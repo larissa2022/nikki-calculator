@@ -38,14 +38,19 @@ export function useWardrobe() {
   const loadData = async () => {
     isLoading.value = true
     try {
-      // 获取云端总条数
-      const { count: cloudCount } = await supabase
+      // 🌟 修复网络拦截：移除 head: true，改用 GET 请求获取 count
+      // 技巧：只 select('id') 并且 limit(1)，既避开了 HEAD 拦截，又极大地节省了流量
+      const { count: cloudCount, error: countError } = await supabase
         .from('clothes')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact' })
+        .limit(1)
+
+      if (countError) throw countError
 
       const localClothes = await getFromLocal('fullClothesData')
       const localStages = await getFromLocal('stagesData')
 
+      // 缓存比对逻辑保持不变...
       if (localClothes && localClothes.length === cloudCount && localStages) {
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
@@ -69,17 +74,40 @@ export function useWardrobe() {
   // 2. 从云端同步我的衣柜
   const syncWardrobeFromCloud = async (userId) => {
     if (!userId) return
-    const { data } = await supabase.from('user_wardrobes').select('wardrobe_data').single()
-    if (data) myWardrobeIds.value = data.wardrobe_data || []
+    try {
+      const { data, error } = await supabase
+        .from('user_wardrobes')
+        .select('owned_clothes') // 🌟 精准呼叫真实的列名
+        .eq('user_id', userId)   // 绑定身份证，防止 400 报错
+        .single()
+
+      if (error) {
+        // 忽略新用户第一次登录时“找不到空衣柜”的正常提示
+        if (error.code !== 'PGRST116') throw error
+      }
+      
+      // 🌟 接收数据时也要用真实的列名
+      if (data && data.owned_clothes) {
+        myWardrobeIds.value = data.owned_clothes
+      }
+    } catch (err) {
+      console.error("☁️ 从云端同步衣柜失败:", err.message)
+    }
   }
 
   // 3. 将我的衣柜存入云端
   const saveWardrobeToCloud = async (userId) => {
     if (!userId) return
-    await supabase.from('user_wardrobes').upsert({ 
-      user_id: userId, 
-      wardrobe_data: myWardrobeIds.value 
-    })
+    try {
+      const { error } = await supabase.from('user_wardrobes').upsert({ 
+        user_id: userId, 
+        owned_clothes: myWardrobeIds.value // 🌟 保存时使用真实的列名
+      })
+      
+      if (error) throw error
+    } catch (err) {
+      console.error("☁️ 保存衣柜到云端失败:", err.message)
+    }
   }
 
   return {

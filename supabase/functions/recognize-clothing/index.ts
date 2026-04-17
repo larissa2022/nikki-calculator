@@ -2,14 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': '*', // 允许所有域名访问（本地 localhost 和未来的线上域名）
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', // 🌟 必须显式允许 OPTIONS 请求
 }
 
-serve(async (req) => {
-  // 1. 处理浏览器的预检请求 (CORS)
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
+serve(async (req) => {
+  // 🌟 核心修复点：处理浏览器的 OPTIONS 预检请求
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { 
+      headers: corsHeaders,
+      status: 200 // 明确告诉浏览器：安全检查通过，你可以发 POST 请求了
+    })
+  }
   try {
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -63,12 +69,14 @@ serve(async (req) => {
     // 兼容通义千问的结果提取路径
     const clothesNames = aiResult.output.choices[0].message.content[0].text
 
+    // 成功时的返回
     return new Response(JSON.stringify({ names: clothesNames }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200
     })
 
   } catch (error) {
+    // 报错时的返回（如果这里没加 corsHeaders，前端就拿不到具体的报错信息，只会报 CORS 错误）
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400
