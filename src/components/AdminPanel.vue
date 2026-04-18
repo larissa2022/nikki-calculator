@@ -18,11 +18,12 @@ const newClothes = reactive({
   category: '连衣裙',
   stars: 5,
   tags: '',
-  pair1: 'simple', grade1: 'S',
-  pair2: 'cute', grade2: 'S',
-  pair3: 'active', grade3: 'S',
-  pair4: 'pure', grade4: 'S',
-  pair5: 'cool', grade5: 'S'
+  // 🌟 默认选项改为中文的“完美”
+  pair1: 'simple', grade1: '完美',
+  pair2: 'cute', grade2: '完美',
+  pair3: 'active', grade3: '完美',
+  pair4: 'pure', grade4: '完美',
+  pair5: 'cool', grade5: '完美'
 })
 
 // 1. 获取审核列表 (带加载状态)
@@ -40,10 +41,16 @@ onMounted(fetchPendingList)
 
 // 2. 快捷填单
 const handlePendingItem = (item) => {
-  newClothes.name = item.name
-  newClothes.pendingId = item.id 
-  window.scrollTo({ top: 500, behavior: 'smooth' }) // 丝滑滚动到编辑区
-}
+  newClothes.name = item.name;
+  newClothes.pendingId = item.id;
+  
+  // 🌟 如果玩家已经填好了详细资料，自动回显到表单里
+  if (item.category) newClothes.category = item.category;
+  if (item.stars) newClothes.stars = item.stars;
+  // 这里可以根据 item.scores 逆向还原出评价等级，或者直接让管理员核对
+  
+  window.scrollTo({ top: 500, behavior: 'smooth' });
+};
 
 // 3. 驳回申请
 const rejectPendingItem = async (id) => {
@@ -71,7 +78,8 @@ const submitNewClothes = async () => {
     else if (newClothes.category.includes('装') || newClothes.category === '上衣') mul = 2.0
     else if (['发型', '外套', '鞋子', '袜子', '妆容', '萤光之灵'].includes(newClothes.category)) mul = 1.0
 
-    const baseScores = { SS: 2500, S: 2000, A: 1500, B: 1000, C: 500, F: 0 }
+    // 🌟 让中文评分完美映射到对应的基础分
+    const baseScores = { '完美+': 2500, '完美': 2000, '优秀': 1500, '不错': 1000, '一般': 500, '失败': 0 }
     const calculatedScores = {
       simple: 0, gorgeous: 0, cute: 0, mature: 0, active: 0, 
       elegant: 0, pure: 0, sexy: 0, cool: 0, warm: 0
@@ -170,7 +178,7 @@ const submitNewClothes = async () => {
       </div>
 
       <div class="attr-form-card">
-        <p class="card-tip">🎨 属性分值设定 (SS=2500, S=2000...)</p>
+        <p class="card-tip">🎨 属性分值设定 </p>
         <div class="attr-grid">
           <div class="attr-row" v-for="(pair, idx) in [
             {p:'pair1', g:'grade1', o:[{v:'simple',l:'简约'},{v:'gorgeous',l:'华丽'}]},
@@ -184,7 +192,7 @@ const submitNewClothes = async () => {
               <option :value="pair.o[1].v">{{pair.o[1].l}}</option>
             </select>
             <select v-model="newClothes[pair.g]" class="grade-select">
-              <option v-for="g in ['SS','S','A','B','C','F']" :key="g">{{g}}</option>
+              <option v-for="g in ['完美+','完美','优秀','不错','一般']" :key="g">{{g}}</option>
             </select>
           </div>
         </div>

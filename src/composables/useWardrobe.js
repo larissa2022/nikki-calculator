@@ -79,7 +79,7 @@ export function useWardrobe() {
         .from('user_wardrobes')
         .select('owned_clothes') // 🌟 精准呼叫真实的列名
         .eq('user_id', userId)   // 绑定身份证，防止 400 报错
-        .single()
+        .maybeSingle()
 
       if (error) {
         // 忽略新用户第一次登录时“找不到空衣柜”的正常提示
@@ -96,17 +96,25 @@ export function useWardrobe() {
   }
 
   // 3. 将我的衣柜存入云端
-  const saveWardrobeToCloud = async (userId) => {
-    if (!userId) return
+  const saveWardrobeToCloud = async (userId) => { // 🌟 修复 1：接收 App.vue 传进来的 userId
+    if (!userId) return // 🌟 修复 2：检查 userId
+
     try {
-      const { error } = await supabase.from('user_wardrobes').upsert({ 
-        user_id: userId, 
-        owned_clothes: myWardrobeIds.value // 🌟 保存时使用真实的列名
-      })
-      
+      // 使用 upsert（有则覆盖更新，无则新增）
+      const { error } = await supabase
+        .from('user_wardrobes')
+        .upsert(
+          { 
+            user_id: userId, // 🌟 修复 3：使用传入的 userId
+            owned_clothes: myWardrobeIds.value 
+          }, 
+          { onConflict: 'user_id' }
+        )
+
       if (error) throw error
+      console.log('☁️ 衣柜已成功同步到云端！')
     } catch (err) {
-      console.error("☁️ 保存衣柜到云端失败:", err.message)
+      console.error('保存云端失败:', err)
     }
   }
 

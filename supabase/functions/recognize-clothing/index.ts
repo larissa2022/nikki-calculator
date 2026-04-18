@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
+// 🌟 核心修复：把 https://esm.sh... 换成 npm: 前缀，彻底告别 522 报错！
+import { createClient } from "npm:@supabase/supabase-js@2"
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*', // 允许所有域名访问（本地 localhost 和未来的线上域名）
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -56,7 +56,8 @@ serve(async (req) => {
             {
               role: "user",
               content: [
-                { image: `data:image/png;base64,${imageBase64}` },
+                // 🌟 核心修复：直接原封不动地把前端传来的完整 base64 字符串塞进去！不要再套模板了！
+                { image: imageBase64 },
                 { text: "这张图里有哪些奇迹暖暖的衣服名字？直接返回名字，用中文逗号分隔，不要废话。" }
               ]
             }
@@ -66,6 +67,12 @@ serve(async (req) => {
     })
 
     const aiResult = await response.json()
+    
+    // 🌟 新增：安全气囊，检查阿里云是否报错
+    if (aiResult.code || !aiResult.output) {
+      throw new Error(`阿里云API拒绝服务: ${aiResult.message || '未知错误'}`)
+    }
+
     // 兼容通义千问的结果提取路径
     const clothesNames = aiResult.output.choices[0].message.content[0].text
 
@@ -76,7 +83,9 @@ serve(async (req) => {
     })
 
   } catch (error) {
-    // 报错时的返回（如果这里没加 corsHeaders，前端就拿不到具体的报错信息，只会报 CORS 错误）
+    // 🌟 新增这一行：让具体的死因打印在 Supabase 后台日志里
+    console.error("❌ AI 识别逻辑出错:", error)
+
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400
