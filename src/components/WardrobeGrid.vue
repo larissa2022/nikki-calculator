@@ -20,6 +20,7 @@ const currentPage = ref(1)
 const pageSize = ref(40)
 
 // ====== 🌟 核心：收集进度计算 (用于顶部展示) ======
+// ====== 🌟 核心：收集进度计算 (用于顶部展示) ======
 const collectionStats = computed(() => {
   const ownedSet = new Set(props.ownedIds)
   
@@ -28,8 +29,9 @@ const collectionStats = computed(() => {
   let ownedInCat = 0
   
   props.wardrobe.forEach(item => {
-    // 统计总图鉴数
-    const isTargetCat = activeCategory.value === '全部' || item.category === activeCategory.value
+    // 🌟 核心修复：从 === 改为 includes，让统计系统也能识别二、三级精细分类
+    const isTargetCat = activeCategory.value === '全部' || (item.category && item.category.includes(activeCategory.value))
+    
     if (isTargetCat) {
       totalInCat++
       if (ownedSet.has(item.id)) ownedInCat++
@@ -41,26 +43,40 @@ const collectionStats = computed(() => {
 })
 
 // ====== 排序与过滤逻辑 ======
-const filteredClothes = computed(() => {
-  const ownedSet = new Set(props.ownedIds)
-  const searchStr = searchQuery.value.trim()
-  
-  const result = props.wardrobe.filter(c => {
-    if (!ownedSet.has(c.id)) return false
-    if (activeCategory.value !== '全部' && c.category !== activeCategory.value) return false
-    if (searchStr && !c.name.includes(searchStr)) return false
-    return true
-  })
+// 在 src/components/WardrobeGrid.vue 的 computed 筛选逻辑中修改：
 
+// ====== 排序与过滤逻辑 ======
+const filteredClothes = computed(() => {
+  const ownedSet = new Set(props.ownedIds);
+  const searchStr = searchQuery.value.trim().toLowerCase();
+  
+  // 1. 过滤逻辑
+  const result = props.wardrobe.filter(c => {
+    // 必须是已拥有的部件
+    if (!ownedSet.has(c.id)) return false;
+
+    // 分类模糊匹配（支持把 饰品-头饰-发饰 归入 饰品）
+    if (activeCategory.value !== '全部' && (!c.category || !c.category.includes(activeCategory.value))) return false;
+
+    // 搜索词匹配（名字或编号）
+    if (searchStr && !(
+      c.name.toLowerCase().includes(searchStr) || 
+      (c.game_id && c.game_id.toLowerCase().includes(searchStr))
+    )) return false;
+
+    return true;
+  });
+
+  // 2. 🌟 恢复灵魂排序：按 game_id 数字大小升序排列
   return result.sort((a, b) => {
     const getVal = (id) => {
-      if (!id || id === 'N') return 999999
-      const m = id.match(/\d+/)
-      return m ? parseInt(m[0], 10) : 999999
-    }
-    return getVal(a.game_id) - getVal(b.game_id)
-  })
-})
+      if (!id || id === 'N') return 999999;
+      const m = id.match(/\d+/);
+      return m ? parseInt(m[0], 10) : 999999;
+    };
+    return getVal(a.game_id) - getVal(b.game_id);
+  });
+});
 
 watch([activeCategory, searchQuery], () => {
   currentPage.value = 1

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { supabase } from '../api/supabase'
 
 const props = defineProps({
@@ -17,10 +17,32 @@ const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount:
 const lastNotFoundNames = ref([])
 const isRecognizing = ref(false)
 
-// ====== 玩家贡献模块状态 ======
+// ====== 🌟 玩家贡献模块状态 ======
 const activeContribution = ref(null)
 const isSubmittingContrib = ref(false)
+const availableSuits = ref([])
+
+// 🌟 终极分类字典同步
+const fullCategories = [
+  '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', 
+  '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头饰-耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链', 
+  '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰', 
+  '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
+]
+
+// 🌟 新增：搜索套装选择器状态
+const suitSearchText = ref('')
+const isSuitDropdownOpen = ref(false)
+
+onMounted(async () => {
+  const { data } = await supabase.from('suits').select('id, name').order('created_at', { ascending: false })
+  if (data) availableSuits.value = data
+})
+
 const contribForm = reactive({
+  suit_id: '',
+  game_id: '', // 🌟 新增编号录入
+  tags: '', // 🌟 新增：特殊标签
   category: '连衣裙', stars: 5,
   pair1: 'simple', grade1: '完美',
   pair2: 'cute', grade2: '完美',
@@ -28,6 +50,26 @@ const contribForm = reactive({
   pair4: 'pure', grade4: '完美',
   pair5: 'cool', grade5: '完美'
 })
+
+// 监听展开状态，清空残留表单
+watch(activeContribution, () => {
+  suitSearchText.value = ''
+  contribForm.suit_id = ''
+  contribForm.game_id = ''
+})
+
+// ====== 🌟 搜索逻辑：计算过滤后的套装 ======
+const filteredSuits = computed(() => {
+  const query = suitSearchText.value.toLowerCase().trim()
+  if (!query) return availableSuits.value
+  return availableSuits.value.filter(s => s.name.toLowerCase().includes(query))
+})
+
+const selectSuit = (suit) => {
+  contribForm.suit_id = suit.id
+  suitSearchText.value = suit.id ? `《${suit.name}》` : ''
+  isSuitDropdownOpen.value = false
+}
 
 // ====== 逻辑 1：处理文本导入 ======
 const handleImport = async () => {
@@ -71,10 +113,8 @@ const handleImport = async () => {
 }
 
 // ====== 逻辑 2：玩家提交贡献数据 ======
-// 新增：防连点和加载状态
-
 const submitContribution = async (name) => {
-  isSubmittingContrib.value = true // 🌟 按钮变成加载中
+  isSubmittingContrib.value = true 
   try {
     const mul = contribForm.category === '连衣裙' ? 4.0 : 
                 (contribForm.category.includes('装') || contribForm.category === '上衣' ? 2.0 : 1.0)
@@ -92,9 +132,12 @@ const submitContribution = async (name) => {
 
     const { error } = await supabase.from('pending_clothes').insert([{
       name: name,
-      category: contribForm.category,
+      game_id: contribForm.game_id || 'N', 
+      category: contribForm.category,      
       stars: Number(contribForm.stars),
-      scores: calculatedScores
+      scores: calculatedScores,
+      suit_id: contribForm.suit_id || null,
+      tags: contribForm.tags || null // 🌟 新增：提交标签给后台
     }])
 
     if (error) throw error
@@ -102,15 +145,30 @@ const submitContribution = async (name) => {
     lastNotFoundNames.value = lastNotFoundNames.value.filter(n => n !== name)
     activeContribution.value = null
   } catch (err) {
-    // 🌟 核心修复：把真实报错印在控制台，并确保弹窗能出来
     console.error("❌ 提交报错详情:", err)
     alert('提交失败，真实原因：' + (err.message || '请按 F12 查看控制台红字'))
   } finally {
-    isSubmittingContrib.value = false // 🌟 恢复按钮
+    isSubmittingContrib.value = false 
   }
 }
 
-// ====== 逻辑 3：AI 识别图片 (含压缩) ======
+// 🌟 一键申请新套装功能
+const promptAddNewSuit = async () => {
+  const newSuitName = prompt('请输入要申请添加的新套装名称：')
+  if (!newSuitName || !newSuitName.trim()) return
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  const { error } = await supabase.from('pending_suits').insert([{
+    name: newSuitName.trim(),
+    submitted_by: user?.id,
+    status: 'pending'
+  }])
+  
+  if (error) alert('套装申请提交失败！')
+  else alert('✅ 套装申请已发送给管理员审核！请等待审核通过后再关联该部件。')
+}
+
+// ====== 逻辑 3：AI 识别图片 ======
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader()
@@ -222,18 +280,58 @@ const onFileChange = async (event) => {
 
           <Transition name="slide">
             <div v-if="activeContribution === name" class="mini-form-body">
-              <div class="form-row">
+              <div class="form-row" style="grid-template-columns: 1fr;">
                 <div class="form-group">
-                  <label>分类</label>
-                  <select v-model="contribForm.category">
-                    <option v-for="cat in ['发型','连衣裙','外套','上装','下装','袜子','鞋子','饰品','妆容']" :key="cat">{{cat}}</option>
+                  <label>所属套装 (选填)</label>
+                  <div style="display: flex; gap: 8px;">
+                    <div class="searchable-select" style="flex: 1;">
+                      <input 
+                        type="text" 
+                        v-model="suitSearchText" 
+                        @focus="isSuitDropdownOpen = true"
+                        @blur="setTimeout(() => isSuitDropdownOpen = false, 200)"
+                        placeholder="🔍 搜索并选择套装..."
+                        class="search-input"
+                      />
+                      <Transition name="slide">
+                        <div v-if="isSuitDropdownOpen" class="select-dropdown">
+                          <div class="option" @click="selectSuit({id: '', name: ''})">-- 作为散件 (无关联套装) --</div>
+                          <div v-for="s in filteredSuits" :key="s.id" class="option" @click="selectSuit(s)">
+                            《{{ s.name }}》
+                          </div>
+                          <div v-if="filteredSuits.length === 0" class="option empty-option">未找到匹配套装</div>
+                        </div>
+                      </Transition>
+                    </div>
+                    <button @click="promptAddNewSuit" class="btn-action-outline" style="white-space: nowrap; padding: 0 10px;">
+                      ➕ 申请新套装
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row three-cols">
+                <div class="form-group">
+                  <label>短编号(如001)</label>
+                  <input type="text" v-model="contribForm.game_id" class="custom-input" placeholder="选填" />
+                </div>
+                <div class="form-group">
+                  <label>分类部位</label>
+                  <select v-model="contribForm.category" class="custom-input">
+                    <option v-for="cat in fullCategories" :key="cat">{{cat}}</option>
                   </select>
                 </div>
                 <div class="form-group">
                   <label>星级</label>
-                  <select v-model="contribForm.stars">
+                  <select v-model="contribForm.stars" class="custom-input">
                     <option v-for="s in 6" :key="s" :value="s">{{s}} 星</option>
                   </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>特殊标签</label>
+                  <input type="text" v-model="contribForm.tags" class="custom-input" placeholder="如: 洛丽塔, 中式古典..." />
                 </div>
               </div>
 
@@ -246,7 +344,7 @@ const onFileChange = async (event) => {
                     <option v-if="i==4" value="pure">清纯</option><option v-if="i==4" value="sexy">性感</option>
                     <option v-if="i==5" value="cool">清凉</option><option v-if="i==5" value="warm">保暖</option>
                   </select>
-                  <select v-model="contribForm['grade'+i]" class="grade-sel">
+                  <select v-model="contribForm['grade'+i]" class="grade-sel custom-input" style="padding: 6px;">
                     <option v-for="g in ['完美+','完美','优秀','不错','一般']" :key="g">{{g}}</option>
                   </select>
                 </div>
@@ -262,6 +360,21 @@ const onFileChange = async (event) => {
 </template>
 
 <style scoped>
+/* 🌟 搜索下拉框样式 (同步自 AdminPanel) */
+.searchable-select { position: relative; width: 100%; }
+.search-input { width: 100%; padding: 8px 12px; border: 1px solid #f1f5f9; border-radius: 8px; outline: none; font-weight: bold; background: #fff; cursor: text; font-size: 13px; box-sizing: border-box;}
+.search-input:focus { border-color: #f472b6; box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.1); }
+.select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px;
+  background: white; border: 1.5px solid #fbcfe8; border-radius: 12px;
+  max-height: 200px; overflow-y: auto; z-index: 1000;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+.option { padding: 10px 12px; cursor: pointer; font-size: 12px; color: #4b5563; border-bottom: 1px solid #f1f5f9; }
+.option:last-child { border-bottom: none; }
+.option:hover { background: #fdf2f8; color: #db2777; font-weight: bold; }
+.empty-option { text-align: center; color: #94a3b8; padding: 15px; font-style: italic; pointer-events: none; }
+
 /* 容器 */
 .import-panel { 
   background: rgba(255, 255, 255, 0.85);
@@ -305,7 +418,7 @@ textarea {
 }
 textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.1); }
 
-/* 解析报告 (SSR 卡片风格) */
+/* 解析报告 */
 .report-box {
   background: white; border-radius: 18px; padding: 20px; margin-top: 20px;
   border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03);
@@ -330,7 +443,7 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px 
 .loot-tag { font-size: 10px; font-weight: 900; color: #f472b6; background: #fdf2f8; padding: 2px 6px; border-radius: 6px; align-self: flex-start; }
 .loot-name { font-size: 13px; font-weight: bold; color: #1e293b; }
 
-/* 玩家贡献模块 (重塑后的) */
+/* 玩家贡献模块 */
 .contribution-section { margin-top: 25px; padding-top: 25px; border-top: 2px dashed #f1f5f9; }
 .contrib-header p { margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #64748b; }
 
@@ -348,16 +461,24 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px 
 
 /* 贡献表单内部 */
 .mini-form-body { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.form-row { display: grid; gap: 10px; margin-bottom: 12px; }
+.three-cols { grid-template-columns: 1fr 1.5fr 1fr; } /* 🌟 三列排版 */
+
 .form-group label { display: block; font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 4px; }
-.form-group select, .attr-line select { 
+.custom-input { 
   width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; 
-  background: white; font-weight: bold; font-size: 13px; color: #1e293b;
+  background: white; font-weight: bold; font-size: 12px; color: #1e293b;
+  box-sizing: border-box; outline: none; transition: border-color 0.2s;
 }
+.custom-input:focus { border-color: #f472b6; }
 
 .attr-grid-mini { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
 .attr-line { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.grade-sel { color: #f472b6 !important; background: #fdf2f8 !important; }
+.attr-line select {
+  width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; 
+  background: white; font-weight: bold; font-size: 12px; color: #1e293b; outline: none;
+}
+.grade-sel { color: #f472b6 !important; background: #fdf2f8 !important; border-color: #fbcfe8 !important;}
 
 .btn-submit-contrib {
   width: 100%; background: #a78bfa; color: white; border: none; padding: 12px;

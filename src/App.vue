@@ -10,6 +10,8 @@ import Calculator from './components/Calculator.vue'
 import ImportZone from './components/ImportZone.vue'
 import WardrobeGrid from './components/WardrobeGrid.vue'
 import AdminPanel from './components/AdminPanel.vue'
+import SuitGallery from './components/SuitGallery.vue'
+
 
 // 逻辑分发中心
 const { currentUser, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
@@ -52,6 +54,7 @@ onMounted(async () => {
         <button :class="{ active: currentTab === 'calculator' }" @click="currentTab = 'calculator'">搭配计算</button>
         <button :class="{ active: currentTab === 'import' }" @click="currentTab = 'import'">录入衣柜</button>
         <button :class="{ active: currentTab === 'wardrobe' }" @click="currentTab = 'wardrobe'">我的衣柜</button>
+        <button :class="{ active: currentTab === 'suits' }" @click="currentTab = 'suits'">套装图鉴</button>
         <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="currentTab = 'admin'" class="admin-tab-btn">图鉴管理</button>
       </nav>
     </header>
@@ -79,6 +82,15 @@ onMounted(async () => {
 
       <WardrobeGrid 
         v-if="currentTab === 'wardrobe'" 
+        :wardrobe="fullWardrobeData"
+        :ownedIds="myWardrobeIds"
+        :isLoggedIn="!!currentUser"
+        @update:ownedIds="myWardrobeIds = $event"
+        @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+      />
+
+      <SuitGallery 
+        v-if="currentTab === 'suits'" 
         :wardrobe="fullWardrobeData"
         :ownedIds="myWardrobeIds"
         :isLoggedIn="!!currentUser"

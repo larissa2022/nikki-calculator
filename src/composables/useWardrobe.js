@@ -47,21 +47,28 @@ export function useWardrobe() {
 
       if (countError) throw countError
 
-      const localClothes = await getFromLocal('fullClothesData')
+      // 🌟 修改 1：去拿新版本的缓存
+      const localClothes = await getFromLocal('fullClothesData_v2') 
       const localStages = await getFromLocal('stagesData')
 
-      // 缓存比对逻辑保持不变...
       if (localClothes && localClothes.length === cloudCount && localStages) {
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
       } else {
         const [cRes, sRes] = await Promise.all([
-          supabase.from('clothes').select('*'),
+          supabase.from('clothes').select('*, suits(name)'),
           supabase.from('stages').select('*').order('id')
         ])
-        fullWardrobeData.value = cRes.data || []
+        
+        const rawClothes = cRes.data || []
+        fullWardrobeData.value = rawClothes.map(item => ({
+          ...item,
+          suit_name: item.suits?.name || null
+        }))
         stagesData.value = sRes.data || []
-        await saveToLocal('fullClothesData', fullWardrobeData.value)
+
+        // 🌟 修改 2：保存为新版本的缓存
+        await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
         await saveToLocal('stagesData', stagesData.value)
       }
     } catch (err) {
