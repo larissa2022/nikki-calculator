@@ -116,10 +116,32 @@ const handleImport = async () => {
 const submitContribution = async (name) => {
   isSubmittingContrib.value = true 
   try {
-    const mul = contribForm.category === '连衣裙' ? 4.0 : 
-                (contribForm.category.includes('装') || contribForm.category === '上衣' ? 2.0 : 1.0)
-    
-    const baseScores = { '完美+': 2500, '完美': 2000, '优秀': 1500, '不错': 1000, '一般': 500, '失败': 0 }
+    // 🌟 终极解密：奇迹暖暖官方固定分值字典
+    const baseScoreMatrix = {
+      '发型': { '完美+': 1324.5, '完美': 1089, '优秀': 837, '不错': 682.5, '一般': 517.5, '失败': 0 },
+      '连衣裙': { '完美+': 5269.5, '完美': 4305, '优秀': 3366, '不错': 2749.5, '一般': 2100, '失败': 0 },
+      '外套': { '完美+': 525, '完美': 423, '优秀': 331.5, '不错': 270, '一般': 213, '失败': 0 },
+      '上装': { '完美+': 2619, '完美': 2140.5, '优秀': 1678.5, '不错': 1369.5, '一般': 1041, '失败': 0 },
+      '下装': { '完美+': 2632.5, '完美': 2137.5, '优秀': 1678.5, '不错': 1357.5, '一般': 1041, '失败': 0 },
+      '袜子': { '完美+': 789, '完美': 648, '优秀': 502.5, '不错': 403.5, '一般': 305, '失败': 0 },
+      '鞋子': { '完美+': 1050, '完美': 855, '优秀': 667.5, '不错': 541.5, '一般': 423, '失败': 0 },
+      '饰品': { '完美+': 526.5, '完美': 424.5, '优秀': 330, '不错': 271.5, '一般': 213, '失败': 0 },
+      '妆容': { '完美+': 267, '完美': 213, '优秀': 168, '不错': 125, '一般': 85, '失败': 0 },
+      '萤光之灵': { '完美+': 517.5, '完美': 421.5, '优秀': 325.5, '不错': 264, '一般': 200, '失败': 0 }
+    };
+
+    // 智能大类提取器
+    const getBroadCat = (cat) => {
+      if (cat.includes('袜子')) return '袜子';
+      if (cat.includes('饰品')) return '饰品';
+      if (cat.includes('上')) return '上装';
+      if (cat.includes('下')) return '下装';
+      return cat;
+    };
+
+    const broadCat = getBroadCat(contribForm.category);
+    const matrix = baseScoreMatrix[broadCat] || baseScoreMatrix['饰品'];
+
     const calculatedScores = {
       simple: 0, gorgeous: 0, cute: 0, mature: 0, active: 0, 
       elegant: 0, pure: 0, sexy: 0, cool: 0, warm: 0
@@ -127,7 +149,8 @@ const submitContribution = async (name) => {
     
     const pairs = [['pair1','grade1'],['pair2','grade2'],['pair3','grade3'],['pair4','grade4'],['pair5','grade5']]
     pairs.forEach(([p, g]) => {
-      calculatedScores[contribForm[p]] = baseScores[contribForm[g]] * mul
+      // 🌟 直接从字典取值，分毫不差！
+      calculatedScores[contribForm[p]] = matrix[contribForm[g]] || 0;
     })
 
     const { error } = await supabase.from('pending_clothes').insert([{
