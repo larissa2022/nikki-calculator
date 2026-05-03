@@ -17,7 +17,25 @@ watch(() => props.stages, (newStages) => {
   }
 }, { immediate: true })
 
-// 2. 🌟 终极搭配计算引擎 (原汁原味，只修改了变量来源)
+// ====== 🌟 新增：一键复制功能 ======
+const copiedId = ref(null) // 用于记录当前哪个部件显示“✅”
+
+const copyName = async (item) => {
+  try {
+    // 调用现代浏览器原生剪贴板 API
+    await navigator.clipboard.writeText(item.name)
+    // 视觉反馈：将状态设为该衣服的 ID
+    copiedId.value = item.id
+    // 1.5 秒后恢复原来的复制图标
+    setTimeout(() => {
+      if (copiedId.value === item.id) copiedId.value = null
+    }, 1500)
+  } catch (err) {
+    alert('复制失败，可能是浏览器权限限制~')
+  }
+}
+
+// 2. 🌟 终极搭配计算引擎
 const outfitResult = computed(() => {
   if (props.wardrobe.length === 0 || props.stages.length === 0) {
     return { items: [], totalScore: 0, penaltyRate: 100, accCount: 0 }
@@ -138,7 +156,15 @@ const outfitResult = computed(() => {
         <div class="item-card" v-for="item in outfitResult.items" :key="item.id">
           <div class="item-category" :class="{'is-acc': item.isAcc}">{{ item.category }}</div>
           <div class="item-info">
-            <span class="item-name">{{ item.name }}</span>
+            
+            <div class="name-group">
+              <span class="item-name" @click="copyName(item)" title="点击复制">{{ item.name }}</span>
+              <button class="btn-copy" @click="copyName(item)" :title="'复制 ' + item.name">
+                <span v-if="copiedId === item.id" class="icon-success">✅</span>
+                <span v-else class="icon-copy">📋</span>
+              </button>
+            </div>
+
             <span class="item-score">{{ item.finalScore }}</span>
           </div>
         </div>
@@ -150,7 +176,7 @@ const outfitResult = computed(() => {
 <style scoped>
 /* 仅属于计算器模块的样式，不会污染全局 */
 .calculator-module {
-  animation: fadeIn 0.3s ease; /* 增加一点页面切换的丝滑动画 */
+  animation: fadeIn 0.3s ease; 
 }
 
 .control-panel, .result-panel { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
@@ -167,12 +193,37 @@ select { padding: 10px; font-size: 16px; width: 100%; margin-top: 10px; border: 
 .item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6;}
 .item-category { color: #4b5563; font-weight: 600; font-size: 13px; width: 70px;}
 .item-category.is-acc { color: #8b5cf6; } 
+
 .item-info { flex-grow: 1; display: flex; justify-content: space-between; align-items: center; }
-.item-name { font-weight: bold; margin-right: 20px; color: #1f2937; }
+
+/* 🌟 新增复制功能样式 */
+.name-group { display: flex; align-items: center; gap: 6px; }
+.item-name { 
+  font-weight: bold; 
+  color: #1f2937; 
+  cursor: pointer; 
+  transition: color 0.2s;
+}
+.item-name:hover { color: #f472b6; text-decoration: underline; }
+
+.btn-copy { 
+  background: none; border: none; cursor: pointer; padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: all 0.2s;
+}
+.icon-copy { filter: grayscale(1); opacity: 0.4; font-size: 14px; transition: all 0.2s; }
+.btn-copy:hover { background: #f3f4f6; }
+.btn-copy:hover .icon-copy { opacity: 1; transform: scale(1.1); filter: none; }
+.icon-success { font-size: 14px; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
 .item-score { color: #f472b6; font-weight: bold; font-family: monospace; font-size: 15px;}
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
 }
 </style>
