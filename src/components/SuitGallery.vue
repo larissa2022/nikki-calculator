@@ -204,7 +204,7 @@ const submitMissingSuits = async (namesArray) => {
 
 <template>
   <div class="suit-gallery glass-panel">
-    
+    <Teleport to="body">
     <div class="batch-import-zone">
       <div class="zone-header">
         <h2>🎁 唤醒套装特区</h2>
@@ -317,6 +317,7 @@ const submitMissingSuits = async (namesArray) => {
         </div>
       </div>
     </Transition>
+    </Teleport>
   </div>
 </template>
 
