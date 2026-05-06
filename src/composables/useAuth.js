@@ -5,7 +5,9 @@ export function useAuth() {
   const currentUser = ref(null)
   const userProfile = ref(null)
 
-  const isAdmin = computed(() => userProfile.value?.role === 'admin')
+  // 🌟 核心修改处：同时识别普通管理员和超级管理员！
+  const isAdmin = computed(() => userProfile.value?.role === 'admin' || userProfile.value?.role === 'super_admin')
+  
   const userQuota = computed(() => userProfile.value?.quota || 0)
 
   const fetchProfile = async () => {

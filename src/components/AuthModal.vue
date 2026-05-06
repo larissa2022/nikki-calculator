@@ -64,4 +64,29 @@ const submitAuth = async () => {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
+/* 📱 手机端专属：弹窗适配 */
+@media (max-width: 768px) {
+  /* 让遮罩层牢牢锁死在屏幕上 */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 9999;
+    padding: 20px; /* 留出安全距离 */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center; /* 绝对垂直居中 */
+    justify-content: center;
+  }
+
+  /* 弹窗本体改造 */
+  .modal-content {
+    width: 100% !important; /* 充分利用手机宽度 */
+    max-width: 400px;
+    max-height: 80vh; /* 最高只能占屏幕的 80% */
+    overflow-y: auto; /* 内容太多就在弹窗内部滑动，不拉长整个网页 */
+    margin: 0; /* 清除电脑端的居中 margin */
+    border-radius: 20px;
+    padding: 24px 20px !important;
+  }
+}
 </style>

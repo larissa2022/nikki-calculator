@@ -210,7 +210,6 @@ const submitNewClothes = async () => {
 
 <template>
   <div class="admin-container">
-    
     <div class="admin-nav-tabs">
       <button :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">📋 图鉴审核中心</button>
       <button v-if="currentUserRole === 'super_admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👑 全站用户与权限</button>
@@ -448,4 +447,55 @@ const submitNewClothes = async () => {
 .slide-enter-active { transition: all 0.3s ease-out; }
 .slide-enter-from { opacity: 0; transform: translateY(-10px); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* 📱 手机端专属：后台管理面板适配 */
+@media (max-width: 768px) {
+  .admin-container {
+    padding: 10px;
+  }
+
+  /* 1. 顶部导航按钮并排改换行，或者缩小字号 */
+  .admin-nav-tabs {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-nav-tabs button {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* 2. 表单区的双列/多列 强制变成单列瀑布流 */
+  .form-grid {
+    grid-template-columns: 1fr; /* 一行只放一个输入框 */
+    gap: 12px;
+  }
+  
+  .attr-grid {
+    grid-template-columns: 1fr; /* 5个属性分值排成一列 */
+  }
+
+  /* 3. 卡片内边距缩小，留出更多可视空间 */
+  .section-card {
+    padding: 16px;
+  }
+
+  /* 4. 拯救超管表格：防止表格撑破屏幕 */
+  .users-table-container {
+    overflow-x: auto; /* 允许表格在手机上左右滑动！极其重要！ */
+    -webkit-overflow-scrolling: touch; /* 让滑动像丝般顺滑 */
+  }
+  .users-table {
+    min-width: 500px; /* 强制表格保持最小宽度，超出就滑动 */
+  }
+
+  /* 5. 调整操作按钮 */
+  .action-btns {
+    flex-direction: column; /* 按钮上下排布防止拥挤 */
+    width: 100%;
+  }
+  .action-btns button {
+    width: 100%;
+    margin-top: 5px;
+  }
+}
 </style>

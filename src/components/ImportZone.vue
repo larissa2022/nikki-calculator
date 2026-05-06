@@ -515,4 +515,12 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px 
 
 .slide-enter-active { transition: all 0.3s ease-out; }
 .slide-enter-from { opacity: 0; transform: translateY(-10px); }
+@media (max-width: 768px) {
+  .three-cols {
+    grid-template-columns: 1fr; /* 把新短编号、分类等强制变成单列 */
+  }
+  .import-panel {
+    padding: 15px;
+  }
+}
 </style>
