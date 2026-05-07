@@ -18,14 +18,39 @@ const submitAuth = async () => {
       const { error } = await supabase.auth.signInWithPassword({ email: authForm.email, password: authForm.password })
       if (error) throw error
       alert('登录成功！欢迎回来。')
+      emit('close') 
     } else {
       const { error } = await supabase.auth.signUp({ email: authForm.email, password: authForm.password })
       if (error) throw error
-      alert('注册成功！')
+      
+      alert('🎉 注册请求已发送！\n\n一封验证邮件已经发送到您的邮箱：' + authForm.email + '\n\n⚠️ 请前往邮箱点击里面的验证链接来激活账号（如果收件箱没有，请务必检查【垃圾邮件】或【拦截网关】）。\n\n验证通过后即可使用该账号登录！')
+      emit('close') 
     }
-    emit('close') // 成功后通知父组件关闭弹窗
   } catch (err) {
-    alert(isLoginMode.value ? '登录失败：' + err.message : '注册失败：' + err.message)
+    // 🌟 核心修改：精准拦截并翻译 Supabase 的英文报错
+    if (isLoginMode.value) {
+      // 拦截 1：邮箱未验证
+      if (err.message.includes('Email not confirmed')) {
+        alert('⚠️ 登录失败：您的邮箱尚未验证！\n\n请前往邮箱（' + authForm.email + '）点击系统发送的验证链接。\n\n如果没有收到，请务必去【垃圾箱】找找看哦！')
+      } 
+      // 拦截 2：账号或密码错误
+      else if (err.message.includes('Invalid login credentials')) {
+        alert('❌ 登录失败：账号或密码错误，请检查后再试！')
+      } 
+      // 其他未知登录报错
+      else {
+        alert('登录失败：' + err.message)
+      }
+    } else {
+      // 拦截 3：注册时邮箱已被占用
+      if (err.message.includes('User already registered')) {
+        alert('❌ 注册失败：该邮箱已经被注册过了，请直接切换到登录模式！')
+      } 
+      // 其他未知注册报错
+      else {
+        alert('注册失败：' + err.message)
+      }
+    }
   } finally {
     isAuthLoading.value = false
   }
