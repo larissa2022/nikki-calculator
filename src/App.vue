@@ -42,68 +42,71 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-container">
+  <div class="root-wrapper">
     
-    <AuthBar :user="currentUser" @open-login="isAuthModalOpen = true" />
-    
-    <AuthModal v-if="isAuthModalOpen" @close="isAuthModalOpen = false" />
+    <AdminPanel 
+      v-if="currentTab === 'admin' && isAdmin" 
+      :fullWardrobeData="fullWardrobeData"
+      @back-to-main="currentTab = 'calculator'" 
+    />
 
-    <header>
-      <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
-      <nav class="tabs">
-        <button :class="{ active: currentTab === 'calculator' }" @click="currentTab = 'calculator'">搭配计算</button>
-        <button :class="{ active: currentTab === 'import' }" @click="currentTab = 'import'">录入衣柜</button>
-        <button :class="{ active: currentTab === 'wardrobe' }" @click="currentTab = 'wardrobe'">我的衣柜</button>
-        <button :class="{ active: currentTab === 'suits' }" @click="currentTab = 'suits'">套装图鉴</button>
-        <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="currentTab = 'admin'" class="admin-tab-btn">图鉴管理</button>
-      </nav>
-    </header>
-
-    <div v-if="isLoading" class="loading-state"><h2>⏳ 奇迹载入中...</h2></div>
-    
-    <main v-else>
-      <Calculator 
-        v-if="currentTab === 'calculator'" 
-        :wardrobe="fullWardrobeData" 
-        :ownedIds="myWardrobeIds" 
-        :stages="stagesData"
-      />
+    <div v-show="currentTab !== 'admin'" class="app-container">
       
-      <ImportZone 
-        v-if="currentTab === 'import'" 
-        :wardrobe="fullWardrobeData"
-        :ownedIds="myWardrobeIds"
-        :quota="userQuota"
-        :isLoggedIn="!!currentUser"
-        @update:ownedIds="myWardrobeIds = $event"
-        @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-        @refresh-profile="fetchProfile"
-      />
+      <AuthBar :user="currentUser" @open-login="isAuthModalOpen = true" />
+      <AuthModal v-if="isAuthModalOpen" @close="isAuthModalOpen = false" />
 
-      <WardrobeGrid 
-        v-if="currentTab === 'wardrobe'" 
-        :wardrobe="fullWardrobeData"
-        :ownedIds="myWardrobeIds"
-        :isLoggedIn="!!currentUser"
-        @update:ownedIds="myWardrobeIds = $event"
-        @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-      />
+      <header>
+        <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
+        <nav class="tabs">
+          <button :class="{ active: currentTab === 'calculator' }" @click="currentTab = 'calculator'">搭配计算</button>
+          <button :class="{ active: currentTab === 'import' }" @click="currentTab = 'import'">录入衣柜</button>
+          <button :class="{ active: currentTab === 'wardrobe' }" @click="currentTab = 'wardrobe'">我的衣柜</button>
+          <button :class="{ active: currentTab === 'suits' }" @click="currentTab = 'suits'">套装图鉴</button>
+          <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="currentTab = 'admin'" class="admin-tab-btn">图鉴管理</button>
+        </nav>
+      </header>
 
-      <SuitGallery 
-        v-if="currentTab === 'suits'" 
-        :wardrobe="fullWardrobeData"
-        :ownedIds="myWardrobeIds"
-        :isLoggedIn="!!currentUser"
-        @update:ownedIds="myWardrobeIds = $event"
-        @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-      />
+      <div v-if="isLoading" class="loading-state"><h2>⏳ 奇迹载入中...</h2></div>
+      
+      <main v-else>
+        <Calculator 
+          v-if="currentTab === 'calculator'" 
+          :wardrobe="fullWardrobeData" 
+          :ownedIds="myWardrobeIds" 
+          :stages="stagesData"
+        />
+        
+        <ImportZone 
+          v-if="currentTab === 'import'" 
+          :wardrobe="fullWardrobeData"
+          :ownedIds="myWardrobeIds"
+          :quota="userQuota"
+          :isLoggedIn="!!currentUser"
+          @update:ownedIds="myWardrobeIds = $event"
+          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+          @refresh-profile="fetchProfile"
+        />
 
-      <AdminPanel 
-        v-if="currentTab === 'admin' && isAdmin" 
-        :fullWardrobeData="fullWardrobeData"
-      />
-    </main>
-    
+        <WardrobeGrid 
+          v-if="currentTab === 'wardrobe'" 
+          :wardrobe="fullWardrobeData"
+          :ownedIds="myWardrobeIds"
+          :isLoggedIn="!!currentUser"
+          @update:ownedIds="myWardrobeIds = $event"
+          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+        />
+
+        <SuitGallery 
+          v-if="currentTab === 'suits'" 
+          :wardrobe="fullWardrobeData"
+          :ownedIds="myWardrobeIds"
+          :isLoggedIn="!!currentUser"
+          @update:ownedIds="myWardrobeIds = $event"
+          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+        />
+      </main>
+      
+    </div>
   </div>
 </template>
 

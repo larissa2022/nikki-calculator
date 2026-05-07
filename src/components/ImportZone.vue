@@ -166,6 +166,10 @@ const submitContribution = async (name) => {
       calculatedScores[contribForm[p]] = matrix[contribForm[g]] || 0;
     })
 
+    // 🌟 核心修复 1：先获取当前点击提交按钮的玩家身份
+    const { data: { user } } = await supabase.auth.getUser()
+
+    // 🌟 核心修复 2：在插入数据时，把玩家 ID (submitted_by) 一起写进数据库
     const { error } = await supabase.from('pending_clothes').insert([{
       name: name,
       game_id: contribForm.game_id || 'N', 
@@ -173,7 +177,9 @@ const submitContribution = async (name) => {
       stars: Number(contribForm.stars),
       scores: calculatedScores,
       suit_id: contribForm.suit_id || null,
-      tags: contribForm.tags || null // 🌟 新增：提交标签给后台
+      tags: contribForm.tags || null,
+      submitted_by: user?.id, // 👈 🌟 补上这句极其重要的“署名”！
+      status: 'pending'       // 👈 🌟 确保有初始状态
     }])
 
     if (error) throw error

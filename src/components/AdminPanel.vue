@@ -2,6 +2,9 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { supabase } from '../api/supabase'
 
+
+const emit = defineEmits(['back-to-main']);
+
 // ====== 🌟 1. 官方全品类分值矩阵 (核心优化逻辑) ======
 const baseScoreMatrix = {
   '发型': { '完美+': 1324.5, '完美': 1089, '优秀': 837, '不错': 682.5, '一般': 517.5, '失败': 0 },
@@ -37,6 +40,9 @@ const isPendingLoading = ref(false)
 const isSubmitting = ref(false)
 const suitSearchText = ref('')        
 const isSuitDropdownOpen = ref(false) 
+const userPage = ref(1)
+const userPageSize = 10
+const currentUserId = ref(null) // 🌟 新增：记住当前登录的站长ID
 
 const newClothes = reactive({
   pendingId: null, suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
@@ -49,10 +55,12 @@ const fetchAllData = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
+      currentUserId.value = user.id // 🌟 新增：保存 ID
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile) currentUserRole.value = profile.role
     }
 
+    // 1. 获取审核申请
     const [clothesRes, pendingSuitsRes] = await Promise.all([
       supabase.from('pending_clothes').select('*, suits(name)').eq('status', 'pending').order('id', { ascending: false }),
       supabase.from('pending_suits').select('*').eq('status', 'pending').order('created_at', { ascending: false })
@@ -60,14 +68,43 @@ const fetchAllData = async () => {
     pendingList.value = clothesRes.data || []
     pendingSuitsList.value = pendingSuitsRes.data || []
 
+    // 2. 如果是站长，获取用户档案及贡献统计
     if (currentUserRole.value === 'super_admin') {
+      // 获取所有档案
       const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-      allUsersList.value = usersData || []
+      
+      // 🌟 核心优化：从待审核表统计该玩家“已批准”的服装数量
+      const { data: contribData } = await supabase
+        .from('pending_clothes')
+        .select('submitted_by')
+        .eq('status', 'approved')
+
+      const countsMap = {}
+      contribData?.forEach(row => {
+        if (row.submitted_by) {
+          countsMap[row.submitted_by] = (countsMap[row.submitted_by] || 0) + 1
+        }
+      })
+
+      allUsersList.value = (usersData || []).map(u => ({
+        ...u,
+        contribCount: countsMap[u.id] || 0 // 将统计结果合入用户信息
+      }))
     }
   } finally {
     isPendingLoading.value = false 
   }
 }
+// ====== 🌟 计算属性：身份分类与分页 ======
+const adminUsers = computed(() => allUsersList.value.filter(u => u.role !== 'user'))
+const regularUsers = computed(() => allUsersList.value.filter(u => u.role === 'user'))
+
+const paginatedRegularUsers = computed(() => {
+  const start = (userPage.value - 1) * userPageSize
+  return regularUsers.value.slice(start, start + userPageSize)
+})
+
+const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
 
 const fetchSuits = async () => {
   const { data } = await supabase.from('suits').select('id, name').order('name')
@@ -179,8 +216,13 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
   <div class="admin-container">
     
     <div class="admin-nav-tabs">
+      <button class="btn-back" @click="emit('back-to-main')">⬅️ 返回玩家前台</button> 
       <button :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">📋 图鉴审核中心</button>
       <button v-if="currentUserRole === 'super_admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👑 全站用户与权限</button>
+      
+      <div style="margin-left: auto; display: flex; align-items: center; font-size: 13px; font-weight: bold; color: #64748b;">
+        当前登录身份：<span style="color: #db2777; margin-left: 5px;">{{ currentUserRole }}</span>
+      </div>
     </div>
 
     <div v-show="activeTab === 'audit'">
@@ -298,28 +340,80 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
     </div>
 
     <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
-      <section class="section-card user-section">
+  
+      <section class="section-card user-section" style="border-left: 4px solid #7c3aed; background: #f5f3ff;">
         <div class="section-header">
-          <h3 class="purple-title">👥 全站玩家档案库</h3>
-          <span class="badge">{{ allUsersList.length }} 人</span>
+          <h3 class="purple-title">🛡️ 管理与决策团队</h3>
+          <span class="badge">席位：{{ adminUsers.length }}</span>
         </div>
         <div class="users-table-container">
           <table class="users-table">
-            <thead><tr><th>时间</th><th>邮箱</th><th>身份</th><th>操作</th></tr></thead>
+            <thead>
+              <tr>
+                <th>注册时间</th>
+                <th>管理员邮箱</th>
+                <th>系统身份</th>
+                <th>图鉴贡献</th>
+                <th>权限变更</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr v-for="u in allUsersList" :key="u.id">
+              <tr v-for="u in adminUsers" :key="u.id" :class="{ 'is-me': u.id === currentUserId }">
                 <td class="time-col">{{ formatDate(u.created_at) }}</td>
                 <td class="email-col"><strong>{{ u.email }}</strong></td>
-                <td><span class="role-badge" :class="u.role">{{ u.role === 'super_admin' ? '👑 站长' : (u.role === 'admin' ? '🛡️ 管理员' : '玩家') }}</span></td>
+                <td><span class="role-badge" :class="u.role">{{ u.role === 'super_admin' ? '👑 最高站长' : '🛡️ 系统管理' }}</span></td>
+                <td><span class="contrib-tag">✨ {{ u.contribCount }} 次</span></td>
                 <td>
                   <select v-if="u.role !== 'super_admin'" class="role-select" :value="u.role" @change="changeUserRole(u.id, $event.target.value)">
-                    <option value="user">玩家</option><option value="admin">管理员</option>
+                    <option value="user">降级为玩家</option>
+                    <option value="admin">维持管理员</option>
                   </select>
-                  <span v-else class="protected-text">不可更改</span>
+                  <span v-else class="protected-text">权限锁定</span>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section class="section-card user-section">
+        <div class="section-header">
+          <h3 class="purple-title">👥 全站活跃玩家档案</h3>
+          <span class="badge">总数：{{ regularUsers.length }}</span>
+        </div>
+        
+        <div class="users-table-container">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>注册时间</th>
+                <th>玩家账号</th>
+                <th>图鉴贡献次数</th>
+                <th>设为管理</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in paginatedRegularUsers" :key="u.id">
+                <td class="time-col">{{ formatDate(u.created_at) }}</td>
+                <td class="email-col">{{ u.email }}</td>
+                <td>
+                  <div class="contrib-progress-bar">
+                    <span class="count-txt">{{ u.contribCount }}</span>
+                    <div class="track"><div class="fill" :style="{ width: Math.min(u.contribCount * 10, 100) + '%' }"></div></div>
+                  </div>
+                </td>
+                <td>
+                  <button class="btn-promote" @click="changeUserRole(u.id, 'admin')">🛡️ 提拔为管理员</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination-admin" v-if="totalUserPages > 1">
+          <button :disabled="userPage === 1" @click="userPage--">◀</button>
+          <span>第 {{ userPage }} / {{ totalUserPages }} 页</span>
+          <button :disabled="userPage === totalUserPages" @click="userPage++">▶</button>
         </div>
       </section>
     </div>
@@ -402,6 +496,16 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
   padding-bottom: 50px;
   animation: fadeIn 0.4s ease;
 }
+.btn-back {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border-color: #e2e8f0 !important;
+  flex: 0.5 !important; /* 让它比另外两个按钮稍微窄一点 */
+}
+.btn-back:hover {
+  background: #e2e8f0 !important;
+  color: #334155 !important;
+}
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* 📱 手机端专属：后台管理面板适配 */
@@ -455,4 +559,18 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
     margin-top: 5px;
   }
 }
+/* 贡献次数小进度条样式 */
+.contrib-progress-bar { display: flex; align-items: center; gap: 10px; width: 120px; }
+.count-txt { font-weight: 900; color: #db2777; font-size: 14px; min-width: 25px; }
+.contrib-progress-bar .track { flex: 1; height: 6px; background: #f1f5f9; border-radius: 10px; overflow: hidden; }
+.contrib-progress-bar .fill { height: 100%; background: linear-gradient(90deg, #f472b6, #7c3aed); border-radius: 10px; }
+
+.contrib-tag { background: #fdf2f8; color: #db2777; padding: 4px 10px; border-radius: 20px; font-weight: 900; font-size: 12px; border: 1px solid #fbcfe8; }
+
+.btn-promote { background: white; border: 1.5px solid #ddd6fe; color: #7c3aed; padding: 5px 12px; border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.btn-promote:hover { background: #7c3aed; color: white; }
+
+.pagination-admin { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 20px; font-size: 13px; font-weight: bold; color: #64748b; }
+.pagination-admin button { background: white; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 5px 12px; cursor: pointer; }
+.pagination-admin button:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
