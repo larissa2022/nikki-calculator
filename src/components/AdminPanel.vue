@@ -1,11 +1,10 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { supabase } from '../api/supabase'
-
 
 const emit = defineEmits(['back-to-main']);
 
-// ====== 🌟 1. 官方全品类分值矩阵 (核心优化逻辑) ======
+// ====== 🌟 1. 官方全品类分值矩阵 ======
 const baseScoreMatrix = {
   '发型': { '完美+': 1324.5, '完美': 1089, '优秀': 837, '不错': 682.5, '一般': 517.5, '失败': 0 },
   '连衣裙': { '完美+': 5269.5, '完美': 4305, '优秀': 3366, '不错': 2749.5, '一般': 2100, '失败': 0 },
@@ -19,7 +18,6 @@ const baseScoreMatrix = {
   '萤光之灵': { '完美+': 517.5, '完美': 421.5, '优秀': 325.5, '不错': 264, '一般': 200, '失败': 0 }
 };
 
-// 辅助函数：将细分部位（如 饰品-头饰）映射到大类矩阵
 const getBroadCat = (cat) => {
   if (!cat) return '饰品';
   if (cat.includes('袜子')) return '袜子';
@@ -32,6 +30,7 @@ const getBroadCat = (cat) => {
 // ====== 🌟 2. 状态管理 ======
 const activeTab = ref('audit')
 const currentUserRole = ref('user')
+const currentUserId = ref(null)
 const allUsersList = ref([])
 const pendingList = ref([])           
 const pendingSuitsList = ref([])      
@@ -42,144 +41,147 @@ const suitSearchText = ref('')
 const isSuitDropdownOpen = ref(false) 
 const userPage = ref(1)
 const userPageSize = 10
-const currentUserId = ref(null) // 🌟 新增：记住当前登录的站长ID
 
 const newClothes = reactive({
-  pendingId: null, suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
+  pendingIds: [], // 🌟 改为数组，存储所有被合并的ID
+  suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
   pair1: 'simple', grade1: '完美', pair2: 'cute', grade2: '完美', pair3: 'active', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
 })
 
-// ====== 🌟 3. 数据加载逻辑 ======
+// ====== 🌟 3. 数据加载与聚类逻辑 ======
 const fetchAllData = async () => {
   isPendingLoading.value = true
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      currentUserId.value = user.id // 🌟 新增：保存 ID
+      currentUserId.value = user.id
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile) currentUserRole.value = profile.role
     }
 
-    // 1. 获取审核申请
-    const [clothesRes, pendingSuitsRes] = await Promise.all([
+    const [clothesRes, pendingSuitsRes, contribRes] = await Promise.all([
       supabase.from('pending_clothes').select('*, suits(name)').eq('status', 'pending').order('id', { ascending: false }),
-      supabase.from('pending_suits').select('*').eq('status', 'pending').order('created_at', { ascending: false })
+      supabase.from('pending_suits').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('pending_clothes').select('submitted_by').eq('status', 'approved')
     ])
+    
     pendingList.value = clothesRes.data || []
     pendingSuitsList.value = pendingSuitsRes.data || []
 
-    // 2. 如果是站长，获取用户档案及贡献统计
+    const countsMap = {}
+    contribRes.data?.forEach(row => { if (row.submitted_by) countsMap[row.submitted_by] = (countsMap[row.submitted_by] || 0) + 1 })
+
     if (currentUserRole.value === 'super_admin') {
-      // 获取所有档案
       const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-      
-      // 🌟 核心优化：从待审核表统计该玩家“已批准”的服装数量
-      const { data: contribData } = await supabase
-        .from('pending_clothes')
-        .select('submitted_by')
-        .eq('status', 'approved')
-
-      const countsMap = {}
-      contribData?.forEach(row => {
-        if (row.submitted_by) {
-          countsMap[row.submitted_by] = (countsMap[row.submitted_by] || 0) + 1
-        }
-      })
-
-      allUsersList.value = (usersData || []).map(u => ({
-        ...u,
-        contribCount: countsMap[u.id] || 0 // 将统计结果合入用户信息
-      }))
+      allUsersList.value = (usersData || []).map(u => ({ ...u, contribCount: countsMap[u.id] || 0 }))
     }
-  } finally {
-    isPendingLoading.value = false 
-  }
-}
-// ====== 🌟 计算属性：身份分类与分页 ======
-const adminUsers = computed(() => allUsersList.value.filter(u => u.role !== 'user'))
-const regularUsers = computed(() => allUsersList.value.filter(u => u.role === 'user'))
-
-const paginatedRegularUsers = computed(() => {
-  const start = (userPage.value - 1) * userPageSize
-  return regularUsers.value.slice(start, start + userPageSize)
-})
-
-const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
-
-const fetchSuits = async () => {
-  const { data } = await supabase.from('suits').select('id, name').order('name')
-  if (data) suitList.value = data
+  } finally { isPendingLoading.value = false }
 }
 
-onMounted(() => { fetchAllData(); fetchSuits(); })
+// 🌟 核心：聚类算法 (Clustering)
+const clusteredPendingList = computed(() => {
+  const groups = {};
+  pendingList.value.forEach(item => {
+    // 聚类钥匙：分类+短编号。如果没有编号，用名字保底
+    const key = (item.game_id && item.game_id !== 'N') ? `${item.category}_${item.game_id}` : `NAME_${item.name}`;
+    if (!groups[key]) groups[key] = { key, items: [] };
+    groups[key].items.push(item);
+  });
+  return Object.values(groups);
+});
 
-// ====== 🌟 4. 核心优化：处理审核申请并转换等级 ======
-const handlePendingItem = (item) => {
-  newClothes.name = item.name; 
-  newClothes.pendingId = item.id;
-  newClothes.suit_id = item.suit_id || ''; 
-  newClothes.game_id = item.game_id || '';
-  newClothes.tags = item.tags ? (Array.isArray(item.tags) ? item.tags.join(', ') : item.tags) : '';
-  newClothes.category = item.category || '发型';
-  newClothes.stars = item.stars || 5;
+// 🌟 辅助：寻找一组数据中的“众数/最准值” (Arbitration)
+const getMostFrequent = (arr) => {
+  if (!arr.length) return null;
+  const counts = {};
+  arr.forEach(v => counts[v] = (counts[v] || 0) + 1);
+  return Object.keys(counts).reduce((a, b) => counts[a] >= counts[b] ? a : b);
+};
 
-  const matchedSuit = suitList.value.find(s => s.id === item.suit_id)
-  suitSearchText.value = matchedSuit ? `《${matchedSuit.name}》` : ''
+// ====== 🌟 4. 处理聚类后的审核申请 ======
+const handleClusteredItem = (group) => {
+  const items = group.items;
+  const userMap = Object.fromEntries(allUsersList.value.map(u => [u.id, u.contribCount]));
 
-  if (item.scores) {
-    const broadCat = getBroadCat(newClothes.category);
-    const matrix = baseScoreMatrix[broadCat] || baseScoreMatrix['饰品'];
+  // 1. 基础信息：取第一个或根据权重取
+  const bestItem = items.reduce((prev, curr) => (userMap[curr.submitted_by] || 0) > (userMap[prev.submitted_by] || 0) ? curr : prev);
+  
+  newClothes.pendingIds = items.map(i => i.id);
+  newClothes.name = bestItem.name;
+  newClothes.game_id = bestItem.game_id || '';
+  newClothes.category = bestItem.category;
+  newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)));
+  newClothes.suit_id = bestItem.suit_id || '';
 
-    const getGrade = (val) => {
-      if (!val || val <= 0) return '失败';
-      let closestGrade = '一般';
-      let minDiff = Infinity;
-      for (const [grade, score] of Object.entries(matrix)) {
-        const diff = Math.abs(val - score);
-        if (diff < minDiff) { minDiff = diff; closestGrade = grade; }
+  // 2. 标签合并 (去重并集)
+  const allTags = items.flatMap(i => i.tags ? (Array.isArray(i.tags) ? i.tags : i.tags.split(/[,，\s]+/)) : []).map(t => t.trim());
+  newClothes.tags = [...new Set(allTags)].filter(t => t).join(', ');
+
+  // 3. 属性智能算分
+  if (bestItem.scores) {
+    const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品'];
+    const getGradeFromScore = (val) => {
+      let closest = '一般'; let minDiff = Infinity;
+      for (const [g, s] of Object.entries(matrix)) {
+        const diff = Math.abs((val||0) - s);
+        if (diff < minDiff) { minDiff = diff; closest = g; }
       }
-      return closestGrade;
+      return closest;
     };
 
-    const s = item.scores;
-    newClothes.pair1 = (s.gorgeous || 0) > (s.simple || 0) ? 'gorgeous' : 'simple'; 
-    newClothes.grade1 = getGrade(Math.max(s.gorgeous||0, s.simple||0));
-    newClothes.pair2 = (s.mature || 0) > (s.cute || 0) ? 'mature' : 'cute'; 
-    newClothes.grade2 = getGrade(Math.max(s.mature||0, s.cute||0));
-    newClothes.pair3 = (s.elegant || 0) > (s.active || 0) ? 'elegant' : 'active'; 
-    newClothes.grade3 = getGrade(Math.max(s.elegant||0, s.active||0));
-    newClothes.pair4 = (s.sexy || 0) > (s.pure || 0) ? 'sexy' : 'pure'; 
-    newClothes.grade4 = getGrade(Math.max(s.sexy||0, s.pure||0));
-    newClothes.pair5 = (s.warm || 0) > (s.cool || 0) ? 'warm' : 'cool'; 
-    newClothes.grade5 = getGrade(Math.max(s.warm||0, s.cool||0));
+    // 针对每一对属性，收集所有人的意见并取众数
+    const attrPairs = [
+      { key: 'pair1', gKey: 'grade1', p1: 'simple', p2: 'gorgeous' },
+      { key: 'pair2', gKey: 'grade2', p1: 'cute', p2: 'mature' },
+      { key: 'pair3', gKey: 'grade3', p1: 'active', p2: 'elegant' },
+      { key: 'pair4', gKey: 'grade4', p1: 'pure', p2: 'sexy' },
+      { key: 'pair5', gKey: 'grade5', p1: 'cool', p2: 'warm' }
+    ];
+
+    attrPairs.forEach(ap => {
+      const votes = items.map(i => {
+        const s = i.scores || {};
+        const p = (s[ap.p1]||0) > (s[ap.p2]||0) ? ap.p1 : ap.p2;
+        const g = getGradeFromScore(Math.max(s[ap.p1]||0, s[ap.p2]||0));
+        return { p, g };
+      });
+      newClothes[ap.key] = getMostFrequent(votes.map(v => v.p));
+      newClothes[ap.gKey] = getMostFrequent(votes.map(v => v.g));
+    });
   }
+
+  const matchedSuit = suitList.value.find(s => s.id === newClothes.suit_id);
+  suitSearchText.value = matchedSuit ? `《${matchedSuit.name}》` : '';
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 };
 
-// ====== 🌟 5. 提交逻辑 ======
+// ====== 🌟 5. 最终入库 (批量批准) ======
 const submitNewClothes = async () => {
   if (!newClothes.name) return alert('名字是必填项哦！')
   isSubmitting.value = true
   try {
-    const broadCat = getBroadCat(newClothes.category);
-    const matrix = baseScoreMatrix[broadCat] || baseScoreMatrix['饰品'];
-    const calculatedScores = {}
-    const pairs = [['pair1', 'grade1'], ['pair2', 'grade2'], ['pair3', 'grade3'], ['pair4', 'grade4'], ['pair5', 'grade5']]
-    pairs.forEach(([p, g]) => {
+    const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品'];
+    const calculatedScores = {};
+    [['pair1', 'grade1'], ['pair2', 'grade2'], ['pair3', 'grade3'], ['pair4', 'grade4'], ['pair5', 'grade5']].forEach(([p, g]) => {
       calculatedScores[newClothes[p]] = matrix[newClothes[g]] || 0;
-    })
+    });
 
     const payload = {
       id: `custom_${Date.now()}`, game_id: newClothes.game_id || 'N', name: newClothes.name,
       category: newClothes.category, stars: Number(newClothes.stars), scores: calculatedScores,
       suit_id: newClothes.suit_id || null, tags: newClothes.tags.split(/[,，\s]+/).filter(t => t)
+    };
+
+    const { error } = await supabase.from('clothes').insert([payload]);
+    if (error) throw error;
+    
+    // 🌟 一键通过该聚类下的所有申请
+    if (newClothes.pendingIds.length > 0) {
+      await supabase.from('pending_clothes').update({ status: 'approved' }).in('id', newClothes.pendingIds);
     }
 
-    const { error } = await supabase.from('clothes').insert([payload])
-    if (error) throw error
-    if (newClothes.pendingId) await supabase.from('pending_clothes').update({ status: 'approved' }).eq('id', newClothes.pendingId)
-    alert(`🎉 【${newClothes.name}】入库成功！`)
-    Object.assign(newClothes, { name: '', game_id: '', tags: '', suit_id: '', pendingId: null })
+    alert(`🎉 【${newClothes.name}】已汇聚多方数据并成功入库！`);
+    Object.assign(newClothes, { name: '', game_id: '', tags: '', suit_id: '', pendingIds: [] });
     suitSearchText.value = ''; fetchAllData();
   } catch (err) { alert('入库失败：' + err.message) } 
   finally { isSubmitting.value = false }
@@ -197,6 +199,21 @@ const filteredSuits = computed(() => {
   return suitList.value.filter(s => s.name.includes(query)).slice(0, 50);
 })
 
+const adminUsers = computed(() => allUsersList.value.filter(u => u.role !== 'user'))
+const regularUsers = computed(() => allUsersList.value.filter(u => u.role === 'user'))
+const paginatedRegularUsers = computed(() => {
+  const start = (userPage.value - 1) * userPageSize
+  return regularUsers.value.slice(start, start + userPageSize)
+})
+const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
+
+const fetchSuits = async () => {
+  const { data } = await supabase.from('suits').select('id, name').order('name')
+  if (data) suitList.value = data
+}
+
+onMounted(() => { fetchAllData(); fetchSuits(); })
+
 const changeUserRole = async (uId, role) => {
   await supabase.from('profiles').update({ role }).eq('id', uId);
   alert('权限更新成功！'); fetchAllData();
@@ -209,112 +226,87 @@ const approvePendingSuit = async (item) => {
 const rejectPendingSuit = (id) => supabase.from('pending_suits').update({ status: 'rejected' }).eq('id', id).then(fetchAllData)
 const rejectPendingItem = (id) => supabase.from('pending_clothes').update({ status: 'rejected' }).eq('id', id).then(fetchAllData)
 const formatDate = (ds) => new Date(ds).toLocaleString();
-
 </script>
 
 <template>
   <div class="admin-container">
-    
     <div class="admin-nav-tabs">
       <button class="btn-back" @click="emit('back-to-main')">⬅️ 返回玩家前台</button> 
-      <button :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">📋 图鉴审核中心</button>
+      <button :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">📋 聚类审核中心</button>
       <button v-if="currentUserRole === 'super_admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👑 全站用户与权限</button>
-      
-      <div style="margin-left: auto; display: flex; align-items: center; font-size: 13px; font-weight: bold; color: #64748b;">
-        当前登录身份：<span style="color: #db2777; margin-left: 5px;">{{ currentUserRole }}</span>
-      </div>
+      <div class="role-indicator">当前登录身份：<span>{{ currentUserRole }}</span></div>
     </div>
 
     <div v-show="activeTab === 'audit'">
-      
       <section class="section-card review-section">
-        <div class="suits-review-zone" style="margin-bottom: 30px;">
-          <div class="section-header">
-            <h3 class="purple-title">🎁 套装建档申请</h3>
-            <span class="badge" v-if="pendingSuitsList.length">{{ pendingSuitsList.length }} 条</span>
-          </div>
-          <div v-if="pendingSuitsList.length > 0" class="queue-grid">
-            <div v-for="item in pendingSuitsList" :key="item.id" class="glass-card suit-item">
-              <span class="item-name">《{{ item.name }}》</span>
-              <div class="action-btns">
-                <button @click="approvePendingSuit(item)" class="btn-process-green">批准</button>
-                <button @click="rejectPendingSuit(item.id)" class="btn-reject">驳回</button>
+        <div class="section-header">
+          <h3 class="purple-title">🎁 套装建档申请</h3>
+          <span class="badge">{{ pendingSuitsList.length }} 条</span>
+        </div>
+        <div class="section-header" style="margin-top: 30px;">
+          <h3 class="purple-title">🔔 散件众筹审核</h3>
+          <span class="badge">{{ clusteredPendingList.length }} 组待办</span>
+        </div>
+
+        <div v-if="clusteredPendingList.length === 0" class="empty-status">☕ 暂时没有新的散件申请</div>
+        <div v-else class="queue-grid">
+          <div v-for="group in clusteredPendingList" :key="group.key" class="glass-card cluster-item">
+            
+            <div class="item-info-meta">
+              <span class="item-name">{{ group.items[0].name }}</span>
+              <div class="cluster-badges">
+                <span class="badge-mini cat">{{ group.items[0].category }}</span>
+                <span class="badge-mini id">#{{ group.items[0].game_id || 'N' }}</span>
+                <span class="badge-mini count">🔥 {{ group.items.length }} 人提交</span>
               </div>
             </div>
-          </div>
-          <div v-else class="empty-status">☕ 暂无新的套装申请</div>
-        </div>
-
-        <div class="section-header">
-          <h3 class="purple-title">🔔 散件属性审核</h3>
-          <span class="badge" v-if="pendingList.length">{{ pendingList.length }} 条待办</span>
-        </div>
-
-        <div v-if="pendingList.length === 0" class="empty-status">☕ 暂时没有新的散件申请</div>
-        <div v-else class="queue-grid">
-          <div v-for="item in pendingList" :key="item.id" class="glass-card">
-            <div class="item-info-meta">
-              <span class="item-name">{{ item.name }}</span>
-              <span v-if="item.suits?.name" class="suit-tag">归属：{{ item.suits.name }}</span>
-            </div>
+            
             <div class="action-btns">
-              <button @click="handlePendingItem(item)" class="btn-process">✍️ 处理</button>
-              <button @click="rejectPendingItem(item.id)" class="btn-reject">驳回</button>
+              <button @click="handleClusteredItem(group)" class="btn-process">✍️ 仲裁处理</button>
+              <button @click="rejectPendingItem(group.items[0].id)" class="btn-reject">一键驳回</button>
             </div>
+            
           </div>
         </div>
       </section>
 
-      <section class="section-card form-section">
+      <section class="section-card form-section" id="entry-form">
         <div class="section-header">
-          <h3 class="purple-title">👑 图鉴云端入库</h3>
-          <span v-if="newClothes.pendingId" class="edit-mode-tag">正在处理：{{ newClothes.name }}</span>
+          <h3 class="purple-title">👑 图鉴仲裁入库</h3>
+          <span v-if="newClothes.pendingIds.length" class="edit-mode-tag">
+            正在合并处理 {{ newClothes.pendingIds.length }} 份数据
+          </span>
         </div>
-
         <div class="form-grid">
-          <div class="input-group">
-            <label>服装名称</label>
-            <input type="text" v-model="newClothes.name" placeholder="服装全名" />
-          </div>
-
+          <div class="input-group"><label>服装名称</label><input type="text" v-model="newClothes.name" /></div>
           <div class="input-group">
             <label>关联套装</label>
             <div class="searchable-select">
-              <input type="text" v-model="suitSearchText" @focus="isSuitDropdownOpen = true" @blur="setTimeout(() => isSuitDropdownOpen = false, 200)" placeholder="🔍 搜索套装..." class="search-input" />
+              <input type="text" v-model="suitSearchText" @focus="isSuitDropdownOpen = true" @blur="setTimeout(() => isSuitDropdownOpen = false, 200)" placeholder="🔍 搜索..." class="search-input" />
               <div v-if="isSuitDropdownOpen" class="select-dropdown">
                 <div class="option" @click="selectSuit({id: '', name: ''})">-- 纯散件 --</div>
                 <div v-for="s in filteredSuits" :key="s.id" class="option" @click="selectSuit(s)">《{{ s.name }}》</div>
               </div>
             </div>
           </div>
-
-          <div class="input-group">
-            <label>短编号</label>
-            <input type="text" v-model="newClothes.game_id" />
-          </div>
-          
+          <div class="input-group"><label>短编号</label><input type="text" v-model="newClothes.game_id" /></div>
           <div class="input-group">
             <label>分类部位</label>
             <select v-model="newClothes.category">
-              <option v-for="cat in ['发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头饰-耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链', '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰', '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤']" :key="cat">{{cat}}</option>
+               <option v-for="cat in ['发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头饰-耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链', '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰', '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤']" :key="cat">{{cat}}</option>
             </select>
           </div>
-          
           <div class="input-group">
             <label>星级</label>
             <select v-model="newClothes.stars">
               <option v-for="s in 6" :key="s" :value="s">{{s}} 星</option>
             </select>
           </div>
-          
-          <div class="input-group">
-            <label>标签 (逗号隔开)</label>
-            <input type="text" v-model="newClothes.tags" placeholder="如: 洛丽塔, 简约" />
-          </div>
+          <div class="input-group"><label>标签</label><input type="text" v-model="newClothes.tags" /></div>
         </div>
 
         <div class="attr-form-card">
-          <p class="card-tip">🎨 属性分值设定 (基于分类自动匹配官方数据)</p>
+          <p class="card-tip">🎨 智能推荐：基于 {{ newClothes.pendingIds.length || 0 }} 份数据的众数计算</p>
           <div class="attr-grid">
             <div class="attr-row" v-for="(pair, idx) in [
               {p:'pair1', g:'grade1', o:[{v:'simple',l:'简约'},{v:'gorgeous',l:'华丽'}]},
@@ -334,13 +326,14 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
         </div>
 
         <button @click="submitNewClothes" class="btn-submit-all" :disabled="isSubmitting">
-          {{ isSubmitting ? '⌛ 同步中...' : (newClothes.pendingId ? '✅ 审核通过并入库' : '🚀 发布新图鉴') }}
+          {{ isSubmitting ? '⌛ 正在同步...' : (newClothes.pendingIds.length ? '✅ 仲裁完毕：一键入库并结案' : '🚀 发布新图鉴') }}
         </button>
       </section>
     </div>
 
-    <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
-  
+  </div>
+  <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
+      
       <section class="section-card user-section" style="border-left: 4px solid #7c3aed; background: #f5f3ff;">
         <div class="section-header">
           <h3 class="purple-title">🛡️ 管理与决策团队</h3>
@@ -417,11 +410,119 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
         </div>
       </section>
     </div>
-
-  </div>
 </template>
 
 <style scoped>
+/* 🌟 新增聚类样式 */
+/* ========================================== */
+/* 🌟 聚类审核卡片：悬浮水晶风格重构 */
+/* ========================================== */
+
+.queue-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+  gap: 20px; 
+}
+
+/* 悬浮磨砂卡片主体 */
+.glass-card { 
+  background: rgba(255, 255, 255, 0.65); 
+  backdrop-filter: blur(12px); 
+  border: 1px solid rgba(255, 255, 255, 0.8); 
+  box-shadow: 0 8px 24px rgba(149, 117, 205, 0.08); /* 极度柔和的紫灰阴影 */
+  padding: 20px; 
+  border-radius: 18px; 
+  display: flex; 
+  flex-direction: column; /* 核心：改为上下排布 */
+  gap: 18px; 
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+}
+.glass-card:hover { 
+  transform: translateY(-5px); 
+  box-shadow: 0 12px 32px rgba(149, 117, 205, 0.15); 
+  background: rgba(255, 255, 255, 0.85); 
+}
+
+/* 去掉原本生硬的左侧边框，改为顶部精致的彩色渐变光晕线 */
+.cluster-item { 
+  border-left: none; 
+  position: relative; 
+  overflow: hidden; 
+}
+.cluster-item::before {
+  content: ''; 
+  position: absolute; 
+  top: 0; left: 0; right: 0; 
+  height: 4px;
+  background: linear-gradient(90deg, #f472b6, #a855f7);
+  opacity: 0.85;
+}
+
+/* 文本与标签区 */
+.item-info-meta { display: flex; flex-direction: column; gap: 10px; }
+.item-name { font-weight: 900; color: #1e293b; font-size: 17px; letter-spacing: 0.5px; }
+
+.cluster-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.badge-mini { 
+  font-size: 11px; 
+  padding: 5px 12px; 
+  border-radius: 20px; /* 胶囊形状 */
+  font-weight: 800; 
+  display: inline-flex; 
+  align-items: center; 
+  letter-spacing: 0.5px; 
+}
+.badge-mini.cat { background: #f3e8ff; color: #7e22ce; }
+.badge-mini.id { background: #f1f5f9; color: #475569; }
+.badge-mini.count { background: #fff1f2; color: #e11d48; }
+
+/* 底部按钮排版重构 */
+.action-btns { 
+  display: flex; 
+  gap: 12px; 
+  width: 100%; 
+  margin-top: auto; /* 把按钮推到卡片最底部对齐 */
+}
+
+/* 仲裁按钮：梦幻渐变 */
+.btn-process { 
+  flex: 2; /* 比例放大，强调主要操作 */
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); 
+  color: white; 
+  border: none; 
+  padding: 10px; 
+  border-radius: 12px; 
+  font-weight: 900; 
+  cursor: pointer; 
+  font-size: 13px; 
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.25); 
+  transition: all 0.2s; 
+}
+.btn-process:hover { filter: brightness(1.15); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(124, 58, 237, 0.35); }
+
+/* 驳回按钮：纯净去红线 */
+.btn-reject { 
+  flex: 1; /* 次要操作，比例稍小 */
+  background: #fff1f2; 
+  color: #ef4444; 
+  border: none; /* 去掉以前那根很丑的红线边框 */
+  padding: 10px; 
+  border-radius: 12px; 
+  font-weight: 900; 
+  cursor: pointer; 
+  font-size: 13px; 
+  transition: all 0.2s; 
+}
+.btn-reject:hover { background: #fecdd3; color: #b91c1c; }
+.badge-mini { font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.badge-mini.cat { background: #ede9fe; color: #7c3aed; }
+.badge-mini.id { background: #f1f5f9; color: #64748b; }
+.badge-mini.count { background: #fff1f2; color: #e11d48; border: 1px solid #fecaca; }
+
+.cluster-item { border-left: 5px solid #f472b6; }
+.role-indicator { margin-left: auto; display: flex; align-items: center; font-size: 13px; font-weight: bold; color: #64748b; }
+.role-indicator span { color: #db2777; margin-left: 5px; }
+
 /* 🌟 新增：顶部导航卡样式 */
 .admin-nav-tabs { display: flex; gap: 15px; margin-bottom: 25px; padding: 0 5px;}
 .admin-nav-tabs button { flex: 1; padding: 14px; background: white; border: 2px solid #f1f5f9; border-radius: 14px; font-size: 15px; font-weight: 900; color: #64748b; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.02);}
@@ -461,17 +562,75 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
 .purple-title { color: #7c3aed; font-size: 18px; font-weight: 900; border-left: 4px solid #f472b6; padding-left: 12px; margin:0;}
 .badge { font-size: 12px; padding: 4px 10px; border-radius: 10px; background: #f3f4f6; color: #64748b; font-weight: bold; }
 
-.queue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.glass-card { background: #f5f3ff; border: 1px solid #ddd6fe; padding: 15px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; }
 .item-info-meta { display: flex; flex-direction: column; gap: 6px; }
 .item-name { font-weight: 800; color: #1e1b4b; font-size: 15px; }
 .suit-tag { font-size: 11px; color: #db2777; background: #fdf2f8; padding: 2px 6px; border-radius: 6px; font-weight: bold; }
 
-.action-btns { display: flex; gap: 8px; }
-.btn-process { background: #7c3aed; color: white; border: none; padding: 8px 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; }
-.btn-process-green { background: #10b981; color: white; border: none; padding: 8px 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; }
-.btn-reject { background: white; color: #ef4444; border: 1.5px solid #fecaca; padding: 8px 14px; border-radius: 10px; font-weight: bold; cursor: pointer; font-size: 13px; }
 
+/* ========================================== */
+/* 🌟 底部按钮排版重构：轻量通透风 */
+/* ========================================== */
+
+.action-btns { 
+  display: flex; 
+  gap: 12px; 
+  width: 100%; 
+  margin-top: auto; 
+  padding-top: 15px; /* 增加顶部空间 */
+  border-top: 1px dashed rgba(149, 117, 205, 0.2); /* 增加极淡的紫色虚线分割，拉满精致感 */
+}
+
+/* 仲裁按钮：微光描边，悬浮亮起 */
+.btn-process { 
+  flex: 1; /* 恢复 1:1 等宽，视觉更平衡 */
+  background: #faf5ff; /* 极微弱的紫底（已修复） */
+  color: #7c3aed; /* 优雅紫字 */
+  border: 1px solid #e9d5ff; /* 细腻边框 */
+  padding: 10px 0; 
+  border-radius: 10px; /* 稍微调方一点，更有高级App的质感 */
+  font-weight: 800; 
+  cursor: pointer; 
+  font-size: 13px; 
+  letter-spacing: 0.5px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+/* 鼠标悬浮：渐变色填充，展现核心操作感 */
+.btn-process:hover { 
+  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); 
+  color: white; 
+  border-color: transparent; 
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.25); 
+  transform: translateY(-2px); 
+}
+
+/* 驳回按钮：次要弱化，避免视觉干扰 */
+.btn-reject { 
+  flex: 1; /* 1:1 等宽 */
+  background: #f8fafc; /* 极淡的灰白底 */
+  color: #64748b; /* 灰色字体，不抢视觉 */
+  border: 1px solid #e2e8f0; /* 灰色边框 */
+  padding: 10px 0; 
+  border-radius: 10px; 
+  font-weight: 800; 
+  cursor: pointer; 
+  font-size: 13px; 
+  letter-spacing: 0.5px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+/* 鼠标悬浮：变为危险红色，提示这是破坏性操作 */
+.btn-reject:hover { 
+  background: #fff1f2; 
+  color: #e11d48; 
+  border-color: #fecaca; 
+  box-shadow: 0 6px 16px rgba(225, 29, 72, 0.15); 
+  transform: translateY(-2px); 
+}
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
 .input-group label { display: block; font-size: 13px; color: #64748b; font-weight: 800; margin-bottom: 6px; }
 .input-group input, .input-group select { width: 100%; padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 10px; outline: none; font-weight: bold; box-sizing: border-box;}
