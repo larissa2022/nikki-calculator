@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch ,nextTick} from 'vue'
 import { supabase } from '../api/supabase'
 
 const props = defineProps({
@@ -71,6 +71,7 @@ const selectSuit = (suit) => {
   isSuitDropdownOpen.value = false
 }
 
+
 // ====== 逻辑 1：处理文本导入 ======
 const handleImport = async () => {
   const inputNames = importText.value.split(/[,，\s\n]+/).map(n => n.trim()).filter(n => n !== '')
@@ -80,6 +81,8 @@ const handleImport = async () => {
   let dupCount = 0
   const notFound = []
   const newlyAdded = []
+  
+  // 🌟 使用一个全新的数组来装载合并后的结果
   const updatedOwnedIds = [...props.ownedIds]
 
   inputNames.forEach(name => {
@@ -99,11 +102,21 @@ const handleImport = async () => {
 
   lastNotFoundNames.value = [...new Set(notFound)]
 
+  // 🌟 核心修复区：确保数据同步与云端保存
   if (newCount > 0) {
+    // 1. 先把新的拥有列表发给父组件
     emit('update:ownedIds', updatedOwnedIds)
-    if (props.isLoggedIn) emit('save-cloud')
+    
+    // 2. 等待 Vue 完成这波数据更新 (极度重要，防止保存空数据)
+    await nextTick() 
+    
+    // 3. 如果已登录，强制命令父组件把最新的列表存到云端
+    if (props.isLoggedIn) {
+      emit('save-cloud')
+    }
   }
 
+  // 渲染报表
   importStats.newCount = newCount
   importStats.dupCount = dupCount
   importStats.failCount = notFound.length
