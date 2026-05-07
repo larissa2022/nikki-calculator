@@ -1,4 +1,8 @@
 /* ====== ✨ 全新升级：奇迹暖暖 梦幻琉璃风 全局样式 ====== */
+/* 🌟 全局修正：所有元素的尺寸计算都包含内边距，不再向外撑爆 */
+* {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
   /* 梦幻粉紫渐变背景 */
@@ -94,3 +98,23 @@ h1 {
 
 @keyframes popIn { from { opacity: 0; transform: scale(0.9) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+@media (max-width: 768px) {
+  /* 让顶部的菜单变成可以左右滑动的导航栏 */
+  .tabs {
+    display: flex;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tabs::-webkit-scrollbar {
+    display: none; /* 隐藏丑陋的滚动条 */
+  }
+
+  .tabs button {
+    flex-shrink: 0; /* 防止按钮被挤变形 */
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+}

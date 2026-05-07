@@ -107,25 +107,3 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped>
-@media (max-width: 768px) {
-  /* 让顶部的菜单变成可以左右滑动的导航栏 */
-  .tabs {
-    display: flex;
-    overflow-x: auto;
-    white-space: nowrap;
-    padding-bottom: 10px;
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  .tabs::-webkit-scrollbar {
-    display: none; /* 隐藏丑陋的滚动条 */
-  }
-
-  .tabs button {
-    flex-shrink: 0; /* 防止按钮被挤变形 */
-    padding: 8px 12px;
-    font-size: 14px;
-  }
-}
-</style>

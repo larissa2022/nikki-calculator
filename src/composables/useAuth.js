@@ -5,14 +5,22 @@ export function useAuth() {
   const currentUser = ref(null)
   const userProfile = ref(null)
 
-  // 🌟 核心修改处：同时识别普通管理员和超级管理员！
-  const isAdmin = computed(() => userProfile.value?.role === 'admin' || userProfile.value?.role === 'super_admin')
+  // 🌟 修改 1：让 isAdmin 逻辑同时兼容“普通管理”和“超级管理”
+  const isAdmin = computed(() => {
+    const role = userProfile.value?.role
+    return role === 'admin' || role === 'super_admin'
+  })
   
   const userQuota = computed(() => userProfile.value?.quota || 0)
 
   const fetchProfile = async () => {
     if (!currentUser.value) return
-    const { data } = await supabase.from('profiles').select('*').single()
+    // 🌟 修改 2：必须加上 .eq('id', ...) 否则一旦有多个用户，.single() 会直接报错
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', currentUser.value.id)
+      .single()
     if (data) userProfile.value = data
   }
 

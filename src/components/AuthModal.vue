@@ -33,25 +33,45 @@ const submitAuth = async () => {
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal-content">
-      <h2>{{ isLoginMode ? '账号登录' : '注册新账号' }}</h2>
-      <input type="email" v-model="authForm.email" placeholder="输入您的邮箱" />
-      <input type="password" v-model="authForm.password" placeholder="输入密码 (至少6位)" @keyup.enter="isLoginMode ? submitAuth() : null" />
-      <input v-if="!isLoginMode" type="password" v-model="authForm.confirmPassword" placeholder="请再次输入密码确认" @keyup.enter="submitAuth" />
-      <button class="btn-primary" @click="submitAuth" :disabled="isAuthLoading">
-        {{ isAuthLoading ? '处理中...' : (isLoginMode ? '立刻登录' : '确认注册') }}
-      </button>
-      <p class="toggle-mode" @click="isLoginMode = !isLoginMode">
-        {{ isLoginMode ? '没有账号？点击注册' : '已有账号？返回登录' }}
-      </p>
+  <Teleport to="body">
+    <div class="modal-overlay" @click.self="$emit('close')">
+      <div class="modal-content">
+        <h2>{{ isLoginMode ? '账号登录' : '注册新账号' }}</h2>
+        <input type="email" v-model="authForm.email" placeholder="输入您的邮箱" />
+        <input type="password" v-model="authForm.password" placeholder="输入密码 (至少6位)" @keyup.enter="isLoginMode ? submitAuth() : null" />
+        <input v-if="!isLoginMode" type="password" v-model="authForm.confirmPassword" placeholder="请再次输入密码确认" @keyup.enter="submitAuth" />
+        <button class="btn-primary" @click="submitAuth" :disabled="isAuthLoading">
+          {{ isAuthLoading ? '处理中...' : (isLoginMode ? '立刻登录' : '确认注册') }}
+        </button>
+        <p class="toggle-mode" @click="isLoginMode = !isLoginMode">
+          {{ isLoginMode ? '没有账号？点击注册' : '已有账号？返回登录' }}
+        </p>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <style scoped>
-.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px);}
-.modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);}
+* { box-sizing: border-box; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* 确保在最上层 */
+}
+.modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  width: 400px; /* PC端固定宽度 */
+  position: relative;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
 .modal-content h2 { text-align: center; color: #374151; margin-top: 0; margin-bottom: 20px;}
 .modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 15px; outline: none; transition: border-color 0.2s;}
 .modal-content input:focus { border-color: #f472b6; }
@@ -64,29 +84,19 @@ const submitAuth = async () => {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
 }
-/* 📱 手机端专属：弹窗适配 */
+/* 📱 手机端适配 */
 @media (max-width: 768px) {
-  /* 让遮罩层牢牢锁死在屏幕上 */
-  .modal-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 9999;
-    padding: 20px; /* 留出安全距离 */
-    box-sizing: border-box;
-    display: flex;
-    align-items: center; /* 绝对垂直居中 */
-    justify-content: center;
-  }
-
-  /* 弹窗本体改造 */
   .modal-content {
-    width: 100% !important; /* 充分利用手机宽度 */
-    max-width: 400px;
-    max-height: 80vh; /* 最高只能占屏幕的 80% */
-    overflow-y: auto; /* 内容太多就在弹窗内部滑动，不拉长整个网页 */
-    margin: 0; /* 清除电脑端的居中 margin */
-    border-radius: 20px;
+    width: 92% !important; /* 🌟 不要 100%，给左右留出呼吸空隙 */
+    margin: 0 auto;
     padding: 24px 20px !important;
+    max-height: 85vh; /* 🌟 限制最高度，防止长页面滑不动 */
+    overflow-y: auto;
   }
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }
 </style>

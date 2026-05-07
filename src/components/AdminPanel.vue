@@ -210,12 +210,14 @@ const submitNewClothes = async () => {
 
 <template>
   <div class="admin-container">
+    
     <div class="admin-nav-tabs">
       <button :class="{ active: activeTab === 'audit' }" @click="activeTab = 'audit'">📋 图鉴审核中心</button>
       <button v-if="currentUserRole === 'super_admin'" :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">👑 全站用户与权限</button>
     </div>
 
     <div v-show="activeTab === 'audit'">
+      
       <section class="section-card review-section">
         <div v-if="pendingSuitsList.length > 0" class="suits-review-zone">
           <div class="section-header">
@@ -330,9 +332,9 @@ const submitNewClothes = async () => {
           {{ isSubmitting ? '⌛ 同步中...' : (newClothes.pendingId ? '✅ 审核通过并入库' : '🚀 发布新图鉴') }}
         </button>
       </section>
-    </div>
 
-    <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
+    </div> <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
+      
       <section class="section-card user-section">
         <div class="section-header">
           <h3 class="purple-title">👥 全站玩家档案库</h3>
@@ -373,9 +375,8 @@ const submitNewClothes = async () => {
           </table>
         </div>
       </section>
-    </div>
 
-  </div>
+    </div> </div>
 </template>
 
 <style scoped>
@@ -446,11 +447,19 @@ const submitNewClothes = async () => {
 
 .slide-enter-active { transition: all 0.3s ease-out; }
 .slide-enter-from { opacity: 0; transform: translateY(-10px); }
+.admin-container {
+  max-width: 1200px; /* 🌟 限制 PC 端最大宽度 */
+  margin: 0 auto;    /* 🌟 居中 */
+  padding: 20px;
+  padding-bottom: 50px;
+  animation: fadeIn 0.4s ease;
+}
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* 📱 手机端专属：后台管理面板适配 */
 @media (max-width: 768px) {
   .admin-container {
+    width: 100%;
     padding: 10px;
   }
 
