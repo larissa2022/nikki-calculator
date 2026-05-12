@@ -187,9 +187,11 @@ const batchDelete = () => {
 </template>
 
 <style scoped>
+/* ==========================================
+   👗 1. 核心容器与顶部统计面板
+   ========================================== */
 .wardrobe-gallery { animation: fadeIn 0.4s ease; }
 
-/* 🌟 顶部进度统计 (复刻 74144b668390a603) */
 .collection-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .stat-card { background: white; border-radius: 12px; padding: 8px 15px; border: 1.5px solid #f3e8ff; flex-grow: 1; max-width: 200px; }
 .stat-info { display: flex; justify-content: space-between; margin-bottom: 4px; }
@@ -200,19 +202,23 @@ const batchDelete = () => {
 .progress-bar { height: 100%; background: linear-gradient(90deg, #fbcfe8 0%, #f472b6 100%); transition: width 0.5s ease; }
 .percent-tag { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 8px; color: #fff; font-weight: 900; text-shadow: 0 1px 2px rgba(0,0,0,0.1); }
 
+/* ==========================================
+   🛠️ 2. 工具栏与纯净导航条
+   ========================================== */
 .header-tools { display: flex; gap: 8px; align-items: center; margin-left: 15px;}
 .mini-search input { border: 1.5px solid #f1f5f9; border-radius: 10px; padding: 4px 10px; font-size: 10px; width: 60px; outline: none; transition: width 0.3s; }
 .mini-search input:focus { width: 100px; border-color: #f472b6; }
 .btn-manage-icon { background: white; border: 1.5px solid #e2e8f0; color: #94a3b8; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; font-weight: bold;}
 .btn-manage-icon.active { color: #f472b6; border-color: #f472b6; background: #fff5f8; }
 
-/* 🌟 纯净导航条 (复刻 9dd3277273796bc9) */
 .category-strip { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 15px; scrollbar-width: none; border-bottom: 1px solid rgba(244, 114, 182, 0.1); }
 .category-strip::-webkit-scrollbar { display: none; }
 .nav-pill { white-space: nowrap; background: rgba(255,255,255,0.7); border: 1px solid #f1f5f9; padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #64748b; font-weight: bold; cursor: pointer; transition: all 0.2s; }
 .nav-pill.active { background: #f472b6; border-color: #f472b6; color: white; box-shadow: 0 3px 8px rgba(244, 114, 182, 0.2); }
 
-/* 🌟 紧凑卡片 (复刻 image_fc27c3) */
+/* ==========================================
+   🎴 3. 紧凑型胶囊卡片网格
+   ========================================== */
 .grid-wrapper { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
 .cloth-capsule { cursor: pointer; transition: transform 0.2s; }
 .inner-box { background: rgba(255, 255, 255, 0.9); border: 1.5px solid #f3e8ff; border-radius: 16px; padding: 5px 8px; height: 58px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
@@ -231,11 +237,11 @@ const batchDelete = () => {
 .line { height: 1px; background: #fdf2f8; flex: 1; }
 .heart { font-size: 7px; color: #f472b6; }
 
-/* 翻页 */
+/* ==========================================
+   📄 4. 极简翻页器
+   ========================================== */
 .simple-pager { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 20px; }
 .simple-pager button { background: #fff; border: 1.5px solid #f1f5f9; width: 24px; height: 24px; border-radius: 50%; color: #64748b; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;}
 .simple-pager span { font-size: 11px; color: #94a3b8; font-weight: bold; }
 .btn-batch-del { border: none !important; width: auto !important; height: auto !important; border-radius: 6px !important; background: #f43f5e !important; color: white !important; padding: 4px 10px !important; font-size: 10px !important; font-weight: bold !important; margin-left: 10px; }
-
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>

@@ -174,56 +174,43 @@ const outfitResult = computed(() => {
 </template>
 
 <style scoped>
-/* 仅属于计算器模块的样式，不会污染全局 */
-.calculator-module {
-  animation: fadeIn 0.3s ease; 
-}
+/* ==========================================
+   🧮 1. 计算器专属容器与排版
+   ========================================== */
+.calculator-module { animation: fadeIn 0.4s ease; }
+.control-panel, .result-panel { background: #fff; padding: 25px; border-radius: 16px; box-shadow: 0 10px 25px rgba(124,58,237,0.05); margin-bottom: 25px; border: 1px solid #f3f4f6; }
 
-.control-panel, .result-panel { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
-select { padding: 10px; font-size: 16px; width: 100%; margin-top: 10px; border: 1px solid #ddd; border-radius: 6px;}
-
-.score-board { display: flex; justify-content: space-between; align-items: center; background: #fff5f8; padding: 15px 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #f472b6;}
+/* ==========================================
+   🏆 2. 顶部分数看板
+   ========================================== */
+.score-board { display: flex; justify-content: space-between; align-items: center; background: #fdf2f8; padding: 15px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 5px solid #f472b6;}
 .score-item { display: flex; flex-direction: column; }
 .acc-info { align-items: flex-end; font-size: 14px;}
-.label { color: #6b7280; margin-bottom: 5px; font-size: 12px; text-transform: uppercase;}
-.huge-score { font-size: 28px; font-weight: 900; color: #f472b6; }
-.value { font-weight: bold; color: #374151;}
+.label { color: #6b7280; margin-bottom: 5px; font-size: 12px; text-transform: uppercase; font-weight: bold;}
+.huge-score { font-size: 28px; font-weight: 900; color: #db2777; }
+.value { font-weight: 900; color: #374151;}
 
+/* ==========================================
+   👗 3. 搭配推荐列表与卡片
+   ========================================== */
 .item-list { display: flex; flex-direction: column; gap: 8px; }
-.item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6;}
-.item-category { color: #4b5563; font-weight: 600; font-size: 13px; width: 70px;}
+.item-card { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #f8fafc; border-radius: 10px; border: 1px solid #f1f5f9;}
+.item-category { color: #64748b; font-weight: 800; font-size: 13px; width: 70px;}
 .item-category.is-acc { color: #8b5cf6; } 
 
 .item-info { flex-grow: 1; display: flex; justify-content: space-between; align-items: center; }
+.item-score { color: #f472b6; font-weight: 900; font-family: monospace; font-size: 15px;}
 
-/* 🌟 新增复制功能样式 */
+/* ==========================================
+   📋 4. 一键复制功能特调
+   ========================================== */
 .name-group { display: flex; align-items: center; gap: 6px; }
-.item-name { 
-  font-weight: bold; 
-  color: #1f2937; 
-  cursor: pointer; 
-  transition: color 0.2s;
-}
+.item-name { font-weight: 900; color: #1e293b; cursor: pointer; transition: color 0.2s; font-size: 14px;}
 .item-name:hover { color: #f472b6; text-decoration: underline; }
 
-.btn-copy { 
-  background: none; border: none; cursor: pointer; padding: 4px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 6px; transition: all 0.2s;
-}
+.btn-copy { background: none; border: none; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: 6px; transition: all 0.2s; }
 .icon-copy { filter: grayscale(1); opacity: 0.4; font-size: 14px; transition: all 0.2s; }
-.btn-copy:hover { background: #f3f4f6; }
+.btn-copy:hover { background: #f1f5f9; }
 .btn-copy:hover .icon-copy { opacity: 1; transform: scale(1.1); filter: none; }
 .icon-success { font-size: 14px; animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-
-.item-score { color: #f472b6; font-weight: bold; font-family: monospace; font-size: 15px;}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.5); }
-  to { opacity: 1; transform: scale(1); }
-}
 </style>

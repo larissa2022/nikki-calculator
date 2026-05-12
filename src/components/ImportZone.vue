@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, watch ,nextTick} from 'vue'
 import { suitService } from '../api/suitService'
 import { contributionService } from '../api/contributionService' // 🌟 新增这行
-import { supabase } from '../api/supabase' // 记得保留这个，因为还要获取当前登录 user
+import { supabase } from '../api/supabase' // 保留这个用于获取 user
 const props = defineProps({
   wardrobe: { type: Array, required: true },
   ownedIds: { type: Array, required: true },
@@ -189,10 +189,6 @@ const submitContribution = async (name) => {
       submitted_by: user?.id,
       status: 'pending'
     })
-
-    if (error) throw error // 这行可以删掉，因为 service 里已经拦截了
-
-    if (error) throw error
     alert(`🎉 感谢小仙女的贡献！【${name}】的详细资料已提交！`)
     lastNotFoundNames.value = lastNotFoundNames.value.filter(n => n !== name)
     activeContribution.value = null
@@ -400,7 +396,9 @@ const onFileChange = async (event) => {
                 </div>
               </div>
 
-              <button class="btn-submit-contrib" @click="submitContribution(name)">确认提交申请</button>
+              <button class="btn-submit-contrib" @click="submitContribution(name)" :disabled="isSubmittingContrib">
+                {{ isSubmittingContrib ? '⌛ 正在加密上传...' : '确认提交申请' }}
+              </button>
             </div>
           </Transition>
         </div>
@@ -410,72 +408,31 @@ const onFileChange = async (event) => {
 </template>
 
 <style scoped>
-/* 🌟 搜索下拉框样式 (同步自 AdminPanel) */
-.searchable-select { position: relative; width: 100%; }
-.search-input { width: 100%; padding: 8px 12px; border: 1px solid #f1f5f9; border-radius: 8px; outline: none; font-weight: bold; background: #fff; cursor: text; font-size: 13px; box-sizing: border-box;}
-.search-input:focus { border-color: #f472b6; box-shadow: 0 0 0 2px rgba(244, 114, 182, 0.1); }
-.select-dropdown {
-  position: absolute; top: 100%; left: 0; right: 0; margin-top: 5px;
-  background: white; border: 1.5px solid #fbcfe8; border-radius: 12px;
-  max-height: 200px; overflow-y: auto; z-index: 1000;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-}
-.option { padding: 10px 12px; cursor: pointer; font-size: 12px; color: #4b5563; border-bottom: 1px solid #f1f5f9; }
-.option:last-child { border-bottom: none; }
-.option:hover { background: #fdf2f8; color: #db2777; font-weight: bold; }
-.empty-option { text-align: center; color: #94a3b8; padding: 15px; font-style: italic; pointer-events: none; }
+/* ==========================================
+   📥 1. 极速录入容器与头部
+   ========================================== */
+.panel-header h2 { margin: 0 0 25px 0; color: #db2777; font-size: 20px; font-weight: 900; border-bottom: 2px dashed #fbcfe8; padding-bottom: 12px; }
 
-/* 容器 */
-.import-panel { 
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 30px; 
-  border-radius: 24px; 
-  margin-bottom: 25px;
-}
-.panel-header h2 { 
-  margin: 0 0 25px 0; color: #db2777; font-size: 20px; font-weight: 900;
-  border-bottom: 2px dashed #fbcfe8; padding-bottom: 12px;
-}
-
-/* AI 扫描区 */
-.ai-zone {
-  background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 100%);
-  border: 2px dashed #ddd6fe; border-radius: 18px; padding: 20px; margin-bottom: 20px;
-}
+/* ==========================================
+   🤖 2. AI 扫描特区
+   ========================================== */
+.ai-zone { background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 100%); border: 2px dashed #ddd6fe; border-radius: 18px; padding: 20px; margin-bottom: 20px; }
 .ai-info-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.quota-badge { 
-  background: #fff; color: #7c3aed; padding: 4px 12px; border-radius: 20px; 
-  font-size: 13px; font-weight: bold; border: 1px solid #ddd6fe;
-}
+.quota-badge { background: #fff; color: #7c3aed; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; border: 1px solid #ddd6fe; }
 .quota-badge.warning { color: #f43f5e; border-color: #fecdd3; }
 .ai-label { font-size: 12px; color: #a78bfa; font-weight: bold; }
 
-.scan-button {
-  display: block; background: linear-gradient(135deg, #7c3aed 0%, #f472b6 100%);
-  color: white; padding: 14px; border-radius: 14px; text-align: center;
-  font-weight: 800; cursor: pointer; transition: all 0.3s;
-  box-shadow: 0 6px 15px rgba(124, 58, 237, 0.2);
-}
+.scan-button { display: block; background: linear-gradient(135deg, #7c3aed 0%, #f472b6 100%); color: white; padding: 14px; border-radius: 14px; text-align: center; font-weight: 800; cursor: pointer; transition: all 0.3s; box-shadow: 0 6px 15px rgba(124, 58, 237, 0.2); }
 .scan-button:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(124, 58, 237, 0.3); }
 .scan-button.scanning { filter: grayscale(1); cursor: wait; }
 
-/* 文本区 */
-textarea {
-  width: 100%; padding: 15px; border-radius: 14px; border: 2px solid #f1f5f9;
-  background: #f8fafc; margin-bottom: 12px; box-sizing: border-box; outline: none;
-  transition: all 0.2s; font-family: inherit;
-}
-textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.1); }
-
-/* 解析报告 */
-.report-box {
-  background: white; border-radius: 18px; padding: 20px; margin-top: 20px;
-  border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03);
-}
+/* ==========================================
+   📊 3. 解析报告面板 (统计图与掉落卡片)
+   ========================================== */
+.report-box { background: white; border-radius: 18px; padding: 20px; margin-top: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); }
 .report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .report-header h3 { margin: 0; font-size: 16px; color: #475569; }
-.btn-close-mini { background: #f1f5f9; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; }
+.btn-close-mini { background: #f1f5f9; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #64748b;}
 
 .stats-summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
 .stat-item { text-align: center; padding: 10px; border-radius: 12px; }
@@ -486,68 +443,40 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 4px 
 .missing { background: #fff1f2; color: #e11d48; }
 
 .loot-display { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-.loot-card { 
-  background: #fff; border: 1px solid #fbcfe8; padding: 8px 12px; border-radius: 10px;
-  display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px rgba(244, 114, 182, 0.05);
-}
+.loot-card { background: #fff; border: 1px solid #fbcfe8; padding: 8px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px rgba(244, 114, 182, 0.05); }
 .loot-tag { font-size: 10px; font-weight: 900; color: #f472b6; background: #fdf2f8; padding: 2px 6px; border-radius: 6px; align-self: flex-start; }
 .loot-name { font-size: 13px; font-weight: bold; color: #1e293b; }
 
-/* 玩家贡献模块 */
+/* ==========================================
+   💖 4. 玩家贡献补录模块
+   ========================================== */
 .contribution-section { margin-top: 25px; padding-top: 25px; border-top: 2px dashed #f1f5f9; }
 .contrib-header p { margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #64748b; }
 
-.contrib-card { 
-  background: rgba(255, 255, 255, 0.6); border: 1px solid #e2e8f0; 
-  border-radius: 16px; padding: 12px; margin-bottom: 12px; transition: all 0.3s;
-}
+.contrib-card { background: rgba(255, 255, 255, 0.6); border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; margin-bottom: 12px; transition: all 0.3s; }
 .contrib-row { display: flex; justify-content: space-between; align-items: center; }
 .missing-name { font-weight: 800; color: #4b5563; }
-.btn-action-outline { 
-  background: #fff; border: 1.5px solid #ddd6fe; color: #8b5cf6;
-  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s;
-}
-.btn-action-outline:hover { background: #8b5cf6; color: white; border-color: #8b5cf6; }
 
-/* 贡献表单内部 */
 .mini-form-body { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
 .form-row { display: grid; gap: 10px; margin-bottom: 12px; }
-.three-cols { grid-template-columns: 1fr 1.5fr 1fr; } /* 🌟 三列排版 */
+.three-cols { grid-template-columns: 1fr 1.5fr 1fr; } 
 
 .form-group label { display: block; font-size: 11px; font-weight: bold; color: #94a3b8; margin-bottom: 4px; }
-.custom-input { 
-  width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; 
-  background: white; font-weight: bold; font-size: 12px; color: #1e293b;
-  box-sizing: border-box; outline: none; transition: border-color 0.2s;
-}
-.custom-input:focus { border-color: #f472b6; }
 
 .attr-grid-mini { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
 .attr-line { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.attr-line select {
-  width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; 
-  background: white; font-weight: bold; font-size: 12px; color: #1e293b; outline: none;
-}
+.attr-line select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #f1f5f9; background: white; font-weight: bold; font-size: 12px; color: #1e293b; outline: none; }
 .grade-sel { color: #f472b6 !important; background: #fdf2f8 !important; border-color: #fbcfe8 !important;}
 
-.btn-submit-contrib {
-  width: 100%; background: #a78bfa; color: white; border: none; padding: 12px;
-  border-radius: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s;
-}
+/* 专属补录提交按钮 */
+.btn-submit-contrib { width: 100%; background: #a78bfa; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
 .btn-submit-contrib:hover { background: #8b5cf6; transform: translateY(-1px); }
 
-/* 动画 */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.slide-enter-active { transition: all 0.3s ease-out; }
-.slide-enter-from { opacity: 0; transform: translateY(-10px); }
+/* ==========================================
+   📱 5. 手机端独有适配
+   ========================================== */
 @media (max-width: 768px) {
-  .three-cols {
-    grid-template-columns: 1fr; /* 把新短编号、分类等强制变成单列 */
-  }
-  .import-panel {
-    padding: 15px;
-  }
+  .three-cols { grid-template-columns: 1fr; }
+  .import-panel { padding: 15px; }
 }
 </style>

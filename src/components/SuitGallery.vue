@@ -190,13 +190,19 @@ const unlockSingleSuit = (suit) => {
 
 const submitMissingSuits = async (namesArray) => {
   if (!props.isLoggedIn) return alert('请先登录后再提报新套装哦~')
+  
+  // 🌟 新增防呆拦截：如果一次性提报超过 20 个，直接弹回！
+  if (namesArray.length > 20) {
+    return alert('⚠️ 提报数量太多啦！请确认你提报的是【套装】而不是【散件】哦！一次最多提报 20 个套装。')
+  }
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
-    // 🌟 核心替换：呼叫服务专员
     await contributionService.submitMissingSuits(namesArray, user.id)
     alert('✅ 提报成功！已发送给管理员审核，感谢你的贡献！')
+    importText.value = '' // 提交成功后顺手清空输入框
   } catch (err) {
-    alert(err.message) // 这样就能精准弹出 API 里的报错信息了
+    alert(err.message)
   }
 }
 </script>
@@ -324,31 +330,15 @@ const submitMissingSuits = async (namesArray) => {
 </template>
 
 <style scoped>
-/* 🌟 全局盒子模型修正，防止撑破边缘 */
-* { box-sizing: border-box; }
+/* ==========================================
+   🌟 1. 核心容器排版
+   ========================================== */
+.suit-gallery { width: 100%; padding: 0; margin: 0; animation: fadeIn 0.4s ease; }
+.glass-panel { background: transparent; border: none; padding: 0; box-shadow: none; }
 
-/* ========================================== */
-/* 🌟 1. 核心容器排版（解决占满全屏问题） */
-/* ========================================== */
-.suit-gallery {
-  /* 🌟 不要用 1200px 了，改成 100%，让它乖乖填满 App.vue 里的 680px 容器即可 */
-  width: 100%; 
-  /* 🌟 移除多余的内外边距，因为它已经在那个玻璃面板里了 */
-  padding: 0; 
-  margin: 0;
-  animation: fadeIn 0.4s ease;
-}
-
-.glass-panel { 
-  background: transparent; 
-  border: none; 
-  padding: 0; 
-  box-shadow: none; 
-}
-
-/* ========================================== */
-/* 🌟 2. 唤醒套装特区 & 顶部工具栏 */
-/* ========================================== */
+/* ==========================================
+   🎁 2. 唤醒套装特区 & 顶部工具栏
+   ========================================== */
 .zone-header { margin-bottom: 12px; }
 .zone-header h2 { margin: 0; color: #db2777; font-size: 18px; font-weight: 900; }
 .sub-title { font-size: 11px; color: #94a3b8; font-weight: bold; }
@@ -358,19 +348,14 @@ const submitMissingSuits = async (namesArray) => {
 .btn-scan.scanning { filter: grayscale(1); cursor: wait; }
 
 .import-controls { display: flex; flex-direction: column; gap: 10px; }
-textarea { width: 100%; padding: 12px; border: 1.5px solid #f1f5f9; border-radius: 14px; background: rgba(255,255,255,0.6); outline: none; resize: vertical; font-size: 13px; transition: all 0.3s; }
-textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.1); }
-
-.btn-primary { background: linear-gradient(135deg, #a855f7 0%, #d946ef 100%); color: white; border: none; padding: 12px; border-radius: 14px; font-weight: bold; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(217, 70, 239, 0.2); }
-.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(217, 70, 239, 0.3); }
 
 .divider { display: flex; align-items: center; justify-content: center; margin: 25px 0; position: relative; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1.5px; background: #fbcfe8; }
 .heart-deco { margin: 0 15px; color: #f472b6; font-size: 14px; }
 
-/* ========================================== */
-/* 🌟 3. 套装列表网格（精致 4 列版） */
-/* ========================================== */
+/* ==========================================
+   ✨ 3. 套装列表网格（精致 4 列版）
+   ========================================== */
 .gallery-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
 .gallery-header-row h3 { margin: 0; color: #9333ea; font-size: 16px; font-weight: 900; }
 .header-controls { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
@@ -382,31 +367,13 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px 
 .search-box { padding: 8px 15px; border: 1.5px solid #e9d5ff; border-radius: 20px; font-size: 12px; outline: none; width: 140px; background: #faf5ff; transition: all 0.3s; }
 .search-box:focus { border-color: #c084fc; width: 180px; background: #fff; }
 
-.suit-grid { 
-  display: grid; 
-  /* 🌟 核心修改：强制一行 4 个，平分剩余空间 */
-  grid-template-columns: repeat(4, 1fr); 
-  gap: 12px; /* 🌟 缩小卡片间距，腾出更多空间 */
-}
+.suit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 
-/* 👇 卡片整体精简化，适应窄横幅 */
-.suit-card { 
-  background: white; 
-  border: 1.5px solid #f3e8ff; 
-  border-radius: 12px; /* 缩小圆角 */
-  padding: 12px;       /* 缩小内边距 */
-  display: flex; 
-  flex-direction: column; 
-  gap: 8px;            /* 内部元素挨得更紧密 */
-  cursor: pointer; 
-  transition: all 0.2s; 
-  box-shadow: 0 4px 12px rgba(0,0,0,0.02); 
-}
+.suit-card { background: white; border: 1.5px solid #f3e8ff; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
 .suit-card:hover { transform: translateY(-3px); border-color: #d8b4fe; box-shadow: 0 8px 20px rgba(168, 85, 247, 0.1); }
 .suit-card.is-complete { background: #fdf2f8; border-color: #fbcfe8; }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; }
-/* 🌟 防止套装名字太长撑破卡片，加入单行省略号 */
 .suit-name { font-size: 13px; font-weight: 900; color: #475569; flex-grow: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suit-badge { background: #f472b6; color: white; font-size: 9px; font-weight: bold; padding: 2px 4px; border-radius: 6px; flex-shrink: 0;}
 
@@ -418,10 +385,10 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px 
 .progress-fill { height: 100%; background: linear-gradient(90deg, #c084fc 0%, #d946ef 100%); border-radius: 10px; transition: width 0.5s ease; }
 .is-complete .progress-fill { background: linear-gradient(90deg, #fbcfe8 0%, #f472b6 100%); }
 
-/* 🌟 按钮缩小排版 */
 .btn-unlock { background: #fff; border: 1.5px solid #d8b4fe; color: #9333ea; font-size: 11px; font-weight: bold; padding: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-top: auto; }
 .btn-unlock:hover { background: #9333ea; color: white; }
 .empty-state { text-align: center; color: #94a3b8; font-size: 13px; padding: 30px 0; grid-column: span 4; }
+
 .pagination { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 30px; }
 .page-btn { background: #fff; border: 1.5px solid #e2e8f0; color: #475569; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
 .page-btn:not(:disabled):hover { border-color: #a855f7; color: #9333ea; box-shadow: 0 4px 10px rgba(168, 85, 247, 0.1); }
@@ -429,35 +396,17 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px 
 .page-info { font-size: 13px; color: #64748b; font-weight: bold; }
 .page-info .current { color: #9333ea; font-size: 15px; }
 
-/* ========================================== */
-/* 🌟 4. 弹窗与部件列表双列美化 */
-/* ========================================== */
+/* ==========================================
+   🖼️ 4. 弹窗与部件列表双列美化
+   ========================================== */
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(4px); }
-.detail-modal { 
-  width: 90%; 
-  max-width: 650px; /* 🌟 放大 PC 端弹窗宽度以适应双列 */
-  background: white; 
-  border-radius: 24px; 
-  padding: 25px; 
-  box-shadow: 0 20px 50px rgba(0,0,0,0.2); 
-  display: flex; 
-  flex-direction: column; 
-  max-height: 85vh; 
-}
+.detail-modal { width: 90%; max-width: 650px; background: white; border-radius: 24px; padding: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 85vh; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; border-bottom: 2px dashed #fdf2f8; padding-bottom: 12px; }
 .modal-header h3 { margin: 0; color: #db2777; font-size: 18px; }
 .modal-subtitle { font-size: 11px; color: #a855f7; margin-bottom: 15px; font-weight: bold; text-align: center; }
 .btn-close { background: #f1f5f9; border: none; font-size: 24px; color: #94a3b8; cursor: pointer; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
 
-/* 🌟 PC 端部件列表：双列网格布局 */
-.parts-list { 
-  display: grid;
-  grid-template-columns: 1fr 1fr; /* 双列展示，告别一条长到底 */
-  gap: 12px;
-  overflow-y: auto; 
-  padding-right: 5px; 
-  margin-bottom: 20px;
-}
+.parts-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; overflow-y: auto; padding-right: 5px; margin-bottom: 20px; }
 .parts-list::-webkit-scrollbar { width: 4px; }
 .parts-list::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
 
@@ -477,25 +426,15 @@ textarea:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px 
 .btn-outline { background: white; color: #a855f7; border: 1.5px solid #d8b4fe; padding: 12px; border-radius: 14px; font-weight: bold; cursor: pointer; transition: all 0.2s; font-size: 14px;}
 .btn-outline:hover { background: #faf5ff; border-color: #a855f7; }
 
-/* ========================================== */
-/* 📱 5. 手机端专属适配策略 */
-/* ========================================== */
+/* ==========================================
+   📱 5. 手机端专属适配策略
+   ========================================== */
 @media (max-width: 768px) {
   .suit-gallery { padding: 10px; }
-  
-  /* 手机端每行显示 2 个套装 */
   .suit-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .suit-card { padding: 12px; }
   .suit-name { font-size: 13px; }
-  
-  /* 弹窗占满手机屏幕宽度（留一点边），高度缩小 */
   .detail-modal { width: 92% !important; max-width: none; padding: 18px !important; }
-  
-  /* 手机端太窄了，改回单列展示部件，防止文字挤重叠 */
   .parts-list { grid-template-columns: 1fr; gap: 8px; }
 }
-
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 </style>

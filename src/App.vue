@@ -1,112 +1,66 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue' // 🌟 新增了 watch
+import { ref, onMounted, watch } from 'vue'
 import { useAuth } from './composables/useAuth'
 import { useWardrobe } from './composables/useWardrobe'
 
-// 引入模块化组件
-import AuthBar from './components/AuthBar.vue'
+// 🌟 只需引入两个大页面和一个弹窗，再也不用引入一堆小零件了！
 import AuthModal from './components/AuthModal.vue'
-import Calculator from './components/Calculator.vue'
-import ImportZone from './components/ImportZone.vue'
-import WardrobeGrid from './components/WardrobeGrid.vue'
-import AdminPanel from './components/AdminPanel.vue'
-import SuitGallery from './components/SuitGallery.vue'
+import MainView from './views/MainView.vue'
+import AdminView from './views/AdminView.vue'
 
-
-// 逻辑分发中心
 const { currentUser, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
 const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
-// 视图控制状态
-const currentTab = ref('calculator')
+const currentMode = ref('main') // 状态只有：'main' (前台) 或 'admin' (后台)
 const isAuthModalOpen = ref(false)
 
-// 🌟 新增：监控用户状态，自动处理数据清理与同步
 watch(currentUser, (newUser) => {
-  if (newUser) {
-    // 监听到有新用户登录，立刻拉取他的云端衣柜
-    syncWardrobeFromCloud(newUser.id)
-  } else {
-    // 监听到用户登出 (变为 null)，立刻清空本地衣柜！
-    myWardrobeIds.value = []
-  }
+  if (newUser) syncWardrobeFromCloud(newUser.id)
+  else myWardrobeIds.value = []
 })
 
-// 应用总启动
 onMounted(async () => {
   await loadData()
   await initAuth()
-  // ✂️ 这里原来那三行关于 syncWardrobeFromCloud 的代码可以直接删掉了，
-  // 因为上面的 watch 已经完美接管了登录后的同步工作！
 })
 </script>
 
 <template>
   <div class="root-wrapper">
+    <AuthModal v-if="isAuthModalOpen" @close="isAuthModalOpen = false" />
     
-    <AdminPanel 
-      v-if="currentTab === 'admin' && isAdmin" 
+    <AdminView 
+      v-if="currentMode === 'admin' && isAdmin" 
       :fullWardrobeData="fullWardrobeData"
-      @back-to-main="currentTab = 'calculator'" 
+      @back-to-main="currentMode = 'main'" 
     />
 
-    <div v-show="currentTab !== 'admin'" class="app-container">
-      
-      <AuthBar :user="currentUser" @open-login="isAuthModalOpen = true" />
-      <AuthModal v-if="isAuthModalOpen" @close="isAuthModalOpen = false" />
-
-      <header>
-        <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
-        <nav class="tabs">
-          <button :class="{ active: currentTab === 'calculator' }" @click="currentTab = 'calculator'">搭配计算</button>
-          <button :class="{ active: currentTab === 'import' }" @click="currentTab = 'import'">录入衣柜</button>
-          <button :class="{ active: currentTab === 'wardrobe' }" @click="currentTab = 'wardrobe'">我的衣柜</button>
-          <button :class="{ active: currentTab === 'suits' }" @click="currentTab = 'suits'">套装图鉴</button>
-          <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="currentTab = 'admin'" class="admin-tab-btn">图鉴管理</button>
-        </nav>
-      </header>
-
-      <div v-if="isLoading" class="loading-state"><h2>⏳ 奇迹载入中...</h2></div>
-      
-      <main v-else>
-        <Calculator 
-          v-if="currentTab === 'calculator'" 
-          :wardrobe="fullWardrobeData" 
-          :ownedIds="myWardrobeIds" 
-          :stages="stagesData"
-        />
-        
-        <ImportZone 
-          v-if="currentTab === 'import'" 
-          :wardrobe="fullWardrobeData"
-          :ownedIds="myWardrobeIds"
-          :quota="userQuota"
-          :isLoggedIn="!!currentUser"
-          @update:ownedIds="myWardrobeIds = $event"
-          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-          @refresh-profile="fetchProfile"
-        />
-
-        <WardrobeGrid 
-          v-if="currentTab === 'wardrobe'" 
-          :wardrobe="fullWardrobeData"
-          :ownedIds="myWardrobeIds"
-          :isLoggedIn="!!currentUser"
-          @update:ownedIds="myWardrobeIds = $event"
-          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-        />
-
-        <SuitGallery 
-          v-if="currentTab === 'suits'" 
-          :wardrobe="fullWardrobeData"
-          :ownedIds="myWardrobeIds"
-          :isLoggedIn="!!currentUser"
-          @update:ownedIds="myWardrobeIds = $event"
-          @save-cloud="saveWardrobeToCloud(currentUser?.id)"
-        />
-      </main>
-      
-    </div>
+    <MainView 
+      v-else
+      :currentUser="currentUser"
+      :isAdmin="isAdmin"
+      :userQuota="userQuota"
+      :fullWardrobeData="fullWardrobeData"
+      :myWardrobeIds="myWardrobeIds"
+      :stagesData="stagesData"
+      :isLoading="isLoading"
+      @open-login="isAuthModalOpen = true"
+      @go-admin="currentMode = 'admin'"
+      @update:ownedIds="myWardrobeIds = $event"
+      @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+      @refresh-profile="fetchProfile"
+    />
   </div>
 </template>
 
+<style>
+/* 🌟 这里只保留全局底色和最基础的排版 */
+body { margin: 0; padding: 0; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: #fdf2f8; background-image: radial-gradient(#fbcfe8 1px, transparent 1px); background-size: 20px 20px; color: #333; }
+.root-wrapper { display: flex; justify-content: center; min-height: 100vh; padding: 20px; box-sizing: border-box; }
+.app-container { width: 100%; max-width: 680px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-radius: 24px; box-shadow: 0 10px 30px rgba(219, 39, 119, 0.1); border: 1px solid rgba(255,255,255,0.6); padding: 30px; margin: 0 auto; box-sizing: border-box; }
+
+@media (max-width: 768px) {
+  .root-wrapper { padding: 10px; }
+  .app-container { padding: 15px; border-radius: 16px; }
+}
+</style>

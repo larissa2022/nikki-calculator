@@ -77,51 +77,26 @@ const submitAuth = async () => {
 </template>
 
 <style scoped>
-* { box-sizing: border-box; }
+/* ==========================================
+   🔒 1. 弹窗底层与容器
+   ========================================== */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); }
+.modal-content { background: white; padding: 30px; border-radius: 20px; width: 400px; position: relative; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999; /* 确保在最上层 */
-}
-.modal-content {
-  background: white;
-  padding: 30px;
-  border-radius: 12px;
-  width: 400px; /* PC端固定宽度 */
-  position: relative;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-.modal-content h2 { text-align: center; color: #374151; margin-top: 0; margin-bottom: 20px;}
-.modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 15px; outline: none; transition: border-color 0.2s;}
-.modal-content input:focus { border-color: #f472b6; }
-.btn-primary { background: #f472b6; color: white; width: 100%; padding: 12px; font-size: 16px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;}
-.btn-primary:hover { background: #ec4899; }
-.btn-primary:disabled { background: #fbcfe8; cursor: not-allowed; }
-.toggle-mode { text-align: center; color: #3b82f6; font-size: 13px; margin-top: 15px; cursor: pointer;}
-.toggle-mode:hover { text-decoration: underline; }
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-/* 📱 手机端适配 */
+/* ==========================================
+   📝 2. 内部排版细节
+   ========================================== */
+.modal-content h2 { text-align: center; color: #db2777; margin-top: 0; margin-bottom: 20px; font-weight: 900; }
+.modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #f1f5f9; border-radius: 12px; box-sizing: border-box; font-size: 14px; font-weight: bold; outline: none; transition: border-color 0.2s; color: #1e293b; background: #f8fafc; }
+.modal-content input:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.1); }
+
+.toggle-mode { text-align: center; color: #8b5cf6; font-size: 13px; font-weight: bold; margin-top: 15px; cursor: pointer; transition: color 0.2s; }
+.toggle-mode:hover { color: #f472b6; text-decoration: underline; }
+
+/* ==========================================
+   📱 3. 手机端适配
+   ========================================== */
 @media (max-width: 768px) {
-  .modal-content {
-    width: 92% !important; /* 🌟 不要 100%，给左右留出呼吸空隙 */
-    margin: 0 auto;
-    padding: 24px 20px !important;
-    max-height: 85vh; /* 🌟 限制最高度，防止长页面滑不动 */
-    overflow-y: auto;
-  }
-}
-
-@keyframes popIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
+  .modal-content { width: 92% !important; margin: 0 auto; padding: 24px 20px !important; max-height: 85vh; overflow-y: auto; }
 }
 </style>
