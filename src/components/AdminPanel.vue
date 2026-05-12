@@ -1,10 +1,12 @@
 <script setup>
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
-import { supabase } from '../api/supabase'
+import { ref, reactive, onMounted, computed } from 'vue'
+// 🌟 引入刚刚写好的双子星服务！
+import { adminService } from '../api/adminService'
+import { suitService } from '../api/suitService'
 
 const emit = defineEmits(['back-to-main']);
 
-// ====== 🌟 1. 官方全品类分值矩阵 ======
+// ====== 🌟 1. 官方全品类分值矩阵 (界面算分逻辑保留在组件内) ======
 const baseScoreMatrix = {
   '发型': { '完美+': 1324.5, '完美': 1089, '优秀': 837, '不错': 682.5, '一般': 517.5, '失败': 0 },
   '连衣裙': { '完美+': 5269.5, '完美': 4305, '优秀': 3366, '不错': 2749.5, '一般': 2100, '失败': 0 },
@@ -43,8 +45,7 @@ const userPage = ref(1)
 const userPageSize = 10
 
 const newClothes = reactive({
-  pendingIds: [], // 🌟 改为数组，存储所有被合并的ID
-  suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
+  pendingIds: [], suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
   pair1: 'simple', grade1: '完美', pair2: 'cute', grade2: '完美', pair3: 'active', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
 })
 
@@ -52,37 +53,41 @@ const newClothes = reactive({
 const fetchAllData = async () => {
   isPendingLoading.value = true
   try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      currentUserId.value = user.id
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (profile) currentUserRole.value = profile.role
+    // 呼叫 API 1：获取身份
+    const { userId, role } = await adminService.getCurrentUserRole();
+    currentUserId.value = userId;
+    currentUserRole.value = role;
+
+    // 呼叫 API 2：获取大盘数据
+    const { pendingClothes, pendingSuits, countsMap } = await adminService.getPendingData();
+    pendingList.value = pendingClothes;
+    pendingSuitsList.value = pendingSuits;
+
+    // 呼叫 API 3：获取所有玩家
+    if (role === 'super_admin') {
+      allUsersList.value = await adminService.getAllUsers(countsMap);
     }
-
-    const [clothesRes, pendingSuitsRes, contribRes] = await Promise.all([
-      supabase.from('pending_clothes').select('*, suits(name)').eq('status', 'pending').order('id', { ascending: false }),
-      supabase.from('pending_suits').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
-      supabase.from('pending_clothes').select('submitted_by').eq('status', 'approved')
-    ])
-    
-    pendingList.value = clothesRes.data || []
-    pendingSuitsList.value = pendingSuitsRes.data || []
-
-    const countsMap = {}
-    contribRes.data?.forEach(row => { if (row.submitted_by) countsMap[row.submitted_by] = (countsMap[row.submitted_by] || 0) + 1 })
-
-    if (currentUserRole.value === 'super_admin') {
-      const { data: usersData } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-      allUsersList.value = (usersData || []).map(u => ({ ...u, contribCount: countsMap[u.id] || 0 }))
-    }
-  } finally { isPendingLoading.value = false }
+  } catch (err) {
+    console.error("后台数据加载失败:", err);
+  } finally { 
+    isPendingLoading.value = false;
+  }
 }
 
-// 🌟 核心：聚类算法 (Clustering)
+const fetchSuits = async () => {
+  try {
+    suitList.value = await suitService.getAllSuits(); // 🌟 复用昨天写好的服务！
+  } catch (err) {
+    console.error("获取套装列表失败:", err);
+  }
+}
+
+onMounted(() => { fetchAllData(); fetchSuits(); })
+
+// 🌟 聚类算法计算属性
 const clusteredPendingList = computed(() => {
   const groups = {};
   pendingList.value.forEach(item => {
-    // 聚类钥匙：分类+短编号。如果没有编号，用名字保底
     const key = (item.game_id && item.game_id !== 'N') ? `${item.category}_${item.game_id}` : `NAME_${item.name}`;
     if (!groups[key]) groups[key] = { key, items: [] };
     groups[key].items.push(item);
@@ -90,7 +95,6 @@ const clusteredPendingList = computed(() => {
   return Object.values(groups);
 });
 
-// 🌟 辅助：寻找一组数据中的“众数/最准值” (Arbitration)
 const getMostFrequent = (arr) => {
   if (!arr.length) return null;
   const counts = {};
@@ -98,12 +102,10 @@ const getMostFrequent = (arr) => {
   return Object.keys(counts).reduce((a, b) => counts[a] >= counts[b] ? a : b);
 };
 
-// ====== 🌟 4. 处理聚类后的审核申请 ======
+// ====== 🌟 4. 处理界面交互 ======
 const handleClusteredItem = (group) => {
   const items = group.items;
   const userMap = Object.fromEntries(allUsersList.value.map(u => [u.id, u.contribCount]));
-
-  // 1. 基础信息：取第一个或根据权重取
   const bestItem = items.reduce((prev, curr) => (userMap[curr.submitted_by] || 0) > (userMap[prev.submitted_by] || 0) ? curr : prev);
   
   newClothes.pendingIds = items.map(i => i.id);
@@ -113,11 +115,9 @@ const handleClusteredItem = (group) => {
   newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)));
   newClothes.suit_id = bestItem.suit_id || '';
 
-  // 2. 标签合并 (去重并集)
   const allTags = items.flatMap(i => i.tags ? (Array.isArray(i.tags) ? i.tags : i.tags.split(/[,，\s]+/)) : []).map(t => t.trim());
   newClothes.tags = [...new Set(allTags)].filter(t => t).join(', ');
 
-  // 3. 属性智能算分
   if (bestItem.scores) {
     const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品'];
     const getGradeFromScore = (val) => {
@@ -129,7 +129,6 @@ const handleClusteredItem = (group) => {
       return closest;
     };
 
-    // 针对每一对属性，收集所有人的意见并取众数
     const attrPairs = [
       { key: 'pair1', gKey: 'grade1', p1: 'simple', p2: 'gorgeous' },
       { key: 'pair2', gKey: 'grade2', p1: 'cute', p2: 'mature' },
@@ -155,10 +154,30 @@ const handleClusteredItem = (group) => {
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
 };
 
-// ====== 🌟 5. 最终入库 (批量批准) ======
+const selectSuit = (suit) => {
+  newClothes.suit_id = suit.id;
+  suitSearchText.value = suit.id ? `《${suit.name}》` : '';
+  isSuitDropdownOpen.value = false;
+}
+
+const filteredSuits = computed(() => {
+  const query = suitSearchText.value.toLowerCase().trim();
+  if (!query || query.startsWith('《')) return suitList.value.slice(0, 50);
+  return suitList.value.filter(s => s.name.includes(query)).slice(0, 50);
+})
+
+const adminUsers = computed(() => allUsersList.value.filter(u => u.role !== 'user'))
+const regularUsers = computed(() => allUsersList.value.filter(u => u.role === 'user'))
+const paginatedRegularUsers = computed(() => {
+  const start = (userPage.value - 1) * userPageSize;
+  return regularUsers.value.slice(start, start + userPageSize);
+})
+const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
+
+// ====== 🌟 5. 将行动指令发给后台专员 ======
 const submitNewClothes = async () => {
-  if (!newClothes.name) return alert('名字是必填项哦！')
-  isSubmitting.value = true
+  if (!newClothes.name) return alert('名字是必填项哦！');
+  isSubmitting.value = true;
   try {
     const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品'];
     const calculatedScores = {};
@@ -172,59 +191,45 @@ const submitNewClothes = async () => {
       suit_id: newClothes.suit_id || null, tags: newClothes.tags.split(/[,，\s]+/).filter(t => t)
     };
 
-    const { error } = await supabase.from('clothes').insert([payload]);
-    if (error) throw error;
-    
-    // 🌟 一键通过该聚类下的所有申请
-    if (newClothes.pendingIds.length > 0) {
-      await supabase.from('pending_clothes').update({ status: 'approved' }).in('id', newClothes.pendingIds);
-    }
+    // 🌟 呼叫 API：终极仲裁入库
+    await adminService.submitArbitration(payload, newClothes.pendingIds);
 
     alert(`🎉 【${newClothes.name}】已汇聚多方数据并成功入库！`);
     Object.assign(newClothes, { name: '', game_id: '', tags: '', suit_id: '', pendingIds: [] });
-    suitSearchText.value = ''; fetchAllData();
-  } catch (err) { alert('入库失败：' + err.message) } 
-  finally { isSubmitting.value = false }
+    suitSearchText.value = ''; 
+    fetchAllData();
+  } catch (err) { 
+    alert(err.message);
+  } finally { 
+    isSubmitting.value = false;
+  }
 }
-
-const selectSuit = (suit) => {
-  newClothes.suit_id = suit.id
-  suitSearchText.value = suit.id ? `《${suit.name}》` : ''
-  isSuitDropdownOpen.value = false
-}
-
-const filteredSuits = computed(() => {
-  const query = suitSearchText.value.toLowerCase().trim();
-  if (!query || query.startsWith('《')) return suitList.value.slice(0, 50);
-  return suitList.value.filter(s => s.name.includes(query)).slice(0, 50);
-})
-
-const adminUsers = computed(() => allUsersList.value.filter(u => u.role !== 'user'))
-const regularUsers = computed(() => allUsersList.value.filter(u => u.role === 'user'))
-const paginatedRegularUsers = computed(() => {
-  const start = (userPage.value - 1) * userPageSize
-  return regularUsers.value.slice(start, start + userPageSize)
-})
-const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
-
-const fetchSuits = async () => {
-  const { data } = await supabase.from('suits').select('id, name').order('name')
-  if (data) suitList.value = data
-}
-
-onMounted(() => { fetchAllData(); fetchSuits(); })
 
 const changeUserRole = async (uId, role) => {
-  await supabase.from('profiles').update({ role }).eq('id', uId);
-  alert('权限更新成功！'); fetchAllData();
+  try {
+    await adminService.updateUserRole(uId, role);
+    alert('权限更新成功！'); 
+    fetchAllData();
+  } catch(err) { alert(err.message); }
 }
+
 const approvePendingSuit = async (item) => {
-  await supabase.from('suits').upsert({ name: item.name });
-  await supabase.from('pending_suits').update({ status: 'approved' }).eq('id', item.id);
-  alert('套装已建档！'); fetchAllData(); fetchSuits();
+  try {
+    await adminService.approveSuit(item.id, item.name);
+    alert(`✅ 《${item.name}》已成功建档！`); 
+    fetchAllData(); 
+    fetchSuits();
+  } catch (err) { alert(err.message); }
 }
-const rejectPendingSuit = (id) => supabase.from('pending_suits').update({ status: 'rejected' }).eq('id', id).then(fetchAllData)
-const rejectPendingItem = (id) => supabase.from('pending_clothes').update({ status: 'rejected' }).eq('id', id).then(fetchAllData)
+
+const rejectPendingSuit = async (id) => {
+  try { await adminService.rejectPending('pending_suits', id); fetchAllData(); } catch(err) { console.error(err); }
+}
+
+const rejectPendingItem = async (id) => {
+  try { await adminService.rejectPending('pending_clothes', id); fetchAllData(); } catch(err) { console.error(err); }
+}
+
 const formatDate = (ds) => new Date(ds).toLocaleString();
 </script>
 
@@ -331,84 +336,85 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
       </section>
     </div>
 
-  </div>
-  <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
-      
-      <section class="section-card user-section" style="border-left: 4px solid #7c3aed; background: #f5f3ff;">
-        <div class="section-header">
-          <h3 class="purple-title">🛡️ 管理与决策团队</h3>
-          <span class="badge">席位：{{ adminUsers.length }}</span>
-        </div>
-        <div class="users-table-container">
-          <table class="users-table">
-            <thead>
-              <tr>
-                <th>注册时间</th>
-                <th>管理员邮箱</th>
-                <th>系统身份</th>
-                <th>图鉴贡献</th>
-                <th>权限变更</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="u in adminUsers" :key="u.id" :class="{ 'is-me': u.id === currentUserId }">
-                <td class="time-col">{{ formatDate(u.created_at) }}</td>
-                <td class="email-col"><strong>{{ u.email }}</strong></td>
-                <td><span class="role-badge" :class="u.role">{{ u.role === 'super_admin' ? '👑 最高站长' : '🛡️ 系统管理' }}</span></td>
-                <td><span class="contrib-tag">✨ {{ u.contribCount }} 次</span></td>
-                <td>
-                  <select v-if="u.role !== 'super_admin'" class="role-select" :value="u.role" @change="changeUserRole(u.id, $event.target.value)">
-                    <option value="user">降级为玩家</option>
-                    <option value="admin">维持管理员</option>
-                  </select>
-                  <span v-else class="protected-text">权限锁定</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="section-card user-section">
-        <div class="section-header">
-          <h3 class="purple-title">👥 全站活跃玩家档案</h3>
-          <span class="badge">总数：{{ regularUsers.length }}</span>
-        </div>
+  
+    <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
         
-        <div class="users-table-container">
-          <table class="users-table">
-            <thead>
-              <tr>
-                <th>注册时间</th>
-                <th>玩家账号</th>
-                <th>图鉴贡献次数</th>
-                <th>设为管理</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="u in paginatedRegularUsers" :key="u.id">
-                <td class="time-col">{{ formatDate(u.created_at) }}</td>
-                <td class="email-col">{{ u.email }}</td>
-                <td>
-                  <div class="contrib-progress-bar">
-                    <span class="count-txt">{{ u.contribCount }}</span>
-                    <div class="track"><div class="fill" :style="{ width: Math.min(u.contribCount * 10, 100) + '%' }"></div></div>
-                  </div>
-                </td>
-                <td>
-                  <button class="btn-promote" @click="changeUserRole(u.id, 'admin')">🛡️ 提拔为管理员</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <section class="section-card user-section" style="border-left: 4px solid #7c3aed; background: #f5f3ff;">
+          <div class="section-header">
+            <h3 class="purple-title">🛡️ 管理与决策团队</h3>
+            <span class="badge">席位：{{ adminUsers.length }}</span>
+          </div>
+          <div class="users-table-container">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>注册时间</th>
+                  <th>管理员邮箱</th>
+                  <th>系统身份</th>
+                  <th>图鉴贡献</th>
+                  <th>权限变更</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in adminUsers" :key="u.id" :class="{ 'is-me': u.id === currentUserId }">
+                  <td class="time-col">{{ formatDate(u.created_at) }}</td>
+                  <td class="email-col"><strong>{{ u.email }}</strong></td>
+                  <td><span class="role-badge" :class="u.role">{{ u.role === 'super_admin' ? '👑 最高站长' : '🛡️ 系统管理' }}</span></td>
+                  <td><span class="contrib-tag">✨ {{ u.contribCount }} 次</span></td>
+                  <td>
+                    <select v-if="u.role !== 'super_admin'" class="role-select" :value="u.role" @change="changeUserRole(u.id, $event.target.value)">
+                      <option value="user">降级为玩家</option>
+                      <option value="admin">维持管理员</option>
+                    </select>
+                    <span v-else class="protected-text">权限锁定</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        <div class="pagination-admin" v-if="totalUserPages > 1">
-          <button :disabled="userPage === 1" @click="userPage--">◀</button>
-          <span>第 {{ userPage }} / {{ totalUserPages }} 页</span>
-          <button :disabled="userPage === totalUserPages" @click="userPage++">▶</button>
-        </div>
-      </section>
+        <section class="section-card user-section">
+          <div class="section-header">
+            <h3 class="purple-title">👥 全站活跃玩家档案</h3>
+            <span class="badge">总数：{{ regularUsers.length }}</span>
+          </div>
+          
+          <div class="users-table-container">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>注册时间</th>
+                  <th>玩家账号</th>
+                  <th>图鉴贡献次数</th>
+                  <th>设为管理</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in paginatedRegularUsers" :key="u.id">
+                  <td class="time-col">{{ formatDate(u.created_at) }}</td>
+                  <td class="email-col">{{ u.email }}</td>
+                  <td>
+                    <div class="contrib-progress-bar">
+                      <span class="count-txt">{{ u.contribCount }}</span>
+                      <div class="track"><div class="fill" :style="{ width: Math.min(u.contribCount * 10, 100) + '%' }"></div></div>
+                    </div>
+                  </td>
+                  <td>
+                    <button class="btn-promote" @click="changeUserRole(u.id, 'admin')">🛡️ 提拔为管理员</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-admin" v-if="totalUserPages > 1">
+            <button :disabled="userPage === 1" @click="userPage--">◀</button>
+            <span>第 {{ userPage }} / {{ totalUserPages }} 页</span>
+            <button :disabled="userPage === totalUserPages" @click="userPage++">▶</button>
+          </div>
+        </section>
+      </div>
     </div>
 </template>
 

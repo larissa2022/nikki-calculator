@@ -1,7 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch ,nextTick} from 'vue'
-import { supabase } from '../api/supabase'
-
+import { suitService } from '../api/suitService'
+import { contributionService } from '../api/contributionService' // 🌟 新增这行
+import { supabase } from '../api/supabase' // 记得保留这个，因为还要获取当前登录 user
 const props = defineProps({
   wardrobe: { type: Array, required: true },
   ownedIds: { type: Array, required: true },
@@ -34,9 +35,13 @@ const fullCategories = [
 const suitSearchText = ref('')
 const isSuitDropdownOpen = ref(false)
 
+// 以前这里写了一大堆 supabase.from... 现在只需一行！
 onMounted(async () => {
-  const { data } = await supabase.from('suits').select('id, name').order('created_at', { ascending: false })
-  if (data) availableSuits.value = data
+  try {
+    availableSuits.value = await suitService.getAllSuits();
+  } catch (err) {
+    alert('加载套装字典失败，请刷新重试');
+  }
 })
 
 const contribForm = reactive({
@@ -58,11 +63,13 @@ watch(activeContribution, () => {
   contribForm.game_id = ''
 })
 
-// ====== 🌟 搜索逻辑：计算过滤后的套装 ======
+// ====== 🌟 搜索逻辑强化：防崩溃与符号过滤 ======
 const filteredSuits = computed(() => {
-  const query = suitSearchText.value.toLowerCase().trim()
-  if (!query) return availableSuits.value
-  return availableSuits.value.filter(s => s.name.toLowerCase().includes(query))
+  const query = suitSearchText.value?.toLowerCase().trim() || '';
+  // 如果搜索框是空的，或者是点选后带《》的，直接返回全列表
+  if (!query || query.startsWith('《')) return availableSuits.value;
+  // 安全过滤，防止 name 为 null 时报错闪退
+  return availableSuits.value.filter(s => s.name && s.name.toLowerCase().includes(query));
 })
 
 const selectSuit = (suit) => {
@@ -166,11 +173,12 @@ const submitContribution = async (name) => {
       calculatedScores[contribForm[p]] = matrix[contribForm[g]] || 0;
     })
 
-    // 🌟 核心修复 1：先获取当前点击提交按钮的玩家身份
+    // ... 前面算分的逻辑保留 ...
+
     const { data: { user } } = await supabase.auth.getUser()
 
-    // 🌟 核心修复 2：在插入数据时，把玩家 ID (submitted_by) 一起写进数据库
-    const { error } = await supabase.from('pending_clothes').insert([{
+    // 🌟 核心替换：直接呼叫专员提交！
+    await contributionService.submitPendingClothes({
       name: name,
       game_id: contribForm.game_id || 'N', 
       category: contribForm.category,      
@@ -178,9 +186,11 @@ const submitContribution = async (name) => {
       scores: calculatedScores,
       suit_id: contribForm.suit_id || null,
       tags: contribForm.tags || null,
-      submitted_by: user?.id, // 👈 🌟 补上这句极其重要的“署名”！
-      status: 'pending'       // 👈 🌟 确保有初始状态
-    }])
+      submitted_by: user?.id,
+      status: 'pending'
+    })
+
+    if (error) throw error // 这行可以删掉，因为 service 里已经拦截了
 
     if (error) throw error
     alert(`🎉 感谢小仙女的贡献！【${name}】的详细资料已提交！`)
@@ -199,15 +209,14 @@ const promptAddNewSuit = async () => {
   const newSuitName = prompt('请输入要申请添加的新套装名称：')
   if (!newSuitName || !newSuitName.trim()) return
   
-  const { data: { user } } = await supabase.auth.getUser()
-  const { error } = await supabase.from('pending_suits').insert([{
-    name: newSuitName.trim(),
-    submitted_by: user?.id,
-    status: 'pending'
-  }])
-  
-  if (error) alert('套装申请提交失败！')
-  else alert('✅ 套装申请已发送给管理员审核！请等待审核通过后再关联该部件。')
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    // 🌟 直接呼叫 API
+    await suitService.applyNewSuit(newSuitName, user?.id)
+    alert('✅ 套装申请已发送给管理员审核！请等待审核通过后再关联该部件。')
+  } catch (error) {
+    alert('套装申请提交失败！')
+  }
 }
 
 // ====== 逻辑 3：AI 识别图片 ======
@@ -243,9 +252,8 @@ const onFileChange = async (event) => {
   isRecognizing.value = true
   try {
     const b64 = await compressImage(file)
-    const { data, error } = await supabase.functions.invoke('recognize-clothing', {
-      body: { imageBase64: b64 }
-    })
+    const data = await contributionService.recognizeImage(b64, 'clothes')
+    importText.value = data.names
     if (error) throw error
     importText.value = data.names
     await handleImport()

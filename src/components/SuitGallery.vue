@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { contributionService } from '../api/contributionService'
 import { supabase } from '../api/supabase'
 
 const props = defineProps({
@@ -130,9 +131,8 @@ const onFileChange = async (event) => {
   isRecognizing.value = true 
   try {
     const compressedBase64 = await compressImage(file)
-    const { data, error } = await supabase.functions.invoke('recognize-clothing', {
-      body: { imageBase64: compressedBase64, mode: 'suit' }
-    })
+    const data = await contributionService.recognizeImage(compressedBase64, 'suit')
+    importText.value = data.names
     if (error) throw error
     importText.value = data.names
     handleSuitImport()
@@ -192,12 +192,11 @@ const submitMissingSuits = async (namesArray) => {
   if (!props.isLoggedIn) return alert('请先登录后再提报新套装哦~')
   try {
     const { data: { user } } = await supabase.auth.getUser()
-    const inserts = namesArray.map(name => ({ name: name, submitted_by: user.id, status: 'pending' }))
-    const { error } = await supabase.from('pending_suits').insert(inserts)
-    if (error) throw error
+    // 🌟 核心替换：呼叫服务专员
+    await contributionService.submitMissingSuits(namesArray, user.id)
     alert('✅ 提报成功！已发送给管理员审核，感谢你的贡献！')
   } catch (err) {
-    alert('提报失败，可能是网络波动~')
+    alert(err.message) // 这样就能精准弹出 API 里的报错信息了
   }
 }
 </script>
