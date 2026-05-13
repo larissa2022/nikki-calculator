@@ -1,8 +1,10 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch ,nextTick} from 'vue'
 import { suitService } from '../api/suitService'
-import { contributionService } from '../api/contributionService' // 🌟 新增这行
-import { supabase } from '../api/supabase' // 保留这个用于获取 user
+import { contributionService } from '../api/contributionService'
+import { supabase } from '../api/supabase'
+import { useWardrobe } from '../composables/useWardrobe' // 🌟 1. 新增：引入衣柜大脑
+
 const props = defineProps({
   wardrobe: { type: Array, required: true },
   ownedIds: { type: Array, required: true },
