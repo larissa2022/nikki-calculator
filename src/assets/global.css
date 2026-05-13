@@ -1,6 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 下面继续保留你原本的 body 样式... */
 /* ==========================================
    ✨ 奇迹暖暖极速搭配器 - 全局核心样式库
    ========================================== */
+
 
 /* 1. 基础重置 & 页面底层 (从 App.vue 抽离) */
 body { margin: 0; padding: 0; font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: #fdf2f8; background-image: radial-gradient(#fbcfe8 1px, transparent 1px); background-size: 20px 20px; color: #333; }
