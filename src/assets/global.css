@@ -1,6 +1,9 @@
+@import "tailwindcss";
+@plugin "daisyui";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 
 /* 下面继续保留你原本的 body 样式... */
 /* ==========================================

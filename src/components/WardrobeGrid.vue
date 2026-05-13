@@ -42,8 +42,7 @@ const collectionStats = computed(() => {
   return { owned: ownedInCat, total: totalInCat, percent }
 })
 
-// ====== 排序与过滤逻辑 ======
-// 在 src/components/WardrobeGrid.vue 的 computed 筛选逻辑中修改：
+
 
 // ====== 排序与过滤逻辑 ======
 const filteredClothes = computed(() => {
@@ -77,6 +76,21 @@ const filteredClothes = computed(() => {
     return getVal(a.game_id) - getVal(b.game_id);
   });
 });
+
+// 🌟 新增 1：智能判断当前是否已经全选了（基于当前过滤后的列表）
+const isAllSelected = computed(() => {
+  return filteredClothes.value.length > 0 && selectedIds.value.length === filteredClothes.value.length
+})
+
+// 🌟 新增 2：一键全选/反选触发器
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedIds.value = [] // 已经全选？那就一键清空
+  } else {
+    // 还没全选？把当前筛选出来的所有衣服 ID 塞进去
+    selectedIds.value = filteredClothes.value.map(item => item.id)
+  }
+}
 
 watch([activeCategory, searchQuery], () => {
   currentPage.value = 1
@@ -127,8 +141,12 @@ const batchDelete = () => {
         <div class="mini-search">
           <input type="text" v-model="searchQuery" placeholder="搜索..." />
         </div>
-        <button class="btn-manage-icon" @click="isSelectMode = !isSelectMode" :class="{ active: isSelectMode }">
-          {{ isSelectMode ? '✓' : '⚙' }}
+        <button 
+          class="btn btn-sm rounded-full transition-all shadow-sm font-bold"
+          :class="isSelectMode ? 'btn-primary' : 'btn-outline btn-secondary'"
+          @click="isSelectMode = !isSelectMode"
+        >
+          {{ isSelectMode ? '✅ 退出管理' : '🛠️ 批量操作' }}
         </button>
       </div>
     </div>
@@ -181,9 +199,40 @@ const batchDelete = () => {
       <button :disabled="currentPage === 1" @click="currentPage--">‹</button>
       <span>{{ currentPage }} / {{ totalPages }}</span>
       <button :disabled="currentPage === totalPages" @click="currentPage++">›</button>
-      <button v-if="isSelectMode" @click="batchDelete" class="btn-batch-del" :disabled="selectedIds.length === 0">批量删除</button>
+      
     </div>
+    <Teleport to="body">
+      <div v-if="isSelectMode" class="fixed bottom-0 left-0 right-0 z-[100] pb-6 pt-3 px-4 bg-base-100/90 backdrop-blur-lg border-t border-base-200 shadow-[0_-10px_30px_rgba(0,0,0,0.1)] animate-slide-up">
+        
+        <div class="max-w-lg mx-auto flex justify-between items-center">
+          <label class="cursor-pointer label gap-3 justify-start p-0">
+            <input 
+              type="checkbox" 
+              class="checkbox checkbox-primary checkbox-md" 
+              :checked="isAllSelected" 
+              @change="toggleSelectAll" 
+            />
+            <span class="font-black text-slate-700">
+              全选 <span class="text-xs text-primary bg-primary/10 px-2 py-1 rounded-full ml-1">已选 {{ selectedIds.length }}</span>
+            </span>
+          </label>
+          
+          <div class="flex gap-2">
+            <button class="btn btn-sm btn-ghost font-bold" @click="isSelectMode = false">取消</button>
+            <button 
+              class="btn btn-sm btn-error shadow-md text-white font-black" 
+              :disabled="selectedIds.length === 0" 
+              @click="batchDelete"
+            >
+              🗑️ 删除 ({{ selectedIds.length }})
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </Teleport>
   </div>
+  
 </template>
 
 <style scoped>

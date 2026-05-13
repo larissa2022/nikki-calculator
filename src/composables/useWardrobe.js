@@ -30,6 +30,7 @@ export function useWardrobe() {
   const myWardrobeIds = ref([])
   const stagesData = ref([])
   const isLoading = ref(false)
+  const isSaving = ref(false) // 🌟 1. 新增：防抖与防误触的全局锁
 
   // 🚀 高性能计算：使用 Set 实现 O(1) 极速查找
   const myWardrobeSet = computed(() => new Set(myWardrobeIds.value))
@@ -38,8 +39,6 @@ export function useWardrobe() {
   const loadData = async () => {
     isLoading.value = true
     try {
-      // 🌟 修复网络拦截：移除 head: true，改用 GET 请求获取 count
-      // 技巧：只 select('id') 并且 limit(1)，既避开了 HEAD 拦截，又极大地节省了流量
       const { count: cloudCount, error: countError } = await supabase
         .from('clothes')
         .select('id', { count: 'exact' })
@@ -47,7 +46,6 @@ export function useWardrobe() {
 
       if (countError) throw countError
 
-      // 🌟 修改 1：去拿新版本的缓存
       const localClothes = await getFromLocal('fullClothesData_v2') 
       const localStages = await getFromLocal('stagesData')
 
@@ -67,7 +65,6 @@ export function useWardrobe() {
         }))
         stagesData.value = sRes.data || []
 
-        // 🌟 修改 2：保存为新版本的缓存
         await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
         await saveToLocal('stagesData', stagesData.value)
       }
@@ -84,16 +81,12 @@ export function useWardrobe() {
     try {
       const { data, error } = await supabase
         .from('user_wardrobes')
-        .select('owned_clothes') // 🌟 精准呼叫真实的列名
-        .eq('user_id', userId)   // 绑定身份证，防止 400 报错
+        .select('owned_clothes') 
+        .eq('user_id', userId)   
         .maybeSingle()
 
-      if (error) {
-        // 忽略新用户第一次登录时“找不到空衣柜”的正常提示
-        if (error.code !== 'PGRST116') throw error
-      }
+      if (error && error.code !== 'PGRST116') throw error
       
-      // 🌟 接收数据时也要用真实的列名
       if (data && data.owned_clothes) {
         myWardrobeIds.value = data.owned_clothes
       }
@@ -102,26 +95,41 @@ export function useWardrobe() {
     }
   }
 
-  // 3. 将我的衣柜存入云端
-  const saveWardrobeToCloud = async (userId) => { // 🌟 修复 1：接收 App.vue 传进来的 userId
-    if (!userId) return // 🌟 修复 2：检查 userId
+  // 3. 🌟 将我的衣柜存入云端 (重构为：悲观更新安全版)
+  const saveWardrobeToCloud = async (userId, pendingIds = null) => { 
+    if (!userId) throw new Error('用户未登录')
+    
+    // 如果传入了新的待存数组，就用新的；如果没有，就兜底用旧的
+    const dataToSave = pendingIds || myWardrobeIds.value
+    
+    isSaving.value = true // 🔒 开启界面锁
 
     try {
-      // 使用 upsert（有则覆盖更新，无则新增）
+      // 🛡️ 防御 1：强行查岗！防止移动端微信悄悄杀后台导致 Token 失效
+      const { data: { session }, error: authErr } = await supabase.auth.getSession()
+      if (authErr || !session) throw new Error('登录状态已过期，请重新登录！')
+
+      // 🛡️ 防御 2：强行写入数据库
       const { error } = await supabase
         .from('user_wardrobes')
         .upsert(
-          { 
-            user_id: userId, // 🌟 修复 3：使用传入的 userId
-            owned_clothes: myWardrobeIds.value 
-          }, 
+          { user_id: userId, owned_clothes: dataToSave }, 
           { onConflict: 'user_id' }
         )
 
       if (error) throw error
-      console.log('☁️ 衣柜已成功同步到云端！')
+      
+      // 🛡️ 防御 3：只有数据库明确没报错，才允许前台数组更新！！！
+      if (pendingIds) {
+        myWardrobeIds.value = [...new Set(pendingIds)] // 顺手去个重
+      }
+      
+      return true // 告诉外部组件“保存成功了！”
     } catch (err) {
       console.error('保存云端失败:', err)
+      throw err // 把错误抛出去，让录入按钮捕获并弹窗警告
+    } finally {
+      isSaving.value = false // 🔓 无论成功失败，解开界面锁
     }
   }
 
@@ -130,6 +138,7 @@ export function useWardrobe() {
     myWardrobeIds,
     stagesData,
     isLoading,
+    isSaving, // 🌟 把锁暴露给外部组件
     myWardrobeSet,
     loadData,
     syncWardrobeFromCloud,

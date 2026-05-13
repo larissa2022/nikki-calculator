@@ -1,10 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch ,nextTick} from 'vue'
 import { suitService } from '../api/suitService'
-import { contributionService } from '../api/contributionService'
-import { supabase } from '../api/supabase'
-import { useWardrobe } from '../composables/useWardrobe' // 🌟 1. 新增：引入衣柜大脑
-
+import { contributionService } from '../api/contributionService' // 🌟 新增这行
+import { supabase } from '../api/supabase' // 保留这个用于获取 user
+import { useWardrobe } from '../composables/useWardrobe'
 const props = defineProps({
   wardrobe: { type: Array, required: true },
   ownedIds: { type: Array, required: true },
@@ -13,12 +12,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:ownedIds', 'save-cloud', 'refresh-profile'])
-
+const { saveWardrobeToCloud } = useWardrobe()
 // ====== 基础状态 ======
 const importText = ref('')
 const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount: 0, newClothes: [] })
 const lastNotFoundNames = ref([])
 const isRecognizing = ref(false)
+const isSaving = ref(false) // 🌟 3. 新增：全局录入锁
 
 // ====== 🌟 玩家贡献模块状态 ======
 const activeContribution = ref(null)
@@ -86,12 +86,14 @@ const handleImport = async () => {
   const inputNames = importText.value.split(/[,，\s\n]+/).map(n => n.trim()).filter(n => n !== '')
   if (inputNames.length === 0) return alert('请输入衣服名字哦~')
 
+  isSaving.value = true // 🔒 第一步：咔嚓！锁死所有操作！
+
   let newCount = 0
   let dupCount = 0
   const notFound = []
   const newlyAdded = []
   
-  // 🌟 使用一个全新的数组来装载合并后的结果
+  // 生成准备要存入的最新数组
   const updatedOwnedIds = [...props.ownedIds]
 
   inputNames.forEach(name => {
@@ -111,27 +113,44 @@ const handleImport = async () => {
 
   lastNotFoundNames.value = [...new Set(notFound)]
 
-  // 🌟 核心修复区：确保数据同步与云端保存
-  if (newCount > 0) {
-    // 1. 先把新的拥有列表发给父组件
-    emit('update:ownedIds', updatedOwnedIds)
-    
-    // 2. 等待 Vue 完成这波数据更新 (极度重要，防止保存空数据)
-    await nextTick() 
-    
-    // 3. 如果已登录，强制命令父组件把最新的列表存到云端
-    if (props.isLoggedIn) {
-      emit('save-cloud')
-    }
-  }
+  try {
+    if (newCount > 0) {
+      // 🛡️ 悲观更新核心：必须先等云端确认保存成功！
+      if (props.isLoggedIn) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('登录失效，请重新登录')
+        
+        // 调用我们刚才写的带安全防御的保存机制
+        await saveWardrobeToCloud(user.id, updatedOwnedIds)
+      }
 
-  // 渲染报表
-  importStats.newCount = newCount
-  importStats.dupCount = dupCount
-  importStats.failCount = notFound.length
-  importStats.newClothes = newlyAdded
-  importStats.show = true
-  importText.value = ''
+      // 🛡️ 只有云端没报错（或者未登录的纯本地体验），才允许更新前台 UI ！！
+      // 彻底告别假录入！
+      emit('update:ownedIds', updatedOwnedIds)
+      // 注意：这里不再需要 emit('save-cloud') 了，因为已经在上方存好了
+      
+      // 渲染报表
+      importStats.newCount = newCount
+      importStats.dupCount = dupCount
+      importStats.failCount = notFound.length
+      importStats.newClothes = newlyAdded
+      importStats.show = true
+      importText.value = ''
+    } else if (dupCount > 0 || notFound.length > 0) {
+      // 没录入新衣服也要弹报告
+      importStats.newCount = 0
+      importStats.dupCount = dupCount
+      importStats.failCount = notFound.length
+      importStats.newClothes = []
+      importStats.show = true
+      importText.value = ''
+    }
+  } catch (err) {
+    // 🚨 一旦断网、微信杀后台，直接拦截在这里！本地衣服原封不动！
+    alert('☁️ 同步云端失败：' + err.message + '\n\n本次录入已自动撤销，请检查网络后重新录入。')
+  } finally {
+    isSaving.value = false // 🔓 最后一步：无论成败，解开锁
+  }
 }
 
 // ====== 逻辑 2：玩家提交贡献数据 ======
@@ -288,40 +307,57 @@ const onFileChange = async (event) => {
 
     <div class="manual-input">
       <textarea v-model="importText" rows="3" placeholder="也可以在这里输入衣服名字，用逗号隔开..."></textarea>
-      <button class="btn-primary" @click="handleImport">🚀 录入到我的云端衣柜</button>
+      <button 
+        class="btn btn-primary w-full shadow-lg text-white font-bold" 
+        @click="handleImport"
+        :disabled="isSaving"
+      >
+        {{ isSaving ? '☁️ 正在全力同步至云端...' : '🚀 录入到我的云端衣柜' }}
+      </button>
     </div>
 
     <Transition name="fade">
-      <div v-if="importStats.show" class="report-box">
-        <div class="report-header">
-          <h3>📊 本次录入报告</h3>
-          <button class="btn-close-mini" @click="importStats.show = false">×</button>
-        </div>
-        <div class="stats-summary">
-          <div class="stat-item success"><span>新解锁</span><strong>{{ importStats.newCount }}</strong></div>
-          <div class="stat-item skip"><span>已拥有</span><strong>{{ importStats.dupCount }}</strong></div>
-          <div class="stat-item missing"><span>缺失</span><strong>{{ importStats.failCount }}</strong></div>
+      <div v-if="importStats.show" class="bg-white rounded-[18px] p-5 mt-5 border border-slate-100 shadow-[0_10px_25px_rgba(0,0,0,0.03)]">
+        
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="m-0 text-base font-bold text-slate-600">📊 本次录入报告</h3>
+          <button class="btn btn-sm btn-circle btn-ghost bg-slate-100" @click="importStats.show = false">✕</button>
         </div>
 
-        <div v-if="importStats.newClothes.length > 0" class="loot-display">
-          <div v-for="item in importStats.newClothes" :key="item.id" class="loot-card">
-            <span class="loot-tag">{{ item.category }}</span>
-            <span class="loot-name">{{ item.name }}</span>
+        <div class="grid grid-cols-3 gap-2 mb-4">
+          <div class="text-center p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
+            <span class="block text-[11px] font-bold mb-1">新解锁</span>
+            <strong class="text-lg font-black">{{ importStats.newCount }}</strong>
+          </div>
+          <div class="text-center p-2.5 rounded-xl bg-slate-50 text-slate-500">
+            <span class="block text-[11px] font-bold mb-1">已拥有</span>
+            <strong class="text-lg font-black">{{ importStats.dupCount }}</strong>
+          </div>
+          <div class="text-center p-2.5 rounded-xl bg-rose-50 text-rose-600">
+            <span class="block text-[11px] font-bold mb-1">缺失</span>
+            <strong class="text-lg font-black">{{ importStats.failCount }}</strong>
+          </div>
+        </div>
+
+        <div v-if="importStats.newClothes.length > 0" class="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-2 max-h-[280px] overflow-y-auto pr-1 custom-scroll">
+          <div v-for="item in importStats.newClothes" :key="item.id" class="bg-white border border-pink-200 p-2 rounded-xl flex flex-col gap-1 shadow-sm">
+            <span class="text-[10px] font-black text-pink-500 bg-pink-50 px-2 py-0.5 rounded-md self-start">{{ item.category }}</span>
+            <span class="text-[13px] font-bold text-slate-800">{{ item.name }}</span>
           </div>
         </div>
       </div>
     </Transition>
 
-    <div v-if="lastNotFoundNames.length > 0" class="contribution-section">
-      <div class="contrib-header">
-        <p>😢 发现 {{ lastNotFoundNames.length }} 件图鉴缺失，请帮帮站长：</p>
+    <div v-if="lastNotFoundNames.length > 0" class="mt-6 pt-6 border-t-2 border-dashed border-slate-100">
+      <div class="mb-4">
+        <p class="m-0 text-sm font-bold text-slate-500">😢 发现 {{ lastNotFoundNames.length }} 件图鉴缺失，请帮帮站长：</p>
       </div>
       
-      <div class="missing-items-list">
-        <div v-for="name in lastNotFoundNames" :key="name" class="contrib-card">
-          <div class="contrib-row">
-            <span class="missing-name">{{ name }}</span>
-            <button @click="activeContribution = (activeContribution === name ? null : name)" class="btn-action-outline">
+      <div class="max-h-[380px] overflow-y-auto pr-2 custom-scroll">
+        <div v-for="name in lastNotFoundNames" :key="name" class="bg-white/60 border border-slate-200 rounded-2xl p-3 mb-3 transition-all hover:bg-white">
+          <div class="flex justify-between items-center">
+            <span class="font-extrabold text-slate-600">{{ name }}</span>
+            <button @click="activeContribution = (activeContribution === name ? null : name)" class="btn btn-sm btn-outline btn-secondary rounded-full">
               {{ activeContribution === name ? '收起' : '✍️ 完善资料' }}
             </button>
           </div>
@@ -406,6 +442,16 @@ const onFileChange = async (event) => {
         </div>
       </div>
     </div>
+    
+    <Teleport to="body">
+      <div v-if="isSaving" class="hard-lock-overlay">
+        <div class="hard-lock-box">
+          <span class="spinner">⏳</span>
+          <span class="loading-text">正在强力写入云端...请勿切出应用！</span>
+        </div>
+      </div>
+    </Teleport>
+    
   </div>
 </template>
 
@@ -416,7 +462,7 @@ const onFileChange = async (event) => {
 .panel-header h2 { margin: 0 0 25px 0; color: #db2777; font-size: 20px; font-weight: 900; border-bottom: 2px dashed #fbcfe8; padding-bottom: 12px; }
 
 /* ==========================================
-   🤖 2. AI 扫描特区
+   🤖 2. AI 扫描特区 (目前保持原样)
    ========================================== */
 .ai-zone { background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 100%); border: 2px dashed #ddd6fe; border-radius: 18px; padding: 20px; margin-bottom: 20px; }
 .ai-info-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -429,36 +475,8 @@ const onFileChange = async (event) => {
 .scan-button.scanning { filter: grayscale(1); cursor: wait; }
 
 /* ==========================================
-   📊 3. 解析报告面板 (统计图与掉落卡片)
+   🎯 3. 补录表单内层专属样式
    ========================================== */
-.report-box { background: white; border-radius: 18px; padding: 20px; margin-top: 20px; border: 1px solid #f1f5f9; box-shadow: 0 10px 25px rgba(0,0,0,0.03); }
-.report-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.report-header h3 { margin: 0; font-size: 16px; color: #475569; }
-.btn-close-mini { background: #f1f5f9; border: none; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #64748b;}
-
-.stats-summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px; }
-.stat-item { text-align: center; padding: 10px; border-radius: 12px; }
-.stat-item span { display: block; font-size: 11px; margin-bottom: 4px; font-weight: bold; }
-.stat-item strong { font-size: 18px; font-weight: 900; }
-.success { background: #ecfdf5; color: #059669; }
-.skip { background: #f8fafc; color: #64748b; }
-.missing { background: #fff1f2; color: #e11d48; }
-
-.loot-display { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
-.loot-card { background: #fff; border: 1px solid #fbcfe8; padding: 8px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px rgba(244, 114, 182, 0.05); }
-.loot-tag { font-size: 10px; font-weight: 900; color: #f472b6; background: #fdf2f8; padding: 2px 6px; border-radius: 6px; align-self: flex-start; }
-.loot-name { font-size: 13px; font-weight: bold; color: #1e293b; }
-
-/* ==========================================
-   💖 4. 玩家贡献补录模块
-   ========================================== */
-.contribution-section { margin-top: 25px; padding-top: 25px; border-top: 2px dashed #f1f5f9; }
-.contrib-header p { margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #64748b; }
-
-.contrib-card { background: rgba(255, 255, 255, 0.6); border: 1px solid #e2e8f0; border-radius: 16px; padding: 12px; margin-bottom: 12px; transition: all 0.3s; }
-.contrib-row { display: flex; justify-content: space-between; align-items: center; }
-.missing-name { font-weight: 800; color: #4b5563; }
-
 .mini-form-body { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e2e8f0; }
 .form-row { display: grid; gap: 10px; margin-bottom: 12px; }
 .three-cols { grid-template-columns: 1fr 1.5fr 1fr; } 
@@ -474,8 +492,23 @@ const onFileChange = async (event) => {
 .btn-submit-contrib { width: 100%; background: #a78bfa; color: white; border: none; padding: 12px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
 .btn-submit-contrib:hover { background: #8b5cf6; transform: translateY(-1px); }
 
+/* 🌟 移动端防掉线：强制锁定遮罩 */
+.hard-lock-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 999999; display: flex; align-items: center; justify-content: center; }
+.hard-lock-box { background: white; padding: 25px 30px; border-radius: 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); animation: popIn 0.3s ease-out; }
+.spinner { font-size: 26px; display: inline-block; animation: spin 1.5s linear infinite; }
+.loading-text { color: #db2777; font-weight: 900; font-size: 15px; letter-spacing: 0.5px;}
+
+/* 🌟 唯独保留一个精致的通用滚动条样式 */
+.custom-scroll { -webkit-overflow-scrolling: touch; }
+.custom-scroll::-webkit-scrollbar { width: 4px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes popIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+
 /* ==========================================
-   📱 5. 手机端独有适配
+   📱 4. 手机端独有适配
    ========================================== */
 @media (max-width: 768px) {
   .three-cols { grid-template-columns: 1fr; }
