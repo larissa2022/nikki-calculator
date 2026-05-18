@@ -2,6 +2,8 @@
 import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
+// 🌟 引入全局数值大脑
+import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
 
 export function useAudit() {
     // 1. 核心状态
@@ -15,33 +17,14 @@ export function useAudit() {
     const isSubmitting = ref(false)
 
     // 待提交的新图鉴表单数据
+    // 将 newClothes 替换为：
     const newClothes = reactive({
         pendingIds: [], suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
-        pair1: 'simple', grade1: '完美', pair2: 'cute', grade2: '完美', pair3: 'active', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
+        // 🌟 活泼 active 变成了 pair2
+        pair1: 'simple', grade1: '完美', pair2: 'active', grade2: '完美', pair3: 'cute', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
     })
-
     // 2. 官方分值矩阵 (内部常量)
-    const baseScoreMatrix = {
-        '发型': { '完美+': 1324.5, '完美': 1089, '优秀': 837, '不错': 682.5, '一般': 517.5, '失败': 0 },
-        '连衣裙': { '完美+': 5269.5, '完美': 4305, '优秀': 3366, '不错': 2749.5, '一般': 2100, '失败': 0 },
-        '外套': { '完美+': 525, '完美': 423, '优秀': 331.5, '不错': 270, '一般': 213, '失败': 0 },
-        '上装': { '完美+': 2619, '完美': 2140.5, '优秀': 1678.5, '不错': 1369.5, '一般': 1041, '失败': 0 },
-        '下装': { '完美+': 2632.5, '完美': 2137.5, '优秀': 1678.5, '不错': 1357.5, '一般': 1041, '失败': 0 },
-        '袜子': { '完美+': 789, '完美': 648, '优秀': 502.5, '不错': 403.5, '一般': 305, '失败': 0 },
-        '鞋子': { '完美+': 1050, '完美': 855, '优秀': 667.5, '不错': 541.5, '一般': 423, '失败': 0 },
-        '饰品': { '完美+': 526.5, '完美': 424.5, '优秀': 330, '不错': 271.5, '一般': 213, '失败': 0 },
-        '妆容': { '完美+': 267, '完美': 213, '优秀': 168, '不错': 125, '一般': 85, '失败': 0 },
-        '萤光之灵': { '完美+': 517.5, '完美': 421.5, '优秀': 325.5, '不错': 264, '一般': 200, '失败': 0 }
-    }
-
-    const getBroadCat = (cat) => {
-        if (!cat) return '饰品'
-        if (cat.includes('袜子')) return '袜子'
-        if (cat.includes('饰品')) return '饰品'
-        if (cat.includes('上')) return '上装'
-        if (cat.includes('下')) return '下装'
-        return cat
-    }
+    
 
     const getMostFrequent = (arr) => {
         if (!arr.length) return null
@@ -50,23 +33,39 @@ export function useAudit() {
         return Object.keys(counts).reduce((a, b) => counts[a] >= counts[b] ? a : b)
     }
 
-    // 3. 数据拉取方法
+    // 3. 数据拉取方法 (🚀 极速且防崩溃版)
     const fetchAllData = async () => {
         isPendingLoading.value = true
         try {
-            const { userId, role } = await adminService.getCurrentUserRole()
+            // 🌟 1. 让【查身份】和【查数据】同时起跑，但不互相绑定生死 (解耦并发)
+            const authPromise = adminService.getCurrentUserRole()
+            
+            // 如果查数据报错了就内部消化，绝对不影响后面身份的显示
+            const pendingPromise = adminService.getPendingData().catch(err => {
+                console.error("获取待办数据失败，可能是网络或权限问题:", err)
+                return { pendingClothes: [], pendingSuits: [], countsMap: {} }
+            })
+
+            // 🌟 2. 优先结算身份！只要数据库没动过，这里瞬间就能让你变成 super_admin
+            const { userId, role } = await authPromise
             currentUserId.value = userId
             currentUserRole.value = role
 
-            // 🌟 修复：加上 || []，防止从 API 服务层传过来的对象结构缺失导致 undefined
-            const { pendingClothes, pendingSuits, countsMap } = await adminService.getPendingData()
+            // 🌟 3. 结算待办数据
+            const { pendingClothes, pendingSuits, countsMap } = await pendingPromise
             pendingList.value = pendingClothes || []
             pendingSuitsList.value = pendingSuits || []
 
-
-            if (role === 'super_admin') {
-                allUsersList.value = await adminService.getAllUsers(countsMap)
+            // 🌟 4. 只有确认为站长后，才去拉取人员名单（同样加上防崩溃保护）
+            if (role === 'super_admin' || role === 'admin') {
+                allUsersList.value = await adminService.getAllUsers(countsMap).catch(err => {
+                    console.error("获取全站用户名单失败:", err)
+                    return []
+                })
             }
+
+        } catch (error) {
+            console.error("🚨 致命错误：身份查验接口彻底崩溃！", error)
         } finally {
             isPendingLoading.value = false
         }
@@ -107,7 +106,7 @@ export function useAudit() {
         newClothes.tags = [...new Set(allTags)].filter(t => t).join(', ')
 
         if (bestItem.scores) {
-            const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品']
+            const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
             const getGradeFromScore = (val) => {
                 let closest = '一般'; let minDiff = Infinity
                 for (const [g, s] of Object.entries(matrix)) {
@@ -117,10 +116,12 @@ export function useAudit() {
                 return closest
             }
 
+            // 将 attrPairs 替换为：
             const attrPairs = [
                 { key: 'pair1', gKey: 'grade1', p1: 'simple', p2: 'gorgeous' },
-                { key: 'pair2', gKey: 'grade2', p1: 'cute', p2: 'mature' },
-                { key: 'pair3', gKey: 'grade3', p1: 'active', p2: 'elegant' },
+                // 🌟 active 和 cute 互换位置
+                { key: 'pair2', gKey: 'grade2', p1: 'active', p2: 'elegant' },
+                { key: 'pair3', gKey: 'grade3', p1: 'cute', p2: 'mature' },
                 { key: 'pair4', gKey: 'grade4', p1: 'pure', p2: 'sexy' },
                 { key: 'pair5', gKey: 'grade5', p1: 'cool', p2: 'warm' }
             ]
@@ -145,7 +146,7 @@ export function useAudit() {
         if (!newClothes.name) throw new Error('名字是必填项哦！')
         isSubmitting.value = true
         try {
-            const matrix = baseScoreMatrix[getBroadCat(newClothes.category)] || baseScoreMatrix['饰品']
+            const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
             const calculatedScores = {}
             // 🌟 修复：将数组单独提取为一个变量，彻底避开 JS 引擎的换行解析陷阱
             const pairs = [['pair1', 'grade1'], ['pair2', 'grade2'], ['pair3', 'grade3'], ['pair4', 'grade4'], ['pair5', 'grade5']]
