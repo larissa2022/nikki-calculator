@@ -1,11 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { suitService } from '../api/suitService'
-import { contributionService } from '../api/contributionService'
-import { supabase } from '../api/supabase'
 import { useWardrobe } from '../composables/useWardrobe'
-import { GRADE_OPTIONS, calculateItemScores } from '../composables/useScoreEngine'
 import MissingItemsQueue from './MissingItemsQueue.vue'
+import { supabase, logErrorToCloud } from '../api/supabase'
+import { suitService } from '../api/suitService'
 
 const props = defineProps({
   wardrobe: { type: Array, required: true },
@@ -21,12 +19,7 @@ const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount:
 
 // 🌟 核心：消消乐视窗逻辑，永远只展示前 3 个
 const lastNotFoundNames = ref([])
-
-
 const isSaving = ref(false)
-
-
-
 const availableSuits = ref([])
 
 const fullCategories = [
@@ -36,51 +29,81 @@ const fullCategories = [
   '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
 ]
 
-
-
 onMounted(async () => {
   try { availableSuits.value = await suitService.getAllSuits(); } catch (err) { console.error('加载失败', err); }
 })
 
-
-
-
-
-
-
 const handleImport = async () => {
   const inputNames = importText.value.split(/[,，\s\n]+/).map(n => n.trim()).filter(n => n !== '')
   if (inputNames.length === 0) return alert('请输入内容')
+  
+  // 1. 开启界面锁
   isSaving.value = true;
-  let newCount = 0, dupCount = 0;
-  const notFound = [], newlyAdded = [], updatedOwnedIds = [...props.ownedIds];
-
-  inputNames.forEach(name => {
-    const found = props.wardrobe.find(item => item.name === name)
-    if (found) {
-      if (updatedOwnedIds.includes(found.id)) { dupCount++; } 
-      else { updatedOwnedIds.push(found.id); newCount++; newlyAdded.push(found); }
-    } else { notFound.push(name); }
-  });
-
-  lastNotFoundNames.value = [...new Set(notFound)];
+  
+  // 🌟 核心优化 1：强制让出主线程，确保“正在同步”的动画能被浏览器立刻画出来，不假死！
+  await new Promise(resolve => setTimeout(resolve, 50));
 
   try {
+    let newCount = 0, dupCount = 0;
+    const notFound = [], newlyAdded = [];
+
+    // 🌟 核心优化 2：建立哈希表 (Map)，把几万件衣服的查询时间从 O(N) 降为 O(1)
+    const wardrobeMap = new Map(props.wardrobe.map(item => [item.name, item]));
+    // 🌟 核心优化 3：建立集合 (Set)，把是否拥有的查重时间从 O(N) 降为 O(1)
+    const ownedSet = new Set(props.ownedIds);
+
+    // 开始极速匹配
+    inputNames.forEach(name => {
+      const found = wardrobeMap.get(name); // 瞬间拿结果，不需要 find 遍历
+      
+      if (found) {
+        if (ownedSet.has(found.id)) { // 瞬间判断，不需要 includes 遍历
+          dupCount++; 
+        } else { 
+          ownedSet.add(found.id); 
+          newCount++; 
+          newlyAdded.push(found); 
+        }
+      } else { 
+        notFound.push(name); 
+      }
+    });
+
+    // 重新转回纯净的数组，准备提交给云端
+    const updatedOwnedIds = Array.from(ownedSet);
+    lastNotFoundNames.value = [...new Set(notFound)];
+
     if (newCount > 0) {
       if (props.isLoggedIn) {
-        const { data: { user } } = await supabase.auth.getUser();
+        // 严格查岗，防止死 Token
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+        if (authErr || !user) throw new Error('登录状态已过期，请刷新页面重新登录！');
+        
+        // 提交云端
         await saveWardrobeToCloud(user.id, updatedOwnedIds);
       }
       emit('update:ownedIds', updatedOwnedIds);
     }
-    importStats.newCount = newCount; importStats.dupCount = dupCount;
+    
+    // 渲染统计结果
+    importStats.newCount = newCount; 
+    importStats.dupCount = dupCount;
     importStats.failCount = lastNotFoundNames.value.length;
-    importStats.newClothes = newlyAdded; importStats.show = true; importText.value = '';
-  } catch (err) { alert('同步失败'); } finally { isSaving.value = false; }
+    importStats.newClothes = newlyAdded; 
+    importStats.show = true; 
+    importText.value = '';
+
+  } catch (err) { 
+    alert('❌ 录入中断：\n' + (err.message || '网络请求异常，请检查网络后重试')); 
+    // 云端异常上报 (上一回合加的代码)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (typeof logErrorToCloud === 'function') {
+      logErrorToCloud('import_wardrobe_mobile', err, session?.user?.id);
+    }
+  } finally { 
+    isSaving.value = false; 
+  }
 }
-
-
-
 </script>
 
 <template>

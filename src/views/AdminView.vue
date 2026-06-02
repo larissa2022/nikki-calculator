@@ -2,9 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAudit } from '../composables/useAudit'
 import UserManageBoard from '../components/UserManageBoard.vue'
-import { GRADE_OPTIONS } from '../composables/useScoreEngine'
 import ScoreAttributePanel from '../components/ScoreAttributePanel.vue'
-
+import { supabase } from '../api/supabase' // 🌟 新增这一行：引入数据库实例
 const emit = defineEmits(['back-to-main'])
 
 // 1. 本地纯 UI 状态
@@ -45,6 +44,40 @@ const uniquePendingSuits = computed(() => {
   // 按提交申请的人数降序排列，越多人申请的套装越靠前
   return Array.from(map.values()).sort((a, b) => b.count - a.count)
 })
+// 🌟 新增：极速顺手创建套装逻辑
+const quickCreateSuit = async (newSuitName) => {
+  // 帮你把玩家可能乱输入的书名号和空格洗掉
+  const cleanName = newSuitName.replace(/[《》]/g, '').trim()
+  if (!cleanName) return
+
+  try {
+    // 1. 直接往数据库正规军库里插入新套装
+    const { data, error } = await supabase
+      .from('suits')
+      .insert([{ name: cleanName }])
+      .select()
+      .single()
+      
+    if (error && error.code !== '23505') throw error // 忽略可能存在的同名并发错误
+    
+    alert(`✅ 套装《${cleanName}》已秒建成功！`)
+    
+    // 2. 重新拉取全局套装列表，让刚才建的套装生效
+    await fetchSuits() 
+    
+    // 3. 自动帮你把新建的套装填入当前的审核表单中！
+    const newlyCreated = suitList.value.find(s => s.name === cleanName)
+    if (newlyCreated) {
+      selectSuit(newlyCreated)
+    } else if (data) {
+      // 兜底：如果刚插入还没来得及同步，直接用插入返回的数据
+      selectSuit(data)
+    }
+    
+  } catch (err) {
+    alert('极速创建套装失败: ' + err.message)
+  }
+}
 // 🌟 补回刚才不小心删掉的初始化加载钩子！
 onMounted(() => {
   fetchAllData()
@@ -207,9 +240,20 @@ const submitNewClothes = async () => {
                   <Transition name="slide">
                     <div v-if="isSuitDropdownOpen" class="select-dropdown">
                       <div class="option" @click="selectSuit({id: '', name: ''})">-- 纯散件 (无关联套装) --</div>
+                      
                       <div v-for="s in filteredSuits" :key="s.id" class="option" @click="selectSuit(s)">
                         《{{ s.name }}》
                       </div>
+
+                      <div 
+                        v-if="filteredSuits.length === 0 && suitSearchText.trim() !== ''" 
+                        class="option bg-purple-50 text-purple-600 font-bold flex justify-between items-center border border-purple-100 hover:bg-purple-100"
+                        @click="quickCreateSuit(suitSearchText)"
+                      >
+                        <span class="text-xs">⚠️ 库中暂无《{{ suitSearchText.replace(/[《》]/g, '') }}》</span>
+                        <span class="bg-purple-500 text-white px-2 py-1 rounded-md text-xs shadow-sm">➕ 秒建套装</span>
+                      </div>
+
                     </div>
                   </Transition>
                 </div>

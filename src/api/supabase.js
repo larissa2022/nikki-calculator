@@ -26,3 +26,20 @@ if (typeof document !== 'undefined') {
     }
   })
 }
+// src/api/supabase.js (在文件末尾添加)
+
+export const logErrorToCloud = async (actionName, err, userId = null) => {
+  try {
+    await supabase.from('app_errors').insert([{
+      action_name: actionName,
+      error_message: err.message || String(err),
+      error_stack: err.stack || 'No stack trace',
+      user_id: userId,
+      // 🌟 这句话极其关键！能帮你查出是不是特定型号的手机或者特定版本的微信出了问题
+      user_agent: navigator.userAgent 
+    }]);
+  } catch (e) {
+    // 如果上报错误本身也失败了，就默默吞掉，不要影响用户体验
+    console.warn('日志上报失败', e);
+  }
+}

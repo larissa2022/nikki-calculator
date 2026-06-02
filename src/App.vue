@@ -23,6 +23,15 @@ onMounted(async () => {
   await loadData()
   await initAuth()
 })
+// 在 App.vue 的 script 中重写一个包裹函数
+const handleSaveCloud = async () => {
+  try {
+    await saveWardrobeToCloud(currentUser.value?.id)
+    alert('🎉 录入成功！数据已同步至云端。')
+  } catch (err) {
+    alert('❌ 保存失败：' + err.message)
+  }
+}
 </script>
 
 <template>
@@ -47,7 +56,7 @@ onMounted(async () => {
       @open-login="isAuthModalOpen = true"
       @go-admin="currentMode = 'admin'"
       @update:ownedIds="myWardrobeIds = $event"
-      @save-cloud="saveWardrobeToCloud(currentUser?.id)"
+      @save-cloud="handleSaveCloud"
       @refresh-profile="fetchProfile"
     />
   </div>
