@@ -5,8 +5,19 @@ defineProps(['user'])
 const emit = defineEmits(['open-login'])
 
 const handleLogout = async () => {
-  await supabase.auth.signOut()
-  alert('已成功登出！')
+  try {
+    // 1. 通知 Supabase 销毁本地 Token 和服务器 Session
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+    
+    // 2. 只需要弹窗提示
+    alert('已成功安全退出！')
+    
+    // 3. 强制刷新页面，浏览器会清空所有 Vue 内存残留，彻底解决幽灵状态
+    window.location.reload() 
+  } catch (err) {
+    alert('退出失败：' + err.message)
+  }
 }
 </script>
 

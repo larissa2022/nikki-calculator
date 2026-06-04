@@ -3,7 +3,9 @@ import { ref, onMounted, watch } from 'vue'
 import { useAuth } from './composables/useAuth'
 import { useWardrobe } from './composables/useWardrobe'
 
-// 🌟 只需引入两个大页面和一个弹窗，再也不用引入一堆小零件了！
+// 🌟 修复 1：补上缺失的 supabase 引入！
+import { supabase } from './api/supabase'
+
 import AuthModal from './components/AuthModal.vue'
 import MainView from './views/MainView.vue'
 import AdminView from './views/AdminView.vue'
@@ -11,7 +13,7 @@ import AdminView from './views/AdminView.vue'
 const { currentUser, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
 const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
-const currentMode = ref('main') // 状态只有：'main' (前台) 或 'admin' (后台)
+const currentMode = ref('main') 
 const isAuthModalOpen = ref(false)
 
 watch(currentUser, (newUser) => {
@@ -22,8 +24,15 @@ watch(currentUser, (newUser) => {
 onMounted(async () => {
   await loadData()
   await initAuth()
+  
+  // 🌟 修复 2：监听登出状态，清理正确的变量 currentUser
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_OUT') {
+      currentUser.value = null // 只要触发登出，强制清空当前用户信息
+    } 
+  })
 })
-// 在 App.vue 的 script 中重写一个包裹函数
+
 const handleSaveCloud = async () => {
   try {
     await saveWardrobeToCloud(currentUser.value?.id)

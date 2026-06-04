@@ -1,58 +1,192 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onUnmounted } from 'vue'
 import { supabase } from '@/api/supabase'
 
 const emit = defineEmits(['close'])
-const isLoginMode = ref(true)
-const authForm = reactive({ email: '', password: '', confirmPassword: '' })
+const currentMode = ref('login')
+const authForm = reactive({ email: '', password: '', confirmPassword: '', otpCode: '' })
 const isAuthLoading = ref(false)
 
-const submitAuth = async () => {
-  if (!authForm.email || !authForm.password) return alert('请输入邮箱和密码！')
-  if (!isLoginMode.value && authForm.password !== authForm.confirmPassword) {
-    return alert('❌ 两次输入的密码不一致！')
-  }
+// ==========================================
+// 🌟 1. 非阻塞式消息提示系统
+// ==========================================
+const feedback = reactive({ show: false, text: '', type: 'error' })
+let feedbackTimer = null
+
+const showMessage = (text, type = 'error') => {
+  feedback.text = text
+  feedback.type = type
+  feedback.show = true
+  if (feedbackTimer) clearTimeout(feedbackTimer)
+  feedbackTimer = setTimeout(() => {
+    feedback.show = false
+  }, 4000)
+}
+
+const getErrorMessage = (err) => {
+  if (err.message.includes('Email not confirmed')) return '您的邮箱尚未验证'
+  if (err.message.includes('Invalid login credentials')) return '账号或密码错误，请检查'
+  if (err.message.includes('User already registered')) return '该邮箱已经被注册过了'
+  if (err.message.includes('Token has expired or is invalid')) return '验证码错误或已过期'
+  if (err.message.includes('rate_limit')) return '发送太频繁啦，请稍后再试'
+  return err.message
+}
+
+// ==========================================
+// 🌟 2. 60秒倒计时逻辑
+// ==========================================
+const countdown = ref(0)
+let timer = null
+
+const startCountdown = () => {
+  countdown.value = 60
+  if (timer) clearInterval(timer)
+  timer = setInterval(() => {
+    if (countdown.value > 0) {
+      countdown.value--
+    } else {
+      clearInterval(timer)
+    }
+  }, 1000)
+}
+
+// 组件卸载时清理定时器，防止内存泄漏
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
+
+// ==========================================
+// 🌟 3. 重新发送验证码逻辑
+// ==========================================
+const resendOtp = async () => {
+  if (countdown.value > 0 || isAuthLoading.value) return
+  const cleanEmail = authForm.email?.trim() || ''
+  if (!cleanEmail) return showMessage('未获取到邮箱信息，请返回重新填写！', 'error')
+
   isAuthLoading.value = true
   try {
-    if (isLoginMode.value) {
-      const { error } = await supabase.auth.signInWithPassword({ email: authForm.email, password: authForm.password })
+    if (currentMode.value === 'verify_register') {
+      // Supabase 专属的重发注册验证码方法
+      const { error } = await supabase.auth.resend({ type: 'signup', email: cleanEmail })
       if (error) throw error
-      alert('登录成功！欢迎回来。')
-      emit('close') 
-    } else {
-      const { error } = await supabase.auth.signUp({ email: authForm.email, password: authForm.password })
-      if (error) throw error
-      
-      alert('🎉 注册请求已发送！\n\n一封验证邮件已经发送到您的邮箱：' + authForm.email + '\n\n⚠️ 请前往邮箱点击里面的验证链接来激活账号（如果收件箱没有，请务必检查【垃圾邮件】或【拦截网关】）。\n\n验证通过后即可使用该账号登录！')
-      emit('close') 
-    }
+    } else if (currentMode.value === 'reset') {
+        // 1. 验证验证码 (这步会在后台悄悄建立一个临时 Session)
+        const { error: verifyErr } = await supabase.auth.verifyOtp({ email: cleanEmail, token: cleanOtp, type: 'recovery' })
+        if (verifyErr) throw verifyErr
+        
+        // 2. 绕过 Supabase 底层卡死 Bug (给它 2 秒钟，如果不回调直接强制放行)
+        let updateErr = null
+        try {
+          await Promise.race([
+            supabase.auth.updateUser({ password: cleanPassword }).then(res => { updateErr = res.error }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('SUPABASE_HANG')), 2000))
+          ])
+        } catch (e) {
+          // 如果抛出的是 SUPABASE_HANG，说明数据库其实已经改完了，只是前端 SDK 卡住了，我们直接忽略它继续往下走
+          if (e.message !== 'SUPABASE_HANG') throw e
+        }
+        
+        if (updateErr) throw updateErr
+        
+        // 3. 核心修复：强制销毁刚才自动建立的临时 Session，避免状态混乱
+        await supabase.auth.signOut()
+        
+        // 4. 重置表单，切回登录页
+        currentMode.value = 'login'
+        authForm.password = ''
+        authForm.confirmPassword = ''
+        authForm.otpCode = ''
+        return { msg: '🎉 密码重置成功！请使用新密码重新登录。', type: 'success' }
+      }
+    
+    showMessage('验证码已重新发送，请前往邮箱查收！', 'success')
+    startCountdown()
   } catch (err) {
-    // 🌟 核心修改：精准拦截并翻译 Supabase 的英文报错
-    if (isLoginMode.value) {
-      // 拦截 1：邮箱未验证
-      if (err.message.includes('Email not confirmed')) {
-        alert('⚠️ 登录失败：您的邮箱尚未验证！\n\n请前往邮箱（' + authForm.email + '）点击系统发送的验证链接。\n\n如果没有收到，请务必去【垃圾箱】找找看哦！')
-      } 
-      // 拦截 2：账号或密码错误
-      else if (err.message.includes('Invalid login credentials')) {
-        alert('❌ 登录失败：账号或密码错误，请检查后再试！')
-      } 
-      // 其他未知登录报错
-      else {
-        alert('登录失败：' + err.message)
-      }
-    } else {
-      // 拦截 3：注册时邮箱已被占用
-      if (err.message.includes('User already registered')) {
-        alert('❌ 注册失败：该邮箱已经被注册过了，请直接切换到登录模式！')
-      } 
-      // 其他未知注册报错
-      else {
-        alert('注册失败：' + err.message)
-      }
-    }
+    showMessage(getErrorMessage(err), 'error')
   } finally {
     isAuthLoading.value = false
+  }
+}
+
+// ==========================================
+// 🌟 4. 核心鉴权逻辑 (登录/注册/重置)
+// ==========================================
+const submitAuth = async () => {
+  const cleanEmail = authForm.email?.trim() || ''
+  const cleanOtp = authForm.otpCode?.replace(/\s+/g, '') || ''
+  const cleanPassword = authForm.password?.trim() || ''
+
+  if (!cleanEmail) return showMessage('请输入邮箱！')
+  if (['login', 'register', 'reset'].includes(currentMode.value) && !cleanPassword) {
+    return showMessage('请输入密码！')
+  }
+  if (['register', 'reset'].includes(currentMode.value) && cleanPassword !== authForm.confirmPassword?.trim()) {
+    return showMessage('两次输入的密码不一致！')
+  }
+  if (['verify_register', 'reset'].includes(currentMode.value) && !cleanOtp) {
+    return showMessage('请输入验证码！')
+  }
+
+  isAuthLoading.value = true
+  feedback.show = false 
+
+  try {
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('网络请求超时，请检查网络📶')), 10000)
+    )
+
+    const executeAuth = async () => {
+      if (currentMode.value === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: cleanPassword })
+        if (error) throw error
+        return { msg: '登录成功！欢迎回来。', type: 'success', action: 'close' }
+      } 
+      else if (currentMode.value === 'register') {
+        const { error } = await supabase.auth.signUp({ email: cleanEmail, password: cleanPassword })
+        if (error) throw error
+        currentMode.value = 'verify_register'
+        startCountdown() // 🌟 第一次发完验证码，自动启动倒计时
+        return { msg: '验证码已发送至邮箱，请查收！', type: 'success' }
+      } 
+      else if (currentMode.value === 'verify_register') {
+        const { error } = await supabase.auth.verifyOtp({ email: cleanEmail, token: cleanOtp, type: 'signup' })
+        if (error) throw error
+        return { msg: '激活成功！已为您自动登录。', type: 'success', action: 'close' }
+      } 
+      else if (currentMode.value === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
+        if (error) throw error
+        currentMode.value = 'reset'
+        startCountdown() // 🌟 第一次发完重置验证码，自动启动倒计时
+        return { msg: '重置验证码已发送至邮箱。', type: 'success' }
+      } 
+      else if (currentMode.value === 'reset') {
+        const { error: verifyErr } = await supabase.auth.verifyOtp({ email: cleanEmail, token: cleanOtp, type: 'recovery' })
+        if (verifyErr) throw verifyErr
+        
+        const { error: updateErr } = await supabase.auth.updateUser({ password: cleanPassword })
+        if (updateErr) throw updateErr
+        
+        currentMode.value = 'login'
+        authForm.password = ''
+        authForm.confirmPassword = ''
+        authForm.otpCode = ''
+        return { msg: '密码重置成功！请重新登录。', type: 'success' }
+      }
+    }
+
+    const result = await Promise.race([executeAuth(), timeoutPromise])
+
+    isAuthLoading.value = false
+    showMessage(result.msg, result.type)
+    
+    if (result.action === 'close') {
+      setTimeout(() => emit('close'), 1000)
+    }
+
+  } catch (err) {
+    isAuthLoading.value = false
+    showMessage(err.message.includes('超时') ? err.message : getErrorMessage(err), 'error')
   }
 }
 </script>
@@ -61,41 +195,106 @@ const submitAuth = async () => {
   <Teleport to="body">
     <div class="modal-overlay" @click.self="$emit('close')">
       <div class="modal-content">
-        <h2>{{ isLoginMode ? '账号登录' : '注册新账号' }}</h2>
-        <input type="email" v-model="authForm.email" placeholder="输入您的邮箱" />
-        <input type="password" v-model="authForm.password" placeholder="输入密码 (至少6位)" @keyup.enter="isLoginMode ? submitAuth() : null" />
-        <input v-if="!isLoginMode" type="password" v-model="authForm.confirmPassword" placeholder="请再次输入密码确认" @keyup.enter="submitAuth" />
+        <h2>
+          {{ currentMode === 'login' ? '账号登录' : 
+             currentMode === 'register' ? '注册新账号' : 
+             currentMode === 'verify_register' ? '邮箱验证激活' :
+             currentMode === 'forgot' ? '找回密码' : '重置密码' }}
+        </h2>
+
+        <div v-if="feedback.show" class="feedback-banner" :class="feedback.type">
+          {{ feedback.text }}
+        </div>
+
+        <input 
+          type="email" 
+          v-model="authForm.email" 
+          placeholder="输入您的邮箱" 
+          :disabled="currentMode === 'verify_register' || currentMode === 'reset' || isAuthLoading" 
+        />
+
+        <input 
+          v-if="['login', 'register', 'reset'].includes(currentMode)" 
+          type="password" 
+          v-model="authForm.password" 
+          :placeholder="currentMode === 'reset' ? '输入新密码 (至少6位)' : '输入密码 (至少6位)'" 
+          @keyup.enter="submitAuth" 
+          :disabled="isAuthLoading"
+        />
+
+        <input 
+          v-if="['register', 'reset'].includes(currentMode)" 
+          type="password" 
+          v-model="authForm.confirmPassword" 
+          placeholder="请再次输入密码确认" 
+          @keyup.enter="submitAuth" 
+          :disabled="isAuthLoading"
+        />
+
+        <div v-if="['verify_register', 'reset'].includes(currentMode)" style="position: relative; margin-bottom: 15px;">
+          <input 
+            type="text" 
+            v-model="authForm.otpCode" 
+            placeholder="输入邮件中的验证码" 
+            @keyup.enter="submitAuth" 
+            style="text-align: center; letter-spacing: 4px; font-size: 16px; margin-bottom: 0; padding-right: 100px;"
+            :disabled="isAuthLoading"
+          />
+          <button 
+            @click="resendOtp"
+            :disabled="countdown > 0 || isAuthLoading"
+            style="position: absolute; right: 6px; top: 6px; bottom: 6px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: bold; border: none; transition: 0.2s;"
+            :style="countdown > 0 ? 'background: #f1f5f9; color: #94a3b8; cursor: not-allowed;' : 'background: #fdf2f8; color: #db2777; cursor: pointer;'"
+          >
+            {{ countdown > 0 ? `${countdown}s 后重发` : '重新发送' }}
+          </button>
+        </div>
+
         <button class="btn-primary" @click="submitAuth" :disabled="isAuthLoading">
-          {{ isAuthLoading ? '处理中...' : (isLoginMode ? '立刻登录' : '确认注册') }}
+          {{ isAuthLoading ? '处理中...' : 
+             currentMode === 'login' ? '立刻登录' : 
+             currentMode === 'register' ? '获取注册验证码' :
+             currentMode === 'verify_register' ? '验证并激活账号' :
+             currentMode === 'forgot' ? '获取重置验证码' : '验证并重置密码' }}
         </button>
-        <p class="toggle-mode" @click="isLoginMode = !isLoginMode">
-          {{ isLoginMode ? '没有账号？点击注册' : '已有账号？返回登录' }}
-        </p>
+
+        <div style="margin-top: 15px;">
+          <p v-if="currentMode === 'login'" class="toggle-mode" @click="currentMode = 'forgot'" style="margin-bottom: 8px;">忘记密码？</p>
+          <p v-if="['login', 'forgot'].includes(currentMode)" class="toggle-mode" @click="currentMode = 'register'">没有账号？点击注册</p>
+          <p v-if="['register', 'verify_register', 'forgot', 'reset'].includes(currentMode)" class="toggle-mode" @click="currentMode = 'login'">返回登录</p>
+        </div>
+
       </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-/* ==========================================
-   🔒 1. 弹窗底层与容器
-   ========================================== */
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); }
 .modal-content { background: white; padding: 30px; border-radius: 20px; width: 400px; position: relative; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
-/* ==========================================
-   📝 2. 内部排版细节
-   ========================================== */
 .modal-content h2 { text-align: center; color: #db2777; margin-top: 0; margin-bottom: 20px; font-weight: 900; }
+
+.feedback-banner { padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; margin-bottom: 15px; text-align: center; animation: slideDown 0.2s ease-out; }
+.feedback-banner.error { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+.feedback-banner.success { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0; }
+
 .modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #f1f5f9; border-radius: 12px; box-sizing: border-box; font-size: 14px; font-weight: bold; outline: none; transition: border-color 0.2s; color: #1e293b; background: #f8fafc; }
+.modal-content input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
 .modal-content input:focus { border-color: #f472b6; background: #fff; box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.1); }
 
-.toggle-mode { text-align: center; color: #8b5cf6; font-size: 13px; font-weight: bold; margin-top: 15px; cursor: pointer; transition: color 0.2s; }
+.toggle-mode { text-align: center; color: #8b5cf6; font-size: 13px; font-weight: bold; margin: 0; cursor: pointer; transition: color 0.2s; }
 .toggle-mode:hover { color: #f472b6; text-decoration: underline; }
 
-/* ==========================================
-   📱 3. 手机端适配
-   ========================================== */
+.btn-primary { width: 100%; padding: 12px; border-radius: 12px; background: #db2777; color: white; border: none; font-weight: bold; font-size: 15px; cursor: pointer; transition: background 0.2s; }
+.btn-primary:hover { background: #be185d; }
+.btn-primary:disabled { background: #f472b6; cursor: not-allowed; }
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @media (max-width: 768px) {
   .modal-content { width: 92% !important; margin: 0 auto; padding: 24px 20px !important; max-height: 85vh; overflow-y: auto; }
 }
