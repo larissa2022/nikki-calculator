@@ -1,0 +1,2 @@
+-- Placeholder for a remote migration that exists in Supabase migration history.
+-- The later 20260418121055_remote_schema.sql dump contains the remote schema state.
