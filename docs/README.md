@@ -1,0 +1,31 @@
+# 项目文档索引
+
+本文档目录用于集中管理需求、开发计划、技术实现和数据库安全记录。
+
+## 需求与规划
+
+| 文档 | 作用 |
+| --- | --- |
+| [需求文档](requirements/需求文档.md) | 记录业务规则、产品口径和需求风险 |
+| [开发文档](planning/开发文档.md) | 记录开发阶段、暂停确认点和验收标准 |
+| [技术实现文档](planning/技术实现文档.md) | 记录表结构、RPC、RLS、前端模块和测试方案 |
+| [缺陷文档](planning/缺陷文档.md) | 记录已发现缺陷、影响范围、状态和建议修复方向 |
+
+## 数据库
+
+| 文档 | 作用 |
+| --- | --- |
+| [数据库开发安全方案](database/数据库开发安全方案.md) | 数据库开发门禁、备份、隔离、回滚和上线检查 |
+| [数据库变更记录](database/数据库变更记录.md) | 每次 migration、RPC、RLS、数据修复的记录模板 |
+| [数据库环境信息](database/环境信息.md) | Supabase production / development 项目信息 |
+| [schema](database/schema.md) | 当前数据库表结构摘要 |
+| [Supabase Review Setup](database/SUPABASE_REVIEW.md) | Supabase 审查上下文与常用命令 |
+
+## 阅读顺序
+
+1. 先看 [需求文档](requirements/需求文档.md)，确认业务口径。
+2. 再看 [开发文档](planning/开发文档.md)，确认阶段与阻塞点。
+3. 进入实现前看 [技术实现文档](planning/技术实现文档.md)。
+4. 涉及数据库前，必须先看 [数据库开发安全方案](database/数据库开发安全方案.md)。
+5. 切换环境前，确认 [数据库环境信息](database/环境信息.md)。
+6. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
