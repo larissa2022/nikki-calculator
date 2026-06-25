@@ -46,34 +46,31 @@ export const adminService = {
         return true;
     },
 
-    // 5. 批准套装建档 (带事务安全检测)
-    // 🌟 升级版：高容错、防崩溃的套装批准逻辑
-    // 5. 批准套装建档 (带事务安全检测)
-    // 🌟 终极优雅版：使用 upsert 彻底消灭控制台 409 报错
-    async approveSuit(id, name) {
-        // 1. 使用 upsert，并指定 onConflict 为 name 字段，开启 ignoreDuplicates
-        // 这等同于 SQL 的 INSERT ... ON CONFLICT (name) DO NOTHING
+    async approveSuit(name) {
+        const cleanName = name?.trim()
+        if (!cleanName) throw new Error('套装名称不能为空')
+
         const { error: insertErr } = await supabase
             .from('suits')
             .upsert(
-                [{ name: name }], 
+                [{ name: cleanName }],
                 { onConflict: 'name', ignoreDuplicates: true }
             )
 
-        // 此时如果重复，insertErr 会直接是 null，完全不会有 409 报错！
         if (insertErr) {
             throw new Error('写入套装库失败: ' + insertErr.message)
         }
 
-        // 2. 清理核心：按 name 团灭所有排队中的同名申请
         const { error: delErr } = await supabase
             .from('pending_suits')
             .delete()
-            .eq('name', name)
+            .eq('name', cleanName)
 
         if (delErr) {
             throw new Error('清理待办套装失败: ' + delErr.message)
         }
+
+        return true
     },
 
     // 6. 驳回任意申请
@@ -81,6 +78,19 @@ export const adminService = {
         const { error } = await supabase.from(tableName).update({ status: 'rejected' }).eq('id', id);
         if (error) throw error;
         return true;
+    },
+
+    async rejectPendingSuitsByName(name) {
+        const cleanName = name?.trim()
+        if (!cleanName) throw new Error('套装名称不能为空')
+
+        const { error } = await supabase
+            .from('pending_suits')
+            .update({ status: 'rejected' })
+            .eq('name', cleanName)
+
+        if (error) throw error
+        return true
     },
 
     // 7. 终极仲裁入库 (散件)

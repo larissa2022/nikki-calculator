@@ -2,15 +2,14 @@
 import { ref, onMounted, watch } from 'vue'
 import { useAuth } from './composables/useAuth'
 import { useWardrobe } from './composables/useWardrobe'
-
-// 🌟 修复 1：补上缺失的 supabase 引入！
 import { supabase } from './api/supabase'
 
 import AuthModal from './components/AuthModal.vue'
 import MainView from './views/MainView.vue'
 import AdminView from './views/AdminView.vue'
 
-const { currentUser, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
+// 🌟 1. 核心修复：在这里把 userProfile 提取出来
+const { currentUser, userProfile, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
 const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
@@ -25,10 +24,9 @@ onMounted(async () => {
   await loadData()
   await initAuth()
   
-  // 🌟 修复 2：监听登出状态，清理正确的变量 currentUser
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
-      currentUser.value = null // 只要触发登出，强制清空当前用户信息
+      currentUser.value = null 
     } 
   })
 })
@@ -56,6 +54,7 @@ const handleSaveCloud = async () => {
     <MainView 
       v-else
       :currentUser="currentUser"
+      :userProfile="userProfile" 
       :isAdmin="isAdmin"
       :userQuota="userQuota"
       :fullWardrobeData="fullWardrobeData"
@@ -68,7 +67,7 @@ const handleSaveCloud = async () => {
       @save-cloud="handleSaveCloud"
       @refresh-profile="fetchProfile"
     />
-  </div>
+    </div>
 </template>
 
 <style>

@@ -1,7 +1,9 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
-import { GRADE_OPTIONS, calculateItemScores } from '../composables/useScoreEngine'
+import { calculateItemScores } from '../composables/useScoreEngine'
+import { createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import ClothesEntryForm from './ClothesEntryForm.vue'
 
 
 
@@ -18,53 +20,24 @@ const displayNotFoundNames = computed(() => lastNotFoundNames.value.slice(0, 3))
 const activeContribution = ref(null)
 const isSubmittingContrib = ref(false)
 const suitSearchText = ref('')
-const isSuitDropdownOpen = ref(false)
 
-const fullCategories = [
-  '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵',
-  '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链',
-  '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰',
-  '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
-]
-
-const contribForm = reactive({
-  name: '',
-  suit_id: '', game_id: '', tags: '', category: '连衣裙', stars: 5,
-  pair1: 'simple', grade1: '完美', pair2: 'active', grade2: '完美',
-  pair3: 'cute', grade3: '完美', pair4: 'pure', grade4: '完美',
-  pair5: 'cool', grade5: '完美'
+const createContributionFormState = (name = '') => createClothesEntryFormState({
+  name,
+  category: '连衣裙'
 })
+
+const contribForm = reactive(createContributionFormState())
 
 watch(activeContribution, (newVal) => {
-  suitSearchText.value = '';
-  contribForm.suit_id = '';
-  contribForm.game_id = '';
-  contribForm.name = newVal || '';
+  suitSearchText.value = ''
+  Object.assign(contribForm, createContributionFormState(newVal || ''))
 })
-
-// 🌟 去掉 .value，加上 props.
-const filteredSuits = computed(() => {
-  const query = suitSearchText.value?.toLowerCase().trim() || '';
-  if (!query || query.startsWith('《')) return props.availableSuits;
-  return props.availableSuits.filter(s => s.name && s.name.toLowerCase().includes(query));
-})
-
-const handleSuitBlur = () => {
-  setTimeout(() => { isSuitDropdownOpen.value = false }, 200)
-}
-
-const selectSuit = (suit) => {
-  contribForm.suit_id = suit.id;
-  suitSearchText.value = suit.id ? `《${suit.name}》` : '';
-  isSuitDropdownOpen.value = false;
-}
 
 // 🌟 新增：玩家点击“一键申请并应用”时的逻辑
 const applyShadowSuit = (name) => {
   const cleanName = name.replace(/[《》]/g, '').trim();
   contribForm.suit_id = ''; // 故意留空，触发影子模式
   suitSearchText.value = `《${cleanName}》`;
-  isSuitDropdownOpen.value = false;
 }
 
 // 🌟 替换：带【智能防重】与【自动自愈刷新】的最终提交逻辑
@@ -135,10 +108,9 @@ const submitContribution = async (name) => {
     );
 
     const executeUpload = async () => {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      const { error: authErr } = await supabase.auth.getUser();
       if (authErr) throw new Error('登录校验失败: ' + authErr.message);
       
-      const userId = authData?.user?.id;
       const pairs = [
         { attr: contribForm.pair1, grade: contribForm.grade1 },
         { attr: contribForm.pair2, grade: contribForm.grade2 },
@@ -148,6 +120,8 @@ const submitContribution = async (name) => {
       ];
       const calculatedScores = calculateItemScores(contribForm.category, pairs);
 
+      // ... 准备 payload ... (保留原有的 payload 定义)
+      // ... 前面生成 payload 的代码保持不变 ...
       const payload = {
         name: contribForm.name || name,
         game_id: gameIdStr.toUpperCase() === 'N' ? 'N' : gameIdStr,
@@ -156,20 +130,21 @@ const submitContribution = async (name) => {
         scores: calculatedScores,
         suit_id: contribForm.suit_id || null,
         temp_suit_name: contribForm.suit_id ? null : (typedSuitName || null),
-        tags: contribForm.tags || null,
-        submitted_by: userId || null,
-        status: 'pending'
+        tags: normalizeClothingTags(contribForm.tags) || null
       };
 
-      const { error: dbErr } = await supabase.from('pending_clothes').insert(payload);
-      if (dbErr) throw new Error(dbErr.message);
+      const { error: submitErr } = await supabase.rpc('submit_clothing_contribution', {
+        p_name: payload.name,
+        p_game_id: payload.game_id,
+        p_category: payload.category,
+        p_stars: payload.stars,
+        p_scores: payload.scores,
+        p_suit_id: payload.suit_id,
+        p_temp_suit_name: payload.temp_suit_name,
+        p_tags: payload.tags
+      })
 
-      if (!contribForm.suit_id && typedSuitName) {
-        await supabase.from('pending_suits').upsert(
-          [{ name: typedSuitName }],
-          { onConflict: 'name', ignoreDuplicates: true }
-        );
-      }
+      if (submitErr) throw new Error(submitErr.message)
       return true; 
     };
 
@@ -212,7 +187,6 @@ const submitContribution = async (name) => {
   }
 }
 </script>
-
 <template>
   <div v-if="lastNotFoundNames.length > 0" class="space-y-3">
     <div class="flex items-center gap-2 px-1">
@@ -221,94 +195,38 @@ const submitContribution = async (name) => {
     </div>
 
     <div class="space-y-3 pr-2">
-      <div v-for="name in displayNotFoundNames" :key="name"
-        class="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-sm">
-        <div class="flex justify-between items-center">
-          <span class="font-black text-slate-700">{{ name }}</span>
-          <button @click="activeContribution = (activeContribution === name ? null : name)"
-            class="btn btn-xs btn-outline btn-secondary rounded-full">
+      <div v-for="name in displayNotFoundNames" :key="name" class="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-center gap-3">
+          <span class="font-black text-slate-700 truncate">{{ name }}</span>
+          <button
+            type="button"
+            class="btn btn-xs btn-outline btn-secondary rounded-full shrink-0"
+            @click="activeContribution = (activeContribution === name ? null : name)"
+          >
             {{ activeContribution === name ? '收起' : '完善资料' }}
           </button>
         </div>
 
         <Transition name="slide">
-          <div v-if="activeContribution === name" class="mt-4 pt-4 border-t border-dashed space-y-4">
-            <div class="grid gap-4 text-xs">
-              <div class="flex flex-col gap-1">
-                <span class="font-bold text-slate-400">服装名称</span>
-                <input type="text" v-model="contribForm.name"
-                  class="input input-bordered w-full font-bold text-slate-700" />
-              </div>
-              <div class="flex flex-col gap-1">
-                <span class="font-bold text-slate-400">所属套装</span>
-                <div class="relative w-full">
-                  <input type="text" v-model="suitSearchText" @focus="isSuitDropdownOpen = true" @blur="handleSuitBlur" placeholder="搜索或输入新套装..." class="input input-sm input-bordered w-full font-bold bg-slate-50 focus:bg-white" />
-                  
-                  <div v-show="isSuitDropdownOpen" class="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                    <div class="p-2 hover:bg-pink-50 font-bold cursor-pointer text-slate-500" @mousedown.prevent="selectSuit({id: '', name: ''})">-- 无关联套装 --</div>
-                    <div v-for="s in filteredSuits" :key="s.id" class="p-2 hover:bg-pink-50 font-bold cursor-pointer" @mousedown.prevent="selectSuit(s)">《{{ s.name }}》</div>
-                    
-                    <div 
-                      v-if="filteredSuits.length === 0 && suitSearchText.trim() !== ''" 
-                      class="p-2 bg-purple-50 text-purple-600 font-bold cursor-pointer border-t border-purple-100 flex justify-between items-center"
-                      @mousedown.prevent="applyShadowSuit(suitSearchText)"
-                    >
-                      <span class="text-xs">⚠️ 暂无《{{ suitSearchText.replace(/[《》]/g, '') }}》</span>
-                      <span class="bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] shadow-sm">一键申请并应用</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <span class="font-bold text-rose-500 mb-1 block">短编号 (必填)</span>
-                  <input type="text" v-model="contribForm.game_id" class="input input-bordered w-full font-bold border-rose-200 focus:border-rose-400 bg-rose-50/30" placeholder="请辛苦一下在游戏中查找哦" />
-                </div>
-                <div><span class="font-bold text-slate-400 mb-1 block">分类部位</span><select v-model="contribForm.category" class="select select-bordered font-bold w-full"><option v-for="cat in fullCategories" :key="cat">{{cat}}</option></select></div>
-                <div><span class="font-bold text-slate-400 mb-1 block">星级</span><select v-model="contribForm.stars" class="select select-bordered font-bold w-full"><option v-for="s in 6" :key="s" :value="s">{{s}} 星</option></select></div>
-              </div>
-
-              <div>
-                <span class="font-bold text-slate-400 mb-1 block">特殊标签</span>
-                <input type="text" v-model="contribForm.tags" class="input input-sm input-bordered w-full font-bold"
-                  placeholder="如: 洛丽塔, 中式古典..." />
-              </div>
-
-              <div class="flex flex-col gap-3">
-                <div v-for="i in 5" :key="i" class="grid grid-cols-2 gap-3">
-                  <select v-model="contribForm['pair' + i]" class="select select-bordered w-full font-bold">
-                    <option v-if="i == 1" value="simple">简约</option>
-                    <option v-if="i == 1" value="gorgeous">华丽</option>
-                    <option v-if="i == 2" value="active">活泼</option>
-                    <option v-if="i == 2" value="elegant">优雅</option>
-                    <option v-if="i == 3" value="cute">可爱</option>
-                    <option v-if="i == 3" value="mature">成熟</option>
-                    <option v-if="i == 4" value="pure">清纯</option>
-                    <option v-if="i == 4" value="sexy">性感</option>
-                    <option v-if="i == 5" value="cool">清凉</option>
-                    <option v-if="i == 5" value="warm">保暖</option>
-                  </select>
-                  <select v-model="contribForm['grade' + i]"
-                    class="select select-bordered w-full font-bold bg-pink-50 text-pink-500 border-pink-200">
-                    <option v-for="g in GRADE_OPTIONS" :key="g">{{ g }}</option>
-                  </select>
-                </div>
-              </div>
-
-              <button class="btn btn-primary w-full shadow-md font-black mt-2" @click="submitContribution(name)"
-                :disabled="isSubmittingContrib">
-                <span v-if="isSubmittingContrib" class="loading loading-spinner loading-sm"></span>
-                {{ isSubmittingContrib ? '上传中...' : '🚀 确认提交申请' }}
-              </button>
-            </div>
+          <div v-if="activeContribution === name" class="mt-4 pt-4 border-t border-dashed">
+            <ClothesEntryForm
+              :form="contribForm"
+              v-model:suitSearchText="suitSearchText"
+          :availableSuits="props.availableSuits"
+          :isSubmitting="isSubmittingContrib"
+          submitText="🚀 提交图鉴申请"
+          submitLoadingText="正在提交申请..."
+          suitNotFoundText="一键申请并应用"
+              :showGameIdWarning="true"
+              @submit="submitContribution(name)"
+              @create-suit="applyShadowSuit"
+            />
           </div>
         </Transition>
       </div>
 
-      <div v-if="lastNotFoundNames.length > 3"
-        class="text-center py-2 text-xs font-bold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-        👇 还有 {{ lastNotFoundNames.length - 3 }} 件缺失服装正在排队...
+      <div v-if="lastNotFoundNames.length > 3" class="text-center py-2 text-xs font-bold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        还有 {{ lastNotFoundNames.length - 3 }} 件缺失服装正在排队
       </div>
     </div>
   </div>

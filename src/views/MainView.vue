@@ -5,22 +5,31 @@ import Calculator from '../components/Calculator.vue'
 import ImportZone from '../components/ImportZone.vue'
 import WardrobeGrid from '../components/WardrobeGrid.vue'
 import SuitGallery from '../components/SuitGallery.vue'
+import UserProfile from '../components/UserProfile.vue'
 
-// 接收来自大总管 App.vue 的数据
 const props = defineProps({
-  currentUser: Object, isAdmin: Boolean, userQuota: Number,
-  fullWardrobeData: Array, myWardrobeIds: Array, stagesData: Array, isLoading: Boolean
+  currentUser: Object, 
+  userProfile: Object, // 🌟 接收全局档案数据
+  isAdmin: Boolean, 
+  userQuota: Number,
+  fullWardrobeData: Array, 
+  myWardrobeIds: Array, 
+  stagesData: Array, 
+  isLoading: Boolean
 })
 
-// 向大总管 App.vue 汇报的事件
 const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile'])
-
 const currentTab = ref('calculator')
 </script>
 
 <template>
   <div class="app-container">
-    <AuthBar :user="currentUser" @open-login="emit('open-login')" />
+    <AuthBar 
+      :user="currentUser" 
+      :profile="userProfile" 
+      @open-login="emit('open-login')" 
+      @open-profile="currentTab = 'profile'" 
+    />
 
     <header>
       <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
@@ -40,6 +49,12 @@ const currentTab = ref('calculator')
       <ImportZone v-if="currentTab === 'import'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
       <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
+      
+      <UserProfile 
+        v-if="currentTab === 'profile'" 
+        :profileData="userProfile" 
+        @refresh-data="emit('refresh-profile')" 
+      />
     </main>
   </div>
 </template>
