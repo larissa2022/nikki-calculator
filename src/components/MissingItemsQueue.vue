@@ -212,6 +212,7 @@ const submitContribution = async (name) => {
         <Transition name="slide">
           <div v-if="activeContribution === name" class="mt-4 pt-4 border-t border-dashed">
             <ClothesEntryForm
+              :key="activeContribution"
               :form="contribForm"
               v-model:suitSearchText="suitSearchText"
           :availableSuits="props.availableSuits"

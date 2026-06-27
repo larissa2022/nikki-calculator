@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { FULL_CATEGORIES, ATTRIBUTE_PAIRS } from '../utils/gameConstants'
 // 直接复用你已经写好的计分引擎里的评级
 import { GRADE_OPTIONS } from '../composables/useScoreEngine' 
@@ -18,22 +18,50 @@ const props = defineProps({
 const emit = defineEmits(['update:suitSearchText', 'submit', 'create-suit'])
 
 const isSuitDropdownOpen = ref(false)
+const explicitNoSuit = ref(false)
+
+const cleanSuitSearchText = computed(() => props.suitSearchText.replace(/[《》]/g, '').trim())
+const hasSuitData = computed(() => props.availableSuits.length > 0)
+const suitInputValue = computed(() => (
+  explicitNoSuit.value ? '-- 无关联套装 (纯散件) --' : props.suitSearchText
+))
 
 // 智能模糊搜索
 const filteredSuits = computed(() => {
-  const query = props.suitSearchText?.toLowerCase().trim() || ''
-  if (!query || query.startsWith('《')) return props.availableSuits.slice(0, 50)
+  const query = cleanSuitSearchText.value.toLowerCase()
+  if (!query) return props.availableSuits.slice(0, 50)
   return props.availableSuits.filter(s => s.name && s.name.toLowerCase().includes(query)).slice(0, 50)
 })
 
+const handleSuitInput = (value) => {
+  explicitNoSuit.value = false
+  if (props.form.suit_id) {
+    props.form.suit_id = ''
+  }
+  emit('update:suitSearchText', value)
+}
+
 const selectSuit = (suit) => {
-  props.form.suit_id = suit.id
+  explicitNoSuit.value = false
+  props.form.suit_id = suit.id || ''
   emit('update:suitSearchText', suit.id ? `《${suit.name}》` : '')
   isSuitDropdownOpen.value = false
 }
 
+const selectNoSuit = async () => {
+  explicitNoSuit.value = true
+  props.form.suit_id = ''
+  emit('update:suitSearchText', '')
+  isSuitDropdownOpen.value = false
+  await nextTick()
+  document.activeElement?.blur?.()
+}
+
 const handleCreateSuit = () => {
-  emit('create-suit', props.suitSearchText)
+  if (!cleanSuitSearchText.value) return
+  explicitNoSuit.value = false
+  props.form.suit_id = ''
+  emit('create-suit', cleanSuitSearchText.value)
   isSuitDropdownOpen.value = false
 }
 </script>
@@ -51,24 +79,29 @@ const handleCreateSuit = () => {
         <div class="searchable-select">
           <input 
             type="text" 
-            :value="suitSearchText"
-            @input="emit('update:suitSearchText', $event.target.value)"
+            :value="suitInputValue"
+            @input="handleSuitInput($event.target.value)"
             @focus="isSuitDropdownOpen = true"
             @blur="setTimeout(() => isSuitDropdownOpen = false, 200)"
-            placeholder="🔍 搜索并选择套装..."
+            @keydown.escape="isSuitDropdownOpen = false"
+            placeholder="🔍 搜索已有套装，或输入新套装名..."
             class="search-input"
           />
           <Transition name="slide">
             <div v-if="isSuitDropdownOpen" class="select-dropdown">
-              <div class="option" @mousedown.prevent="selectSuit({id: '', name: ''})">-- 无关联套装 (纯散件) --</div>
-              <div v-for="s in filteredSuits" :key="s.id" class="option" @mousedown.prevent="selectSuit(s)">《{{ s.name }}》</div>
+              <div class="option no-suit-option" @pointerdown.prevent="selectNoSuit">-- 无关联套装 (纯散件) --</div>
+              <div v-for="s in filteredSuits" :key="s.id" class="option" @pointerdown.prevent="selectSuit(s)">《{{ s.name }}》</div>
               
+              <div v-if="!hasSuitData && !cleanSuitSearchText" class="option empty-option">
+                暂无套装数据。可直接输入套装名后申请，或选择“无关联套装”。
+              </div>
+
               <div 
-                v-if="filteredSuits.length === 0 && suitSearchText.trim() !== ''" 
+                v-if="filteredSuits.length === 0 && cleanSuitSearchText !== ''" 
                 class="option bg-purple-50 text-purple-600 font-bold flex justify-between items-center border border-purple-100 hover:bg-purple-100"
-                @mousedown.prevent="handleCreateSuit"
+                @pointerdown.prevent="handleCreateSuit"
               >
-                <span class="text-xs">⚠️ 暂无《{{ suitSearchText.replace(/[《》]/g, '') }}》</span>
+                <span class="text-xs">⚠️ 暂无《{{ cleanSuitSearchText }}》</span>
                 <span class="bg-purple-500 text-white px-2 py-1 rounded-md text-xs shadow-sm">{{ suitNotFoundText }}</span>
               </div>
             </div>
@@ -144,6 +177,9 @@ const handleCreateSuit = () => {
 .select-dropdown { position: absolute; z-index: 50; top: 100%; left: 0; right: 0; margin-top: 6px; background: white; border: 1px solid #f1f5f9; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); max-height: 200px; overflow-y: auto; padding: 6px; }
 .option { padding: 8px 12px; font-size: 13px; font-weight: 800; color: #475569; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
 .option:hover { background: #fdf2f8; color: #db2777; }
+.empty-option { color: #94a3b8; cursor: default; text-align: center; }
+.empty-option:hover { background: transparent; color: #94a3b8; }
+.no-suit-option { color: #db2777; background: #fdf2f8; }
 .btn-submit-contrib { background: linear-gradient(135deg, #a855f7, #ec4899); color: white; border: none; font-size: 15px; font-weight: 900; padding: 12px; border-radius: 14px; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(236, 72, 153, 0.25); margin-top: 10px; }
 .btn-submit-contrib:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(236, 72, 153, 0.35); }
 .btn-submit-contrib:disabled { opacity: 0.7; cursor: not-allowed; background: #cbd5e1; box-shadow: none; }
