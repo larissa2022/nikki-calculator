@@ -36,7 +36,7 @@ export function useWardrobe() {
   const myWardrobeSet = computed(() => new Set(myWardrobeIds.value))
 
   // 1. 初始化加载图鉴 (含智能缓存比对)
-  const loadData = async () => {
+  const loadData = async ({ force = false } = {}) => {
     isLoading.value = true
     try {
       const { count: cloudCount, error: countError } = await supabase
@@ -49,7 +49,7 @@ export function useWardrobe() {
       const localClothes = await getFromLocal('fullClothesData_v2') 
       const localStages = await getFromLocal('stagesData')
 
-      if (localClothes && localClothes.length === cloudCount && localStages) {
+      if (!force && localClothes && localClothes.length === cloudCount && localStages) {
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
       } else {

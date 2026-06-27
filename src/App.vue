@@ -39,6 +39,13 @@ const handleSaveCloud = async () => {
     alert('❌ 保存失败：' + err.message)
   }
 }
+
+const handleRefreshCatalog = async () => {
+  await loadData({ force: true })
+  if (currentUser.value) {
+    await syncWardrobeFromCloud(currentUser.value.id)
+  }
+}
 </script>
 
 <template>
@@ -66,6 +73,7 @@ const handleSaveCloud = async () => {
       @update:ownedIds="myWardrobeIds = $event"
       @save-cloud="handleSaveCloud"
       @refresh-profile="fetchProfile"
+      @refresh-catalog="handleRefreshCatalog"
     />
     </div>
 </template>

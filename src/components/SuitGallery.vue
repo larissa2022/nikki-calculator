@@ -10,11 +10,13 @@ const props = defineProps({
   isLoggedIn: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:ownedIds', 'save-cloud'])
+const emit = defineEmits(['update:ownedIds', 'save-cloud', 'refresh-catalog'])
 
 const importText = ref('')
 const searchQuery = ref('')
 const isRecognizing = ref(false)
+const isSuitListLoading = ref(false)
+const suitListError = ref('')
 
 const filterStatus = ref('all') 
 const currentPage = ref(1)
@@ -36,12 +38,26 @@ watch(selectedSuit, (newSuit) => {
   }
 })
 
-onMounted(async () => {
+const refreshSuits = async () => {
+  isSuitListLoading.value = true
+  suitListError.value = ''
   try {
     dbSuitList.value = await suitService.getAllSuits()
   } catch (err) {
     console.error('加载套装列表失败:', err)
+    suitListError.value = '套装列表刷新失败，请稍后重试。'
+  } finally {
+    isSuitListLoading.value = false
   }
+}
+
+const refreshGallery = async () => {
+  emit('refresh-catalog')
+  await refreshSuits()
+}
+
+onMounted(async () => {
+  await refreshSuits()
 })
 
 // ====== 🌟 新增：单件点击切换逻辑 ======
@@ -281,11 +297,23 @@ const submitMissingSuits = async (namesArray) => {
             <button :class="{ active: filterStatus === 'completed' }" @click="filterStatus = 'completed'">已集齐</button>
             <button :class="{ active: filterStatus === 'incomplete' }" @click="filterStatus = 'incomplete'">未集齐</button>
           </div>
+          <button class="btn-refresh" :disabled="isSuitListLoading" @click="refreshGallery">
+            {{ isSuitListLoading ? '刷新中...' : '刷新' }}
+          </button>
           <input type="text" v-model="searchQuery" class="search-box" placeholder="搜索套装..." />
         </div>
       </div>
 
-      <div class="suit-grid" v-if="paginatedSuits.length > 0">
+      <div v-if="isSuitListLoading" class="gallery-loading">
+        正在刷新套装数据...
+      </div>
+
+      <div v-else-if="suitListError" class="empty-state error-state">
+        <p>{{ suitListError }}</p>
+        <button class="btn-refresh" @click="refreshGallery">重试</button>
+      </div>
+
+      <div class="suit-grid" v-else-if="paginatedSuits.length > 0">
         <div 
           v-for="suit in paginatedSuits" 
           :key="suit.name" 
@@ -409,6 +437,9 @@ const submitMissingSuits = async (namesArray) => {
 .filter-tabs { display: flex; background: #f8fafc; padding: 4px; border-radius: 12px; border: 1px solid #e2e8f0; }
 .filter-tabs button { background: transparent; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; color: #64748b; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
 .filter-tabs button.active { background: white; color: #9333ea; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+.btn-refresh { background: #fff; border: 1.5px solid #d8b4fe; color: #9333ea; padding: 7px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.btn-refresh:hover:not(:disabled) { background: #faf5ff; border-color: #a855f7; }
+.btn-refresh:disabled { opacity: 0.6; cursor: wait; }
 
 .search-box { padding: 8px 15px; border: 1.5px solid #e9d5ff; border-radius: 20px; font-size: 12px; outline: none; width: 140px; background: #faf5ff; transition: all 0.3s; }
 .search-box:focus { border-color: #c084fc; width: 180px; background: #fff; }
@@ -435,6 +466,8 @@ const submitMissingSuits = async (namesArray) => {
 .btn-unlock:hover { background: #9333ea; color: white; }
 .no-parts-note { margin-top: auto; background: #f8fafc; border: 1.5px dashed #cbd5e1; color: #94a3b8; font-size: 11px; font-weight: bold; padding: 6px; border-radius: 8px; text-align: center; }
 .empty-state { text-align: center; color: #94a3b8; font-size: 13px; padding: 30px 0; grid-column: span 4; }
+.gallery-loading { text-align: center; color: #9333ea; background: #faf5ff; border: 1.5px dashed #d8b4fe; border-radius: 14px; padding: 24px; font-size: 13px; font-weight: bold; }
+.error-state { color: #e11d48; background: #fff1f2; border: 1.5px dashed #fecdd3; border-radius: 14px; }
 
 .pagination { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 30px; }
 .page-btn { background: #fff; border: 1.5px solid #e2e8f0; color: #475569; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
