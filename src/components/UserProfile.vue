@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { supabase } from '../api/supabase'
 import { getDisplayUsername, getUserRankAndPrivilege } from '../composables/useUserPrivilege'
 
@@ -8,12 +8,21 @@ const props = defineProps({
   profileData: { type: Object, default: () => ({}) }
 })
 // 🌟 2. 严格的代码管理：不越级请求数据，只向父组件汇报“我要刷新数据”
-const emit = defineEmits(['refresh-data'])
+const emit = defineEmits(['refresh-data', 'profile-updated'])
 
-const myRank = computed(() => getUserRankAndPrivilege(props.profileData?.total_points || 0))
+const localProfile = ref(null)
+const displayProfile = computed(() => localProfile.value || props.profileData)
+const myRank = computed(() => getUserRankAndPrivilege(displayProfile.value?.total_points || 0))
 const newUsername = ref('')
 const isUpdatingName = ref(false)
 const isModalOpen = ref(false)
+
+watch(
+  () => props.profileData,
+  (profile) => {
+    if (profile) localProfile.value = null
+  }
+)
 
 const updateUsername = async () => {
   const cleanName = newUsername.value.trim()
@@ -22,21 +31,25 @@ const updateUsername = async () => {
 
   isUpdatingName.value = true
   try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ username: cleanName })
-      .eq('id', props.profileData.id)
+    const { data, error } = await supabase.rpc('update_profile_username', {
+      p_username: cleanName
+    })
 
     if (error) {
       if (error.code === '23505') throw new Error(`代号 "${cleanName}" 已被抢注，换一个霸气点的名字吧！`)
       throw error
     }
+
+    if (!data) throw new Error('代号没有保存成功，请稍后重试')
+
+    const updatedProfile = Array.isArray(data) ? data[0] : data
+    localProfile.value = { ...props.profileData, ...updatedProfile }
     
     alert('🎉 代号修改成功！')
     newUsername.value = ''
     isModalOpen.value = false 
     
-    // 🌟 3. 通知上层组件去拉取新数据
+    emit('profile-updated', localProfile.value)
     emit('refresh-data')
     
   } catch (err) {
@@ -47,13 +60,13 @@ const updateUsername = async () => {
 }
 
 const openEditModal = () => {
-  newUsername.value = props.profileData?.username || ''
+  newUsername.value = displayProfile.value?.username || ''
   isModalOpen.value = true
 }
 </script>
 
 <template>
-  <div class="space-y-6" v-if="profileData">
+  <div class="space-y-6" v-if="displayProfile">
     <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
       <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-pink-400 to-purple-500"></div>
       <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
@@ -68,8 +81,8 @@ const openEditModal = () => {
               ✏️ 修改
             </button>
           </div>
-          <div class="text-lg font-black text-pink-500 truncate">{{ getDisplayUsername(profileData) }}</div>
-          <div v-if="!profileData.username" class="mt-1 text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded w-fit">尚未设置专属代号</div>
+          <div class="text-lg font-black text-pink-500 truncate">{{ getDisplayUsername(displayProfile) }}</div>
+          <div v-if="!displayProfile.username" class="mt-1 text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded w-fit">尚未设置专属代号</div>
         </div>
         
         <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
@@ -80,8 +93,8 @@ const openEditModal = () => {
         
         <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
           <div class="text-xs font-bold text-slate-400 mb-1">累计积分</div>
-          <div class="text-lg font-black text-purple-600">{{ profileData.total_points || 0 }} 分</div>
-          <div class="mt-1 text-[11px] font-bold text-slate-500">本月活跃度: {{ profileData.monthly_action_count || 0 }} 次</div>
+          <div class="text-lg font-black text-purple-600">{{ displayProfile.total_points || 0 }} 分</div>
+          <div class="mt-1 text-[11px] font-bold text-slate-500">本月活跃度: {{ displayProfile.monthly_action_count || 0 }} 次</div>
         </div>
       </div>
     </section>

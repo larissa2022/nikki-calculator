@@ -46,6 +46,13 @@ const handleRefreshCatalog = async () => {
     await syncWardrobeFromCloud(currentUser.value.id)
   }
 }
+
+const handleProfileUpdated = (updatedProfile) => {
+  userProfile.value = {
+    ...(userProfile.value || {}),
+    ...(updatedProfile || {})
+  }
+}
 </script>
 
 <template>
@@ -73,6 +80,7 @@ const handleRefreshCatalog = async () => {
       @update:ownedIds="myWardrobeIds = $event"
       @save-cloud="handleSaveCloud"
       @refresh-profile="fetchProfile"
+      @profile-updated="handleProfileUpdated"
       @refresh-catalog="handleRefreshCatalog"
     />
     </div>

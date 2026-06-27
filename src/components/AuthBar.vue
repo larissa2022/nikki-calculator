@@ -1,9 +1,12 @@
 <script setup>
+import { computed } from 'vue'
 import { supabase } from '@/api/supabase'
 
-defineProps(['user'])
+const props = defineProps(['user', 'profile'])
 // 🌟 新增抛出 'open-profile' 事件
 const emit = defineEmits(['open-login', 'open-profile'])
+
+const displayName = computed(() => props.profile?.username || props.user?.email || '个人中心')
 
 const handleLogout = async () => {
   try {
@@ -21,7 +24,7 @@ const handleLogout = async () => {
   <div class="auth-bar">
     <div v-if="user" class="user-info">
       <span class="user-email" @click="$emit('open-profile')" title="进入个人中心">
-        👋 {{ user.email }}
+        👋 {{ displayName }}
       </span>
       <button class="btn-tiny btn-profile" @click="$emit('open-profile')">✨ 个人中心</button>
       

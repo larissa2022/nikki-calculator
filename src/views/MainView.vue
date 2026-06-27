@@ -18,7 +18,7 @@ const props = defineProps({
   isLoading: Boolean
 })
 
-const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'refresh-catalog'])
+const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
 const currentTab = ref('calculator')
 
 const switchTab = (tab) => {
@@ -59,6 +59,7 @@ const switchTab = (tab) => {
         v-if="currentTab === 'profile'" 
         :profileData="userProfile" 
         @refresh-data="emit('refresh-profile')" 
+        @profile-updated="emit('profile-updated', $event)"
       />
     </main>
   </div>
