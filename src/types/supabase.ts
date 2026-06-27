@@ -181,6 +181,7 @@ export type Database = {
           nickname: string | null
           quota: number | null
           role: string | null
+          role_level: number
           total_points: number | null
           updated_at: string | null
           username: string | null
@@ -194,6 +195,7 @@ export type Database = {
           nickname?: string | null
           quota?: number | null
           role?: string | null
+          role_level?: number
           total_points?: number | null
           updated_at?: string | null
           username?: string | null
@@ -207,6 +209,7 @@ export type Database = {
           nickname?: string | null
           quota?: number | null
           role?: string | null
+          role_level?: number
           total_points?: number | null
           updated_at?: string | null
           username?: string | null
@@ -299,12 +302,37 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_clothes_to_submitter_wardrobes: {
+        Args: { p_clothes_id: string; p_user_ids: string[] }
+        Returns: number
+      }
+      approve_pending_clothes_arbitration: {
+        Args: {
+          p_category: string
+          p_game_id: string
+          p_id: string
+          p_name: string
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
+      is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       normalize_known_clothing_tags: {
         Args: { p_tags: string }
         Returns: string
       }
+      profile_role_level_to_text: {
+        Args: { p_role_level: number }
+        Returns: string
+      }
+      profile_role_to_level: { Args: { p_role: string }; Returns: number }
       submit_clothing_contribution: {
         Args: {
           p_category: string

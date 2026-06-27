@@ -1,13 +1,14 @@
 // src/api/adminService.js
 import { supabase } from './supabase'
+import { getRoleKey, getRoleLevel, getRoleUpdatePayload } from '../utils/roles'
 
 export const adminService = {
     // 1. 获取当前登录站长的身份
     async getCurrentUserRole() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return { userId: null, role: 'user' };
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        return { userId: user.id, role: profile?.role || 'user' };
+        const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        return { userId: user.id, role: getRoleKey(profile), roleLevel: getRoleLevel(profile) };
     },
 
     // 2. 获取审核大盘数据 (散件、套装、贡献度统计)
@@ -36,12 +37,17 @@ export const adminService = {
     // 3. 获取全站玩家档案 (仅限超管)
     async getAllUsers(countsMap) {
         const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        return (data || []).map(u => ({ ...u, contribCount: countsMap[u.id] || 0 }));
+        return (data || []).map(u => ({
+            ...u,
+            role: getRoleKey(u),
+            role_level: getRoleLevel(u),
+            contribCount: countsMap[u.id] || 0
+        }));
     },
 
     // 4. 更改用户权限
     async updateUserRole(userId, newRole) {
-        const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+        const { error } = await supabase.from('profiles').update(getRoleUpdatePayload(newRole)).eq('id', userId);
         if (error) throw new Error('权限修改失败：' + error.message);
         return true;
     },

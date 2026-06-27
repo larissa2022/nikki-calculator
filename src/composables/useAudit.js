@@ -3,6 +3,7 @@ import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
 import { createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
 
@@ -57,7 +58,7 @@ export function useAudit() {
             pendingSuitsList.value = pendingSuits || []
 
             // 🌟 4. 只有确认为站长后，才去拉取人员名单（同样加上防崩溃保护）
-            if (role === 'super_admin' || role === 'admin') {
+            if (isAdminRole(role)) {
                 allUsersList.value = await adminService.getAllUsers(countsMap).catch(err => {
                     console.error("获取全站用户名单失败:", err)
                     return []

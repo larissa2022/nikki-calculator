@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
+import { isAdminRole } from '../utils/roles'
 
 // 🌟 1. 【核心修复】将状态提升到函数外部！
 // 这样全站无论调用多少次 useAuth()，读写的都是这一份真实的数据（单例模式）
@@ -8,8 +9,7 @@ const userProfile = ref(null)
 
 // 🌟 让 isAdmin 逻辑同时兼容“普通管理”和“超级管理”
 const isAdmin = computed(() => {
-  const role = userProfile.value?.role
-  return role === 'admin' || role === 'super_admin'
+  return isAdminRole(userProfile.value)
 })
 
 export function useAuth() {

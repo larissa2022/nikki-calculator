@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { getDisplayUsername, getUserRankAndPrivilege, isActiveUser } from '../composables/useUserPrivilege'
+import { getRoleKey, getRoleLabel, isAdminRole, isSuperAdminRole, ROLE_KEY } from '../utils/roles'
 
 const props = defineProps({
   allUsersList: { type: Array, required: true },
@@ -15,8 +16,8 @@ const emit = defineEmits(['refresh-data'])
 const userPage = ref(1)
 const userPageSize = 10
 
-const adminUsers = computed(() => props.allUsersList.filter(u => u.role !== 'user'))
-const regularUsers = computed(() => props.allUsersList.filter(u => u.role === 'user'))
+const adminUsers = computed(() => props.allUsersList.filter(u => isAdminRole(u)))
+const regularUsers = computed(() => props.allUsersList.filter(u => !isAdminRole(u)))
 const paginatedRegularUsers = computed(() => {
   const start = (userPage.value - 1) * userPageSize;
   return regularUsers.value.slice(start, start + userPageSize);
@@ -53,11 +54,11 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
                 <strong>{{ getDisplayUsername(u) }}</strong><br>
                 <span class="text-[10px] text-slate-400">{{ u.email }}</span>
               </td>
-              <td><span class="role-badge" :class="u.role">{{ u.role === 'super_admin' ? '👑 最高站长' : '🛡️ 系统管理' }}</span></td>
+              <td><span class="role-badge" :class="getRoleKey(u)">{{ isSuperAdminRole(u) ? '👑 ' : '🛡️ ' }}{{ getRoleLabel(u) }}</span></td>
               <td><span class="contrib-tag">✨ {{ u.total_points || 0 }} 分</span></td>
               <td>
-                <select v-if="u.role !== 'super_admin'" class="role-select" :value="u.role" @change="changeUserRole(u.id, $event.target.value)">
-                  <option value="user">降级为玩家</option><option value="admin">维持管理员</option>
+                <select v-if="!isSuperAdminRole(u)" class="role-select" :value="getRoleKey(u)" @change="changeUserRole(u.id, $event.target.value)">
+                  <option :value="ROLE_KEY.USER">降级为玩家</option><option :value="ROLE_KEY.ADMIN">维持管理员</option>
                 </select>
                 <span v-else class="protected-text">权限锁定</span>
               </td>
@@ -92,7 +93,7 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
                 <span v-else class="text-xs font-bold text-slate-400">潜水</span>
               </td>
               <td>
-                <button class="btn-promote" @click="changeUserRole(u.id, 'admin')">🛡️ 提拔为管理员</button>
+                <button class="btn-promote" @click="changeUserRole(u.id, ROLE_KEY.ADMIN)">🛡️ 提拔为管理员</button>
               </td>
             </tr>
           </tbody>
