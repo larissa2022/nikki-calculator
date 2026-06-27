@@ -23,13 +23,32 @@ const showMessage = (text, type = 'error') => {
   }, 4000)
 }
 
+const isErrorMessage = (err, keyword) => err?.message?.toLowerCase().includes(keyword.toLowerCase())
+
 const getErrorMessage = (err) => {
-  if (err.message.includes('Email not confirmed')) return '您的邮箱尚未验证'
-  if (err.message.includes('Invalid login credentials')) return '账号或密码错误，请检查'
-  if (err.message.includes('User already registered')) return '该邮箱已经被注册过了'
-  if (err.message.includes('Token has expired or is invalid')) return '验证码错误或已过期'
-  if (err.message.includes('rate_limit')) return '发送太频繁啦，请稍后再试'
+  if (!err?.message) return '操作失败，请稍后重试'
+  if (isErrorMessage(err, 'Email not confirmed')) return '该邮箱尚未完成验证，请输入邮件验证码；如果没收到，请点击重新发送。'
+  if (isErrorMessage(err, 'Invalid login credentials')) return '账号或密码错误；如果刚注册过，请先完成邮箱验证。'
+  if (isErrorMessage(err, 'User already registered') || isErrorMessage(err, 'already registered')) return '该邮箱已经注册过，请直接登录；如果忘记密码，请使用找回密码。'
+  if (isErrorMessage(err, 'Token has expired or is invalid') || isErrorMessage(err, 'otp')) return '验证码错误或已过期，请检查邮件中的最新验证码。'
+  if (isErrorMessage(err, 'rate_limit') || isErrorMessage(err, 'too many')) return '发送太频繁啦，请稍后再试。'
+  if (isErrorMessage(err, 'network') || isErrorMessage(err, 'fetch')) return '网络连接异常，请检查网络后重试。'
   return err.message
+}
+
+const handleAuthErrorState = (err) => {
+  if (isErrorMessage(err, 'Email not confirmed')) {
+    currentMode.value = 'verify_register'
+    authForm.otpCode = ''
+  }
+}
+
+const switchMode = (mode) => {
+  currentMode.value = mode
+  authForm.password = ''
+  authForm.confirmPassword = ''
+  authForm.otpCode = ''
+  feedback.show = false
 }
 
 // ==========================================
@@ -70,38 +89,14 @@ const resendOtp = async () => {
       const { error } = await supabase.auth.resend({ type: 'signup', email: cleanEmail })
       if (error) throw error
     } else if (currentMode.value === 'reset') {
-        // 1. 验证验证码 (这步会在后台悄悄建立一个临时 Session)
-        const { error: verifyErr } = await supabase.auth.verifyOtp({ email: cleanEmail, token: cleanOtp, type: 'recovery' })
-        if (verifyErr) throw verifyErr
-        
-        // 2. 绕过 Supabase 底层卡死 Bug (给它 2 秒钟，如果不回调直接强制放行)
-        let updateErr = null
-        try {
-          await Promise.race([
-            supabase.auth.updateUser({ password: cleanPassword }).then(res => { updateErr = res.error }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('SUPABASE_HANG')), 2000))
-          ])
-        } catch (e) {
-          // 如果抛出的是 SUPABASE_HANG，说明数据库其实已经改完了，只是前端 SDK 卡住了，我们直接忽略它继续往下走
-          if (e.message !== 'SUPABASE_HANG') throw e
-        }
-        
-        if (updateErr) throw updateErr
-        
-        // 3. 核心修复：强制销毁刚才自动建立的临时 Session，避免状态混乱
-        await supabase.auth.signOut()
-        
-        // 4. 重置表单，切回登录页
-        currentMode.value = 'login'
-        authForm.password = ''
-        authForm.confirmPassword = ''
-        authForm.otpCode = ''
-        return { msg: '🎉 密码重置成功！请使用新密码重新登录。', type: 'success' }
-      }
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail)
+      if (error) throw error
+    }
     
     showMessage('验证码已重新发送，请前往邮箱查收！', 'success')
     startCountdown()
   } catch (err) {
+    handleAuthErrorState(err)
     showMessage(getErrorMessage(err), 'error')
   } finally {
     isAuthLoading.value = false
@@ -142,8 +137,11 @@ const submitAuth = async () => {
         return { msg: '登录成功！欢迎回来。', type: 'success', action: 'close' }
       } 
       else if (currentMode.value === 'register') {
-        const { error } = await supabase.auth.signUp({ email: cleanEmail, password: cleanPassword })
+        const { data, error } = await supabase.auth.signUp({ email: cleanEmail, password: cleanPassword })
         if (error) throw error
+        if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+          return { msg: '该邮箱已经注册过，请点击下方“返回登录”后直接登录；如果忘记密码，请使用找回密码。', type: 'error' }
+        }
         currentMode.value = 'verify_register'
         startCountdown() // 🌟 第一次发完验证码，自动启动倒计时
         return { msg: '验证码已发送至邮箱，请查收！', type: 'success' }
@@ -186,6 +184,7 @@ const submitAuth = async () => {
 
   } catch (err) {
     isAuthLoading.value = false
+    handleAuthErrorState(err)
     showMessage(err.message.includes('超时') ? err.message : getErrorMessage(err), 'error')
   }
 }
@@ -259,9 +258,9 @@ const submitAuth = async () => {
         </button>
 
         <div style="margin-top: 15px;">
-          <p v-if="currentMode === 'login'" class="toggle-mode" @click="currentMode = 'forgot'" style="margin-bottom: 8px;">忘记密码？</p>
-          <p v-if="['login', 'forgot'].includes(currentMode)" class="toggle-mode" @click="currentMode = 'register'">没有账号？点击注册</p>
-          <p v-if="['register', 'verify_register', 'forgot', 'reset'].includes(currentMode)" class="toggle-mode" @click="currentMode = 'login'">返回登录</p>
+          <p v-if="currentMode === 'login'" class="toggle-mode" @click="switchMode('forgot')" style="margin-bottom: 8px;">忘记密码？</p>
+          <p v-if="['login', 'forgot'].includes(currentMode)" class="toggle-mode" @click="switchMode('register')">没有账号？点击注册</p>
+          <p v-if="['register', 'verify_register', 'forgot', 'reset'].includes(currentMode)" class="toggle-mode" @click="switchMode('login')">返回登录</p>
         </div>
 
       </div>
