@@ -95,14 +95,20 @@ export const adminService = {
 
     // 7. 终极仲裁入库 (散件)
     async submitArbitration(payload, pendingIds) {
-        // 写入主衣服库
-        const { error } = await supabase.from('clothes').insert([payload]);
-        if (error) throw new Error('入库失败: ' + error.message);
+        const { error } = await supabase.rpc('approve_pending_clothes_arbitration', {
+            p_id: payload.id,
+            p_name: payload.name,
+            p_game_id: payload.game_id,
+            p_category: payload.category,
+            p_stars: Number(payload.stars),
+            p_scores: payload.scores,
+            p_suit_id: payload.suit_id || null,
+            p_temp_suit_name: payload.temp_suit_name || null,
+            p_tags: payload.tags || null,
+            p_pending_ids: pendingIds || []
+        });
 
-        // 批量通过该聚类下的所有玩家申请
-        if (pendingIds && pendingIds.length > 0) {
-            await supabase.from('pending_clothes').update({ status: 'approved' }).in('id', pendingIds);
-        }
+        if (error) throw new Error('入库失败: ' + error.message);
         return true;
     }
 };
