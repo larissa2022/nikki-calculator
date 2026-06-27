@@ -20,6 +20,11 @@ const displayNotFoundNames = computed(() => lastNotFoundNames.value.slice(0, 3))
 const activeContribution = ref(null)
 const isSubmittingContrib = ref(false)
 const suitSearchText = ref('')
+const submitHint = ref('')
+const DRAFT_PREFIX = 'nikki.missingItemDraft.v1:'
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const SUBMIT_TIMEOUT_MS = 12000
+const SLOW_REQUEST_HINT_MS = 5000
 
 const createContributionFormState = (name = '') => createClothesEntryFormState({
   name,
@@ -28,9 +33,80 @@ const createContributionFormState = (name = '') => createClothesEntryFormState({
 
 const contribForm = reactive(createContributionFormState())
 
+const getDraftKey = (name) => `${DRAFT_PREFIX}${encodeURIComponent(name || '')}`
+
+const readContributionDraft = (name) => {
+  try {
+    const raw = localStorage.getItem(getDraftKey(name))
+    if (!raw) return null
+    const draft = JSON.parse(raw)
+    if (!draft?.updatedAt || Date.now() - draft.updatedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(getDraftKey(name))
+      return null
+    }
+    return draft
+  } catch (err) {
+    console.warn('读取缺失项草稿失败:', err)
+    return null
+  }
+}
+
+const saveContributionDraft = (name) => {
+  if (!name) return
+  try {
+    localStorage.setItem(getDraftKey(name), JSON.stringify({
+      form: JSON.parse(JSON.stringify(contribForm)),
+      suitSearchText: suitSearchText.value,
+      updatedAt: Date.now()
+    }))
+  } catch (err) {
+    console.warn('保存缺失项草稿失败:', err)
+  }
+}
+
+const clearContributionDraft = (name) => {
+  if (!name) return
+  try {
+    localStorage.removeItem(getDraftKey(name))
+  } catch (err) {
+    console.warn('清理缺失项草稿失败:', err)
+  }
+}
+
+const withTimeout = (promise, timeoutMs = SUBMIT_TIMEOUT_MS) => Promise.race([
+  promise,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('网络请求超时')), timeoutMs)
+  })
+])
+
 watch(activeContribution, (newVal) => {
   suitSearchText.value = ''
   Object.assign(contribForm, createContributionFormState(newVal || ''))
+  const draft = readContributionDraft(newVal)
+  if (draft?.form) {
+    Object.assign(contribForm, draft.form)
+    suitSearchText.value = draft.suitSearchText || ''
+  }
+})
+
+watch(
+  () => ({
+    active: activeContribution.value,
+    suitSearchText: suitSearchText.value,
+    form: { ...contribForm }
+  }),
+  (draft) => {
+    if (draft.active) saveContributionDraft(draft.active)
+  },
+  { deep: true }
+)
+
+watch(lastNotFoundNames, (names) => {
+  if (activeContribution.value && !names.includes(activeContribution.value)) {
+    clearContributionDraft(activeContribution.value)
+    activeContribution.value = null
+  }
 })
 
 // 🌟 新增：玩家点击“一键申请并应用”时的逻辑
@@ -85,31 +161,35 @@ const submitContribution = async (name) => {
 
   // 锁住按钮，开始转圈圈
   isSubmittingContrib.value = true;
+  submitHint.value = '正在连接云端，请稍候...'
+  const slowHintTimer = setTimeout(() => {
+    if (isSubmittingContrib.value) {
+      submitHint.value = '网络响应较慢，可能是页面连接休眠。草稿已自动保存，可稍等或刷新后重试。'
+    }
+  }, SLOW_REQUEST_HINT_MS)
   
   try {
-    // ==========================================
-    // 🛡️ 第三防线：云端衣服编号精确查重 
-    // ==========================================
-    const { data: existClothes } = await supabase
-      .from('clothes')
-      .select('name')
-      .eq('category', contribForm.category)
-      .eq('game_id', gameIdStr)
-      .limit(1);
-      
-    if (existClothes && existClothes.length > 0) {
-      isSubmittingContrib.value = false; // 拦截时也要先解锁UI
-      return alert(`🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`);
-    }
+    const executeSubmitRequest = async () => {
+      // ==========================================
+      // 🛡️ 第三防线：云端衣服编号精确查重
+      // ==========================================
+      const { data: existClothes } = await supabase
+        .from('clothes')
+        .select('name')
+        .eq('category', contribForm.category)
+        .eq('game_id', gameIdStr)
+        .limit(1);
 
-    // ==========================================
-    // 🚀 第四防线：10秒超时赛跑机制
-    // ==========================================
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('网络请求超时')), 10000)
-    );
+      if (existClothes && existClothes.length > 0) {
+        return {
+          blocked: true,
+          message: `🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`
+        }
+      }
 
-    const executeUpload = async () => {
+      // ==========================================
+      // 🚀 第四防线：云端提交
+      // ==========================================
       const { error: authErr } = await supabase.auth.getUser();
       if (authErr) throw new Error('登录校验失败: ' + authErr.message);
       
@@ -147,18 +227,25 @@ const submitContribution = async (name) => {
       })
 
       if (submitErr) throw new Error(submitErr.message)
-      return true; 
+      return { success: true }
     };
 
-    // 执行赛跑
-    await Promise.race([executeUpload(), timeoutPromise]);
+    const result = await withTimeout(executeSubmitRequest());
+
+    if (result?.blocked) {
+      isSubmittingContrib.value = false;
+      submitHint.value = '';
+      return alert(result.message);
+    }
 
     // ==========================================
     // 🌟 成功：先关掉转圈圈，再弹窗
     // ==========================================
     isSubmittingContrib.value = false; 
+    submitHint.value = '';
     setTimeout(() => {
       alert(`🎉 提交成功！`);
+      clearContributionDraft(name);
       lastNotFoundNames.value = lastNotFoundNames.value.filter(n => n !== name);
       activeContribution.value = null;
     }, 50); // 延迟 50 毫秒，确保 Vue 已经把动画从屏幕上移除了
@@ -170,11 +257,12 @@ const submitContribution = async (name) => {
     // 🌟 失败：强制先关掉转圈圈，防止卡死！
     // ==========================================
     isSubmittingContrib.value = false;
+    submitHint.value = '';
     
     setTimeout(() => {
       // 既然刷新能解决，如果检测到超时或认证失败（僵尸状态），直接提示刷新！
       if (err.message.includes('超时') || err.message.includes('校验失败')) {
-        const needRefresh = confirm('⚠️ 页面离开太久，网络连接已休眠！\n\n为确保数据成功录入，需要刷新页面重新激活。是否立即刷新？');
+        const needRefresh = confirm('⚠️ 网络连接可能已休眠，提交没有完成。\n\n你填写的内容已自动保存在本地草稿中。建议刷新页面后重新提交。\n\n是否立即刷新？');
         if (needRefresh) {
           window.location.reload(); // 帮玩家一键刷新网页
         }
@@ -186,6 +274,8 @@ const submitContribution = async (name) => {
     if (typeof logErrorToCloud === 'function') {
       logErrorToCloud('submit_missing_item', err);
     }
+  } finally {
+    clearTimeout(slowHintTimer)
   }
 }
 </script>
@@ -223,7 +313,13 @@ const submitContribution = async (name) => {
               :showGameIdWarning="true"
               @submit="submitContribution(name)"
               @create-suit="applyShadowSuit"
-            />
+            >
+              <template #admin-tips>
+                <div v-if="submitHint" class="submit-hint">
+                  {{ submitHint }}
+                </div>
+              </template>
+            </ClothesEntryForm>
           </div>
         </Transition>
       </div>
@@ -431,6 +527,17 @@ const submitContribution = async (name) => {
   cursor: not-allowed;
   background: #cbd5e1;
   box-shadow: none;
+}
+
+.submit-hint {
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  color: #c2410c;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 /* =========================================
