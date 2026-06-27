@@ -46,10 +46,14 @@ const submitContribution = async (name) => {
   // 🛡️ 第一防线：前端格式拦截
   // ==========================================
   if (!contribForm.game_id || contribForm.game_id.trim() === '') {
-    return alert('⚠️ 提交被拦截：短编号为必填项！\n(如果该散件没有短编号，请填写 N)');
+    return alert('⚠️ 提交被拦截：短编号为必填项！\n请填写游戏内数字短编号。');
   }
 
   const gameIdStr = contribForm.game_id.trim();
+  if (!/^\d+$/.test(gameIdStr)) {
+    return alert('⚠️ 提交被拦截：短编号只允许填写数字。');
+  }
+
   const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
 
   // ==========================================
@@ -86,18 +90,16 @@ const submitContribution = async (name) => {
     // ==========================================
     // 🛡️ 第三防线：云端衣服编号精确查重 
     // ==========================================
-    if (gameIdStr.toUpperCase() !== 'N') {
-      const { data: existClothes } = await supabase
-        .from('clothes')
-        .select('name')
-        .eq('category', contribForm.category)
-        .eq('game_id', gameIdStr)
-        .limit(1);
-        
-      if (existClothes && existClothes.length > 0) {
-        isSubmittingContrib.value = false; // 拦截时也要先解锁UI
-        return alert(`🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`);
-      }
+    const { data: existClothes } = await supabase
+      .from('clothes')
+      .select('name')
+      .eq('category', contribForm.category)
+      .eq('game_id', gameIdStr)
+      .limit(1);
+      
+    if (existClothes && existClothes.length > 0) {
+      isSubmittingContrib.value = false; // 拦截时也要先解锁UI
+      return alert(`🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`);
     }
 
     // ==========================================
@@ -124,7 +126,7 @@ const submitContribution = async (name) => {
       // ... 前面生成 payload 的代码保持不变 ...
       const payload = {
         name: contribForm.name || name,
-        game_id: gameIdStr.toUpperCase() === 'N' ? 'N' : gameIdStr,
+        game_id: gameIdStr,
         category: contribForm.category,
         stars: Number(contribForm.stars),
         scores: calculatedScores,

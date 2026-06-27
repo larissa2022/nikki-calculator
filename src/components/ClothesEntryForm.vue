@@ -80,7 +80,15 @@ const handleCreateSuit = () => {
     <div class="form-row three-cols">
       <div class="form-group">
         <label :class="{'text-rose-500': showGameIdWarning}">短编号(如001) <span v-if="showGameIdWarning">必填</span></label>
-        <input type="text" v-model="form.game_id" class="custom-input" :class="{'border-rose-200 bg-rose-50/30': showGameIdWarning}" placeholder="若无填 N" />
+        <input
+          type="text"
+          v-model="form.game_id"
+          class="custom-input"
+          :class="{'border-rose-200 bg-rose-50/30': showGameIdWarning}"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          placeholder="请输入数字短编号"
+        />
       </div>
       <div class="form-group">
         <label>分类部位</label>
