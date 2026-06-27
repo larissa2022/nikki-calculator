@@ -2,6 +2,8 @@
 import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
+import { createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
 
@@ -19,9 +21,8 @@ export function useAudit() {
     // 待提交的新图鉴表单数据
     // 将 newClothes 替换为：
     const newClothes = reactive({
-        pendingIds: [], suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
-        // 🌟 活泼 active 变成了 pair2
-        pair1: 'simple', grade1: '完美', pair2: 'active', grade2: '完美', pair3: 'cute', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
+        pendingIds: [],
+        ...createClothesEntryFormState()
     })
     // 2. 官方分值矩阵 (内部常量)
     
@@ -57,7 +58,7 @@ export function useAudit() {
             pendingSuitsList.value = pendingSuits || []
 
             // 🌟 4. 只有确认为站长后，才去拉取人员名单（同样加上防崩溃保护）
-            if (role === 'super_admin' || role === 'admin') {
+            if (isAdminRole(role)) {
                 allUsersList.value = await adminService.getAllUsers(countsMap).catch(err => {
                     console.error("获取全站用户名单失败:", err)
                     return []
@@ -83,7 +84,7 @@ export function useAudit() {
 
         pendingList.value.forEach(item => {
             const key = (item.game_id && item.game_id !== 'N') ? `${item.category}_${item.game_id}` : `NAME_${item.name}`
-            if (!groups[key]) groups[key] = { key, items: [] }
+            if (!groups[key]) groups[key] = { key, name: item.name || '未命名散件', items: [] }
             groups[key].items.push(item)
         })
         return Object.values(groups)
@@ -102,8 +103,7 @@ export function useAudit() {
         newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)))
         newClothes.suit_id = bestItem.suit_id || ''
 
-        const allTags = items.flatMap(i => i.tags ? (Array.isArray(i.tags) ? i.tags : i.tags.split(/[,，\s]+/)) : []).map(t => t.trim())
-        newClothes.tags = [...new Set(allTags)].filter(t => t).join(', ')
+        newClothes.tags = normalizeClothingTags(items.map(i => i.tags))
 
         if (bestItem.scores) {
             const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
@@ -158,14 +158,13 @@ export function useAudit() {
                 id: `custom_${Date.now()}`, game_id: newClothes.game_id || 'N', name: newClothes.name,
                 category: newClothes.category, stars: Number(newClothes.stars), scores: calculatedScores,
                 suit_id: newClothes.suit_id || null,
-                // 🌟 修复：确保 tags 哪怕被意外清空也是个安全字符串，再进行拆分
-                tags: (newClothes.tags || '').split(/[,，\s]+/).filter(t => t)
+                tags: normalizeClothingTags(newClothes.tags) || null
             }
 
             await adminService.submitArbitration(payload, newClothes.pendingIds)
 
             const successName = newClothes.name
-            Object.assign(newClothes, { name: '', game_id: '', tags: '', suit_id: '', pendingIds: [] })
+            Object.assign(newClothes, { ...createClothesEntryFormState(), pendingIds: [] })
             await fetchAllData()
             return successName
         } finally {
@@ -178,13 +177,13 @@ export function useAudit() {
         await fetchAllData()
     }
 
-    // 🌟 补充：新增套装专用的批准与驳回方法
-    const approvePendingSuit = async (id, name) => {
-        await adminService.approveSuit(id, name)
+    const approvePendingSuit = async (suitName) => {
+        await adminService.approveSuit(suitName)
         await fetchAllData()
+        await fetchSuits()
     }
-    const rejectPendingSuit = async (id) => {
-        await adminService.rejectPending('pending_suits', id)
+    const rejectPendingSuit = async (suitName) => {
+        await adminService.rejectPendingSuitsByName(suitName)
         await fetchAllData()
     }
 

@@ -5,30 +5,44 @@ import Calculator from '../components/Calculator.vue'
 import ImportZone from '../components/ImportZone.vue'
 import WardrobeGrid from '../components/WardrobeGrid.vue'
 import SuitGallery from '../components/SuitGallery.vue'
+import UserProfile from '../components/UserProfile.vue'
 
-// 接收来自大总管 App.vue 的数据
 const props = defineProps({
-  currentUser: Object, isAdmin: Boolean, userQuota: Number,
-  fullWardrobeData: Array, myWardrobeIds: Array, stagesData: Array, isLoading: Boolean
+  currentUser: Object, 
+  userProfile: Object, // 🌟 接收全局档案数据
+  isAdmin: Boolean, 
+  userQuota: Number,
+  fullWardrobeData: Array, 
+  myWardrobeIds: Array, 
+  stagesData: Array, 
+  isLoading: Boolean
 })
 
-// 向大总管 App.vue 汇报的事件
-const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile'])
-
+const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
 const currentTab = ref('calculator')
+
+const switchTab = (tab) => {
+  currentTab.value = tab
+  if (tab === 'suits') emit('refresh-catalog')
+}
 </script>
 
 <template>
   <div class="app-container">
-    <AuthBar :user="currentUser" @open-login="emit('open-login')" />
+    <AuthBar 
+      :user="currentUser" 
+      :profile="userProfile" 
+      @open-login="emit('open-login')" 
+      @open-profile="currentTab = 'profile'" 
+    />
 
     <header>
       <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
       <nav class="tabs">
-        <button :class="{ active: currentTab === 'calculator' }" @click="currentTab = 'calculator'">搭配计算</button>
-        <button :class="{ active: currentTab === 'import' }" @click="currentTab = 'import'">录入衣柜</button>
-        <button :class="{ active: currentTab === 'wardrobe' }" @click="currentTab = 'wardrobe'">我的衣柜</button>
-        <button :class="{ active: currentTab === 'suits' }" @click="currentTab = 'suits'">套装图鉴</button>
+        <button :class="{ active: currentTab === 'calculator' }" @click="switchTab('calculator')">搭配计算</button>
+        <button :class="{ active: currentTab === 'import' }" @click="switchTab('import')">录入衣柜</button>
+        <button :class="{ active: currentTab === 'wardrobe' }" @click="switchTab('wardrobe')">我的衣柜</button>
+        <button :class="{ active: currentTab === 'suits' }" @click="switchTab('suits')">套装图鉴</button>
         <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="emit('go-admin')" class="admin-tab-btn">图鉴管理</button>
       </nav>
     </header>
@@ -39,7 +53,14 @@ const currentTab = ref('calculator')
       <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
       <ImportZone v-if="currentTab === 'import'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
-      <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
+      <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" @refresh-catalog="emit('refresh-catalog')" />
+      
+      <UserProfile 
+        v-if="currentTab === 'profile'" 
+        :profileData="userProfile" 
+        @refresh-data="emit('refresh-profile')" 
+        @profile-updated="emit('profile-updated', $event)"
+      />
     </main>
   </div>
 </template>

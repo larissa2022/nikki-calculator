@@ -21,6 +21,8 @@ const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount:
 const lastNotFoundNames = ref([])
 const isSaving = ref(false)
 const availableSuits = ref([])
+const IMPORT_DRAFT_KEY = 'nikki.importZoneDraft.v1'
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 
 const fullCategories = [
   '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', 
@@ -29,8 +31,68 @@ const fullCategories = [
   '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
 ]
 
+const readImportDraft = () => {
+  try {
+    const raw = localStorage.getItem(IMPORT_DRAFT_KEY)
+    if (!raw) return null
+    const draft = JSON.parse(raw)
+    if (!draft?.updatedAt || Date.now() - draft.updatedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(IMPORT_DRAFT_KEY)
+      return null
+    }
+    return draft
+  } catch (err) {
+    console.warn('读取录入草稿失败:', err)
+    return null
+  }
+}
+
+const saveImportDraft = () => {
+  try {
+    localStorage.setItem(IMPORT_DRAFT_KEY, JSON.stringify({
+      importText: importText.value,
+      lastNotFoundNames: lastNotFoundNames.value,
+      importStats: JSON.parse(JSON.stringify(importStats)),
+      updatedAt: Date.now()
+    }))
+  } catch (err) {
+    console.warn('保存录入草稿失败:', err)
+  }
+}
+
+const restoreImportDraft = () => {
+  const draft = readImportDraft()
+  if (!draft) return
+  importText.value = draft.importText || ''
+  lastNotFoundNames.value = Array.isArray(draft.lastNotFoundNames) ? draft.lastNotFoundNames : []
+  if (draft.importStats) {
+    Object.assign(importStats, {
+      show: !!draft.importStats.show,
+      newCount: Number(draft.importStats.newCount) || 0,
+      dupCount: Number(draft.importStats.dupCount) || 0,
+      failCount: Number(draft.importStats.failCount) || lastNotFoundNames.value.length,
+      newClothes: Array.isArray(draft.importStats.newClothes) ? draft.importStats.newClothes : []
+    })
+  }
+}
+
 onMounted(async () => {
+  restoreImportDraft()
   try { availableSuits.value = await suitService.getAllSuits(); } catch (err) { console.error('加载失败', err); }
+})
+
+watch(
+  () => ({
+    importText: importText.value,
+    lastNotFoundNames: lastNotFoundNames.value,
+    importStats: { ...importStats }
+  }),
+  saveImportDraft,
+  { deep: true }
+)
+
+watch(lastNotFoundNames, (names) => {
+  importStats.failCount = names.length
 })
 
 const handleImport = async () => {

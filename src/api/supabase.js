@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
 // 你的 Supabase 配置 (请保留你原本的 URL 和 Anon Key)
-const supabaseUrl = 'https://fopyjewbsvusftpqbtml.supabase.co'
-const supabaseKey = 'sb_publishable_XxYDVPY0_Ir4kfF-rQCGkA_dtRBH1Yh' 
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY')
+}
 
 // 1. 确保开启了自动刷新和持久化会话
 export const supabase = createClient(supabaseUrl, supabaseKey, {

@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { contributionService } from '../api/contributionService'
 import { supabase } from '../api/supabase'
+import { suitService } from '../api/suitService'
 
 const props = defineProps({
   wardrobe: { type: Array, required: true }, 
@@ -9,11 +10,13 @@ const props = defineProps({
   isLoggedIn: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:ownedIds', 'save-cloud'])
+const emit = defineEmits(['update:ownedIds', 'save-cloud', 'refresh-catalog'])
 
 const importText = ref('')
 const searchQuery = ref('')
 const isRecognizing = ref(false)
+const isSuitListLoading = ref(false)
+const suitListError = ref('')
 
 const filterStatus = ref('all') 
 const currentPage = ref(1)
@@ -22,6 +25,7 @@ const pageSize = 24
 // 🌟 弹窗与临时状态管理
 const selectedSuit = ref(null)
 const localOwnedIds = ref([]) // 用于在弹窗中暂存勾选状态
+const dbSuitList = ref([])
 
 watch([searchQuery, filterStatus], () => {
   currentPage.value = 1
@@ -32,6 +36,28 @@ watch(selectedSuit, (newSuit) => {
   if (newSuit) {
     localOwnedIds.value = [...props.ownedIds]
   }
+})
+
+const refreshSuits = async () => {
+  isSuitListLoading.value = true
+  suitListError.value = ''
+  try {
+    dbSuitList.value = await suitService.getAllSuits()
+  } catch (err) {
+    console.error('加载套装列表失败:', err)
+    suitListError.value = '套装列表刷新失败，请稍后重试。'
+  } finally {
+    isSuitListLoading.value = false
+  }
+}
+
+const refreshGallery = async () => {
+  emit('refresh-catalog')
+  await refreshSuits()
+}
+
+onMounted(async () => {
+  await refreshSuits()
 })
 
 // ====== 🌟 新增：单件点击切换逻辑 ======
@@ -54,30 +80,50 @@ const confirmSuitChanges = () => {
 
 // ====== 引擎 1：动态聚合出所有套装 ======
 const allSuits = computed(() => {
-  const suitMap = {}
+  const suitMap = new Map()
+
+  dbSuitList.value.forEach(suit => {
+    if (!suit?.name) return
+    suitMap.set(suit.id || suit.name, {
+      id: suit.id || null,
+      name: suit.name.trim(),
+      parts: []
+    })
+  })
   
   props.wardrobe.forEach(item => {
     const sName = item.suit_name?.trim()
     if (sName) {
-      if (!suitMap[sName]) suitMap[sName] = []
-      suitMap[sName].push(item)
+      const key = item.suit_id || sName
+      if (!suitMap.has(key)) {
+        suitMap.set(key, {
+          id: item.suit_id || null,
+          name: sName,
+          parts: []
+        })
+      }
+      suitMap.get(key).parts.push(item)
     }
   })
 
-  return Object.keys(suitMap).map(name => {
-    const parts = suitMap[name]
+  return Array.from(suitMap.values()).map(suit => {
+    const parts = suit.parts
     const partIds = parts.map(p => p.id)
     const ownedCount = partIds.filter(id => props.ownedIds.includes(id)).length
+    const total = parts.length
     return {
-      name,
+      id: suit.id,
+      name: suit.name,
       parts,
       partIds,
-      total: parts.length,
+      total,
       owned: ownedCount,
-      isComplete: ownedCount === parts.length,
-      percent: Math.floor((ownedCount / parts.length) * 100)
+      isComplete: total > 0 && ownedCount === total,
+      percent: total > 0 ? Math.floor((ownedCount / total) * 100) : 0,
+      hasParts: total > 0
     }
   }).sort((a, b) => {
+    if (a.hasParts !== b.hasParts) return a.hasParts ? -1 : 1
     if (a.isComplete === b.isComplete) return b.percent - a.percent
     return a.isComplete ? 1 : -1
   })
@@ -149,11 +195,16 @@ const handleSuitImport = () => {
   if (inputNames.length === 0) return alert('请输入套装名字哦~')
   let addedCount = 0
   const notFound = []
+  const noPartSuits = []
   const updatedOwnedIds = [...props.ownedIds]
 
   inputNames.forEach(name => {
     const suit = allSuits.value.find(s => s.name === name)
     if (suit) {
+      if (suit.partIds.length === 0) {
+        noPartSuits.push(name)
+        return
+      }
       suit.partIds.forEach(id => {
         if (!updatedOwnedIds.includes(id)) {
           updatedOwnedIds.push(id)
@@ -167,6 +218,8 @@ const handleSuitImport = () => {
     emit('update:ownedIds', updatedOwnedIds)
     if (props.isLoggedIn) emit('save-cloud')
     alert(`✨ 琉璃共鸣！成功录入了 ${addedCount} 个套装部件！`)
+  } else if (noPartSuits.length > 0) {
+    alert(`⚠️ 以下套装已收录，但暂无部件数据，暂时无法一键集齐：\n${noPartSuits.join('、')}`)
   } else if (notFound.length === 0) {
     alert('没有录入新部件，可能是已经集齐啦。')
   }
@@ -180,6 +233,9 @@ const handleSuitImport = () => {
 }
 
 const unlockSingleSuit = (suit) => {
+  if (!suit.partIds.length) {
+    return alert('该套装已收录，但暂无部件数据，暂时无法一键补齐。')
+  }
   const updatedOwnedIds = [...props.ownedIds]
   suit.partIds.forEach(id => {
     if (!updatedOwnedIds.includes(id)) updatedOwnedIds.push(id)
@@ -241,11 +297,23 @@ const submitMissingSuits = async (namesArray) => {
             <button :class="{ active: filterStatus === 'completed' }" @click="filterStatus = 'completed'">已集齐</button>
             <button :class="{ active: filterStatus === 'incomplete' }" @click="filterStatus = 'incomplete'">未集齐</button>
           </div>
+          <button class="btn-refresh" :disabled="isSuitListLoading" @click="refreshGallery">
+            {{ isSuitListLoading ? '刷新中...' : '刷新' }}
+          </button>
           <input type="text" v-model="searchQuery" class="search-box" placeholder="搜索套装..." />
         </div>
       </div>
 
-      <div class="suit-grid" v-if="paginatedSuits.length > 0">
+      <div v-if="isSuitListLoading" class="gallery-loading">
+        正在刷新套装数据...
+      </div>
+
+      <div v-else-if="suitListError" class="empty-state error-state">
+        <p>{{ suitListError }}</p>
+        <button class="btn-refresh" @click="refreshGallery">重试</button>
+      </div>
+
+      <div class="suit-grid" v-else-if="paginatedSuits.length > 0">
         <div 
           v-for="suit in paginatedSuits" 
           :key="suit.name" 
@@ -260,15 +328,16 @@ const submitMissingSuits = async (namesArray) => {
           
           <div class="progress-section">
             <div class="progress-info">
-              <span class="percent-num">{{ suit.percent }}%</span>
-              <span class="count-num">{{ suit.owned }}/{{ suit.total }}</span>
+            <span class="percent-num">{{ suit.percent }}%</span>
+              <span class="count-num">{{ suit.hasParts ? `${suit.owned}/${suit.total}` : '暂无部件' }}</span>
             </div>
             <div class="progress-track">
               <div class="progress-fill" :style="{ width: suit.percent + '%' }"></div>
             </div>
           </div>
 
-          <button class="btn-unlock" v-if="!suit.isComplete" @click.stop="unlockSingleSuit(suit)">一键补齐部件</button>
+          <div v-if="!suit.hasParts" class="no-parts-note">已收录套装，待补部件</div>
+          <button class="btn-unlock" v-else-if="!suit.isComplete" @click.stop="unlockSingleSuit(suit)">一键补齐部件</button>
         </div>
       </div>
       
@@ -291,9 +360,11 @@ const submitMissingSuits = async (namesArray) => {
               <button class="btn-close" @click="selectedSuit = null">×</button>
             </div>
             
-            <div class="modal-subtitle">点击部件可快速切换拥有状态</div>
+            <div class="modal-subtitle">
+              {{ selectedSuit.hasParts ? '点击部件可快速切换拥有状态' : '该套装已收录，部件数据仍待补全' }}
+            </div>
 
-            <div class="parts-list">
+            <div v-if="selectedSuit.hasParts" class="parts-list">
               <div 
                 v-for="part in selectedSuit.parts" 
                 :key="part.id" 
@@ -308,8 +379,11 @@ const submitMissingSuits = async (namesArray) => {
                 <span class="unowned-tag" v-else>未拥有</span>
               </div>
             </div>
+            <div v-else class="modal-empty-state">
+              暂无部件清单。等部件通过图鉴审核并关联到该套装后，这里会自动显示进度。
+            </div>
 
-            <div class="modal-actions">
+            <div v-if="selectedSuit.hasParts" class="modal-actions">
               <button class="btn-primary" @click="confirmSuitChanges">
                 ✅ 确认并保存修改
               </button>
@@ -363,6 +437,9 @@ const submitMissingSuits = async (namesArray) => {
 .filter-tabs { display: flex; background: #f8fafc; padding: 4px; border-radius: 12px; border: 1px solid #e2e8f0; }
 .filter-tabs button { background: transparent; border: none; padding: 6px 12px; font-size: 12px; font-weight: bold; color: #64748b; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
 .filter-tabs button.active { background: white; color: #9333ea; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+.btn-refresh { background: #fff; border: 1.5px solid #d8b4fe; color: #9333ea; padding: 7px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
+.btn-refresh:hover:not(:disabled) { background: #faf5ff; border-color: #a855f7; }
+.btn-refresh:disabled { opacity: 0.6; cursor: wait; }
 
 .search-box { padding: 8px 15px; border: 1.5px solid #e9d5ff; border-radius: 20px; font-size: 12px; outline: none; width: 140px; background: #faf5ff; transition: all 0.3s; }
 .search-box:focus { border-color: #c084fc; width: 180px; background: #fff; }
@@ -387,7 +464,10 @@ const submitMissingSuits = async (namesArray) => {
 
 .btn-unlock { background: #fff; border: 1.5px solid #d8b4fe; color: #9333ea; font-size: 11px; font-weight: bold; padding: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-top: auto; }
 .btn-unlock:hover { background: #9333ea; color: white; }
+.no-parts-note { margin-top: auto; background: #f8fafc; border: 1.5px dashed #cbd5e1; color: #94a3b8; font-size: 11px; font-weight: bold; padding: 6px; border-radius: 8px; text-align: center; }
 .empty-state { text-align: center; color: #94a3b8; font-size: 13px; padding: 30px 0; grid-column: span 4; }
+.gallery-loading { text-align: center; color: #9333ea; background: #faf5ff; border: 1.5px dashed #d8b4fe; border-radius: 14px; padding: 24px; font-size: 13px; font-weight: bold; }
+.error-state { color: #e11d48; background: #fff1f2; border: 1.5px dashed #fecdd3; border-radius: 14px; }
 
 .pagination { display: flex; justify-content: center; align-items: center; gap: 20px; margin-top: 30px; }
 .page-btn { background: #fff; border: 1.5px solid #e2e8f0; color: #475569; padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.2s; }
@@ -409,6 +489,7 @@ const submitMissingSuits = async (namesArray) => {
 .parts-list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; overflow-y: auto; padding-right: 5px; margin-bottom: 20px; }
 .parts-list::-webkit-scrollbar { width: 4px; }
 .parts-list::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
+.modal-empty-state { color: #94a3b8; background: #f8fafc; border: 1.5px dashed #e2e8f0; border-radius: 14px; padding: 24px 16px; text-align: center; font-size: 13px; font-weight: bold; margin-bottom: 20px; }
 
 .part-item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #f8fafc; border-radius: 12px; border: 1.5px solid #e2e8f0; transition: all 0.2s; }
 .part-item.owned { background: #fdf2f8; border-color: #fbcfe8; }

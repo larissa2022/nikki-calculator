@@ -6,7 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "npm run build",
+    "db:dump": "supabase db dump --schema public --file supabase/schema.sql",
+    "db:check": "node scripts/check-dev-link.mjs",
+    "db:types": "npm run db:types:dev",
+    "db:types:dev": "supabase gen types typescript --schema public --project-id tfwejruvdahonacyldrg > src/types/supabase.ts",
+    "db:types:prod": "supabase gen types typescript --schema public --project-id fopyjewbsvusftpqbtml > src/types/supabase.ts",
+    "db:types:local": "supabase gen types typescript --local --schema public > src/types/supabase.ts",
+    "db:types:safe": "npm run db:check && npm run db:types:dev",
+    "db:push:dev": "npm run db:check && supabase db push",
+    "verify:db": "npm run db:check && npm run db:types:dev && npm run build",
+    "db:diff": "supabase db diff --schema public",
+    "db:pull": "supabase db pull"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
