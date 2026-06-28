@@ -4,6 +4,7 @@ import { useWardrobe } from '../composables/useWardrobe'
 import MissingItemsQueue from './MissingItemsQueue.vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
 import { suitService } from '../api/suitService'
+import { FULL_CATEGORIES } from '../utils/gameConstants'
 
 const props = defineProps({
   wardrobe: { type: Array, required: true },
@@ -14,8 +15,11 @@ const props = defineProps({
 const emit = defineEmits(['update:ownedIds', 'save-cloud', 'refresh-profile'])
 const { saveWardrobeToCloud } = useWardrobe()
 
+const importMode = ref('name')
 const importText = ref('')
-const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount: 0, newClothes: [] })
+const codeImportCategory = ref('连衣裙')
+const codeImportText = ref('')
+const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount: 0, newClothes: [], missingCodes: [] })
 
 // 🌟 核心：消消乐视窗逻辑，永远只展示前 3 个
 const lastNotFoundNames = ref([])
@@ -24,15 +28,17 @@ const availableSuits = ref([])
 const IMPORT_DRAFT_KEY = 'nikki.importZoneDraft.v1'
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 const PROCESS_BATCH_SIZE = 500
+const CLOUD_REQUEST_TIMEOUT_MS = 15000
+const IMPORT_TASK_TIMEOUT_MS = 20000
 
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0))
 
-const fullCategories = [
-  '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', 
-  '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头饰-耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链', 
-  '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰', 
-  '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
-]
+const withTimeout = (promise, timeoutMs, message) => Promise.race([
+  promise,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(message)), timeoutMs)
+  })
+])
 
 const readImportDraft = () => {
   try {
@@ -53,7 +59,10 @@ const readImportDraft = () => {
 const saveImportDraft = () => {
   try {
     localStorage.setItem(IMPORT_DRAFT_KEY, JSON.stringify({
+      importMode: importMode.value,
       importText: importText.value,
+      codeImportCategory: codeImportCategory.value,
+      codeImportText: codeImportText.value,
       lastNotFoundNames: lastNotFoundNames.value,
       importStats: JSON.parse(JSON.stringify(importStats)),
       updatedAt: Date.now()
@@ -66,7 +75,10 @@ const saveImportDraft = () => {
 const restoreImportDraft = () => {
   const draft = readImportDraft()
   if (!draft) return
+  importMode.value = draft.importMode === 'code' ? 'code' : 'name'
   importText.value = draft.importText || ''
+  codeImportCategory.value = draft.codeImportCategory || '连衣裙'
+  codeImportText.value = draft.codeImportText || ''
   lastNotFoundNames.value = Array.isArray(draft.lastNotFoundNames) ? draft.lastNotFoundNames : []
   if (draft.importStats) {
     Object.assign(importStats, {
@@ -74,7 +86,8 @@ const restoreImportDraft = () => {
       newCount: Number(draft.importStats.newCount) || 0,
       dupCount: Number(draft.importStats.dupCount) || 0,
       failCount: Number(draft.importStats.failCount) || lastNotFoundNames.value.length,
-      newClothes: Array.isArray(draft.importStats.newClothes) ? draft.importStats.newClothes : []
+      newClothes: Array.isArray(draft.importStats.newClothes) ? draft.importStats.newClothes : [],
+      missingCodes: Array.isArray(draft.importStats.missingCodes) ? draft.importStats.missingCodes : []
     })
   }
 }
@@ -86,7 +99,10 @@ onMounted(async () => {
 
 watch(
   () => ({
+    importMode: importMode.value,
     importText: importText.value,
+    codeImportCategory: codeImportCategory.value,
+    codeImportText: codeImportText.value,
     lastNotFoundNames: lastNotFoundNames.value,
     importStats: { ...importStats }
   }),
@@ -95,13 +111,81 @@ watch(
 )
 
 watch(lastNotFoundNames, (names) => {
-  importStats.failCount = names.length
+  importStats.failCount = names.length + importStats.missingCodes.length
 })
 
-const handleImport = async () => {
-  const inputNames = importText.value.split(/[,，\s\n]+/).map(n => n.trim()).filter(n => n !== '')
-  if (inputNames.length === 0) return alert('请输入内容')
-  
+const parseImportTokens = (value) => value
+  .split(/[,，、;；\s\n]+/)
+  .map(n => n.trim())
+  .filter(Boolean)
+
+const normalizeGameId = (value) => {
+  const digits = String(value || '').replace(/\D/g, '')
+  return digits.replace(/^0+(?=\d)/, '') || digits
+}
+
+const missingCodeContributionNames = computed({
+  get() {
+    return importStats.missingCodes.map(item => `${item.category} #${item.game_id}`)
+  },
+  set(names) {
+    const keep = new Set(names)
+    importStats.missingCodes = importStats.missingCodes.filter(item => (
+      keep.has(`${item.category} #${item.game_id}`)
+    ))
+    importStats.failCount = lastNotFoundNames.value.length + importStats.missingCodes.length
+  }
+})
+
+const missingCodeContributionPrefills = computed(() => Object.fromEntries(
+  importStats.missingCodes.map(item => [
+    `${item.category} #${item.game_id}`,
+    { name: '', category: item.category, game_id: item.game_id }
+  ])
+))
+
+const saveImportedWardrobe = async (updatedOwnedIds) => {
+  if (!props.isLoggedIn) {
+    emit('update:ownedIds', updatedOwnedIds)
+    return updatedOwnedIds
+  }
+
+  const { data: { user }, error: authErr } = await withTimeout(
+    supabase.auth.getUser(),
+    CLOUD_REQUEST_TIMEOUT_MS,
+    '登录状态校验超时，请刷新页面后重试。'
+  )
+  if (authErr || !user) throw new Error('登录状态已过期，请刷新页面重新登录！')
+
+  const savedOwnedIds = await withTimeout(
+    saveWardrobeToCloud(user.id, updatedOwnedIds, { mode: 'merge' }),
+    CLOUD_REQUEST_TIMEOUT_MS,
+    '云端衣柜同步超时。本次输入已自动保存在本地草稿，请刷新后重试。'
+  )
+  emit('update:ownedIds', savedOwnedIds)
+  return savedOwnedIds
+}
+
+const reportImportError = async (err) => {
+  if (typeof logErrorToCloud !== 'function') return
+
+  try {
+    const { data: { session } } = await withTimeout(
+      supabase.auth.getSession(),
+      3000,
+      '日志上报会话读取超时'
+    )
+    await withTimeout(
+      logErrorToCloud('import_wardrobe_mobile', err, session?.user?.id),
+      3000,
+      '日志上报超时'
+    )
+  } catch (logErr) {
+    console.warn('录入错误日志上报跳过:', logErr.message)
+  }
+}
+
+const runImportTask = async (task) => {
   // 1. 开启界面锁
   isSaving.value = true;
   
@@ -109,18 +193,37 @@ const handleImport = async () => {
   await new Promise(resolve => setTimeout(resolve, 50));
 
   try {
-    let newCount = 0, dupCount = 0;
-    const notFound = [], newlyAdded = [];
+    await withTimeout(
+      task(),
+      IMPORT_TASK_TIMEOUT_MS,
+      '录入处理超时。本次输入已自动保存在本地草稿，请刷新后重试。'
+    )
+  } catch (err) {
+    isSaving.value = false
+    alert('❌ 录入中断：\n' + (err.message || '网络请求异常，请检查网络后重试'));
+    void reportImportError(err)
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+const handleNameImport = async () => {
+  const inputNames = parseImportTokens(importText.value)
+  if (inputNames.length === 0) return alert('请输入衣服名称')
+
+  await runImportTask(async () => {
+    let newCount = 0, dupCount = 0
+    const notFound = [], newlyAdded = []
 
     // 🌟 核心优化 2：建立哈希表 (Map)，把几万件衣服的查询时间从 O(N) 降为 O(1)
-    const wardrobeMap = new Map(props.wardrobe.map(item => [item.name, item]));
+    const wardrobeMap = new Map(props.wardrobe.map(item => [item.name, item]))
     // 🌟 核心优化 3：建立集合 (Set)，把是否拥有的查重时间从 O(N) 降为 O(1)
     const ownedSet = new Set(props.ownedIds);
 
     // 开始极速匹配；大量录入时分批让出主线程，避免页面假死
     for (let index = 0; index < inputNames.length; index++) {
       const name = inputNames[index]
-      const found = wardrobeMap.get(name); // 瞬间拿结果，不需要 find 遍历
+      const found = wardrobeMap.get(name) // 瞬间拿结果，不需要 find 遍历
       
       if (found) {
         if (ownedSet.has(found.id)) { // 瞬间判断，不需要 includes 遍历
@@ -137,41 +240,94 @@ const handleImport = async () => {
     }
 
     // 重新转回纯净的数组，准备提交给云端
-    const updatedOwnedIds = Array.from(ownedSet);
-    lastNotFoundNames.value = [...new Set(notFound)];
+    const updatedOwnedIds = Array.from(ownedSet)
+    lastNotFoundNames.value = [...new Set(notFound)]
 
     if (newCount > 0) {
-      if (props.isLoggedIn) {
-        // 严格查岗，防止死 Token
-        const { data: { user }, error: authErr } = await supabase.auth.getUser();
-        if (authErr || !user) throw new Error('登录状态已过期，请刷新页面重新登录！');
-        
-        // 提交云端
-        const savedOwnedIds = await saveWardrobeToCloud(user.id, updatedOwnedIds, { mode: 'merge' });
-        emit('update:ownedIds', savedOwnedIds);
-      } else {
-        emit('update:ownedIds', updatedOwnedIds);
-      }
+      await saveImportedWardrobe(updatedOwnedIds)
     }
     
     // 渲染统计结果
     importStats.newCount = newCount; 
     importStats.dupCount = dupCount;
-    importStats.failCount = lastNotFoundNames.value.length;
+    importStats.missingCodes = []
+    importStats.failCount = lastNotFoundNames.value.length
     importStats.newClothes = newlyAdded; 
     importStats.show = true; 
     importText.value = '';
+  })
+}
 
-  } catch (err) { 
-    alert('❌ 录入中断：\n' + (err.message || '网络请求异常，请检查网络后重试')); 
-    // 云端异常上报 (上一回合加的代码)
-    const { data: { session } } = await supabase.auth.getSession();
-    if (typeof logErrorToCloud === 'function') {
-      logErrorToCloud('import_wardrobe_mobile', err, session?.user?.id);
+const handleCodeImport = async () => {
+  const inputCodes = parseImportTokens(codeImportText.value)
+    .map(code => code.replace(/\D/g, ''))
+    .filter(Boolean)
+  if (inputCodes.length === 0) return alert('请输入数字短编号')
+
+  await runImportTask(async () => {
+    let newCount = 0, dupCount = 0
+    const notFound = [], newlyAdded = []
+    const category = codeImportCategory.value
+    const ownedSet = new Set(props.ownedIds)
+    const exactMap = new Map()
+    const normalizedMap = new Map()
+    const duplicateNormalizedKeys = new Set()
+
+    props.wardrobe.forEach(item => {
+      if (item.category !== category || item.game_id == null) return
+      const rawGameId = String(item.game_id).trim()
+      const exactKey = `${category}::${rawGameId}`
+      const normalizedKey = `${category}::${normalizeGameId(rawGameId)}`
+
+      exactMap.set(exactKey, item)
+      if (normalizedMap.has(normalizedKey) && normalizedMap.get(normalizedKey).id !== item.id) {
+        duplicateNormalizedKeys.add(normalizedKey)
+      } else {
+        normalizedMap.set(normalizedKey, item)
+      }
+    })
+
+    for (let index = 0; index < inputCodes.length; index++) {
+      const code = inputCodes[index]
+      const exactKey = `${category}::${code}`
+      const normalizedKey = `${category}::${normalizeGameId(code)}`
+      const found = exactMap.get(exactKey) || (!duplicateNormalizedKeys.has(normalizedKey) ? normalizedMap.get(normalizedKey) : null)
+
+      if (found) {
+        if (ownedSet.has(found.id)) {
+          dupCount++
+        } else {
+          ownedSet.add(found.id)
+          newCount++
+          newlyAdded.push(found)
+        }
+      } else {
+        notFound.push({ category, game_id: code })
+      }
+
+      if ((index + 1) % PROCESS_BATCH_SIZE === 0) await yieldToBrowser()
     }
-  } finally { 
-    isSaving.value = false; 
-  }
+
+    const updatedOwnedIds = Array.from(ownedSet)
+
+    if (newCount > 0) {
+      await saveImportedWardrobe(updatedOwnedIds)
+    }
+
+    lastNotFoundNames.value = []
+    importStats.newCount = newCount
+    importStats.dupCount = dupCount
+    importStats.missingCodes = [...new Map(notFound.map(item => [`${item.category}_${item.game_id}`, item])).values()]
+    importStats.failCount = importStats.missingCodes.length
+    importStats.newClothes = newlyAdded
+    importStats.show = true
+    codeImportText.value = ''
+  })
+}
+
+const handleImport = () => {
+  if (importMode.value === 'code') return handleCodeImport()
+  return handleNameImport()
 }
 </script>
 
@@ -182,7 +338,37 @@ const handleImport = async () => {
     </div>
     
     <div class="flex flex-col gap-3">
-      <textarea v-model="importText" class="textarea textarea-bordered h-32 focus:border-pink-400 font-bold" placeholder="输入衣服名字，用逗号或换行隔开..."></textarea>
+      <div class="mode-switch">
+        <button type="button" :class="{ active: importMode === 'name' }" @click="importMode = 'name'">按名称录入</button>
+        <button type="button" :class="{ active: importMode === 'code' }" @click="importMode = 'code'">按分类短编号录入</button>
+      </div>
+
+      <div v-if="importMode === 'name'" class="flex flex-col gap-3">
+        <textarea v-model="importText" class="textarea textarea-bordered h-32 focus:border-pink-400 font-bold" placeholder="输入衣服名字，用逗号或换行隔开..."></textarea>
+      </div>
+
+      <div v-else class="flex flex-col gap-3">
+        <div class="code-import-grid">
+          <label class="code-import-label">
+            <span>分类部位</span>
+            <select v-model="codeImportCategory" class="select select-bordered w-full font-black">
+              <option v-for="cat in FULL_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
+          </label>
+          <label class="code-import-label">
+            <span>短编号</span>
+            <textarea
+              v-model="codeImportText"
+              class="textarea textarea-bordered h-32 focus:border-pink-400 font-bold"
+              placeholder="输入短编号，用逗号、空格或换行隔开，如：0001 0002 0003"
+            ></textarea>
+          </label>
+        </div>
+        <div class="code-import-tip">
+          系统会按“{{ codeImportCategory }} + 短编号”匹配图鉴，成功匹配后加入你的衣柜。
+        </div>
+      </div>
+
       <button class="btn btn-primary w-full shadow-lg text-white font-black" @click="handleImport" :disabled="isSaving">
         {{ isSaving ? '同步中...' : '🚀 录入到云端衣柜' }}
       </button>
@@ -216,6 +402,29 @@ const handleImport = async () => {
 
             <MissingItemsQueue v-model="lastNotFoundNames" :availableSuits="availableSuits" />
 
+            <div v-if="importStats.missingCodes.length > 0" class="space-y-3">
+              <div class="flex items-center gap-2 px-1">
+                <span class="text-rose-500">⚠️</span>
+                <h4 class="font-black text-sm text-slate-700 m-0">未匹配到图鉴编号</h4>
+              </div>
+              <div class="missing-code-grid">
+                <div v-for="item in importStats.missingCodes" :key="`${item.category}_${item.game_id}`" class="missing-code-card">
+                  <span>{{ item.category }}</span>
+                  <strong>#{{ item.game_id }}</strong>
+                </div>
+              </div>
+              <p class="missing-code-note">
+                这些编号未在正式图鉴中找到；如确认游戏内存在，可在下方补齐名称与属性后提交。
+              </p>
+            </div>
+
+            <MissingItemsQueue
+              v-if="importStats.missingCodes.length > 0"
+              v-model="missingCodeContributionNames"
+              :availableSuits="availableSuits"
+              :prefills="missingCodeContributionPrefills"
+            />
+
             <div v-if="importStats.newClothes.length > 0" class="space-y-3">
               <div class="flex items-center gap-2 px-1">
                 <span class="text-emerald-500">✨</span>
@@ -244,6 +453,86 @@ const handleImport = async () => {
 </template>
 
 <style scoped>
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 6px;
+  background: #f8fafc;
+  border: 1.5px solid #f1f5f9;
+  border-radius: 16px;
+}
+
+.mode-switch button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-switch button.active {
+  background: #f472b6;
+  color: white;
+  box-shadow: 0 6px 16px rgba(244, 114, 182, 0.25);
+}
+
+.code-import-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  gap: 12px;
+}
+
+.code-import-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.code-import-label span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+  padding-left: 2px;
+}
+
+.code-import-tip,
+.missing-code-note {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.missing-code-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.missing-code-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.missing-code-card strong {
+  color: #e11d48;
+  font-size: 14px;
+}
+
 .custom-scroll::-webkit-scrollbar { width: 4px; }
 .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -254,4 +543,10 @@ const handleImport = async () => {
 /* 🌟 彻底抛弃重绘成本极高的 max-height，改用极其丝滑的 GPU 加速特效 */
 .slide-enter-active, .slide-leave-active { transition: opacity 0.2s ease-out, transform 0.2s ease-out; }
 .slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(-10px); }
+
+@media (max-width: 768px) {
+  .code-import-grid {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

@@ -12,7 +12,8 @@ import ClothesEntryForm from './ClothesEntryForm.vue'
 const lastNotFoundNames = defineModel({ type: Array, required: true })
 // 🌟 把它赋值给 props 变量
 const props = defineProps({
-  availableSuits: { type: Array, required: true }
+  availableSuits: { type: Array, required: true },
+  prefills: { type: Object, default: () => ({}) }
 })
 
 // 2. 100% 移入原版本所需的独立表单状态
@@ -26,10 +27,14 @@ const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 const SUBMIT_TIMEOUT_MS = 12000
 const SLOW_REQUEST_HINT_MS = 5000
 
-const createContributionFormState = (name = '') => createClothesEntryFormState({
-  name,
-  category: '连衣裙'
-})
+const createContributionFormState = (name = '') => {
+  const prefill = props.prefills[name] || null
+  return createClothesEntryFormState({
+    name: prefill ? (prefill.name || '') : name,
+    category: prefill?.category || '连衣裙',
+    game_id: prefill?.game_id || ''
+  })
+}
 
 const contribForm = reactive(createContributionFormState())
 
@@ -122,7 +127,8 @@ const submitContribution = async (name) => {
   // ==========================================
   // 🛡️ 第一防线：前端格式拦截
   // ==========================================
-  const itemName = String(contribForm.name || name || '').trim()
+  const hasPrefill = Boolean(props.prefills[name])
+  const itemName = String(contribForm.name || (hasPrefill ? '' : name) || '').trim()
   const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
   const missingFields = []
 
