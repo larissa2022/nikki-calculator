@@ -2,7 +2,7 @@
 import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
-import { createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
 import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
@@ -102,6 +102,7 @@ export function useAudit() {
         newClothes.category = bestItem.category
         newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)))
         newClothes.suit_id = bestItem.suit_id || ''
+        newClothes.suit_status = bestItem.suit_id ? 'existing' : ''
 
         newClothes.tags = normalizeClothingTags(items.map(i => i.tags))
 
@@ -143,7 +144,27 @@ export function useAudit() {
 
     // 6. 最终执行入库
     const executeSubmit = async () => {
-        if (!newClothes.name) throw new Error('名字是必填项哦！')
+        const missingFields = []
+        const gameId = String(newClothes.game_id || '').trim()
+
+        const clothesName = String(newClothes.name || '').trim()
+
+        if (!clothesName) missingFields.push('服装名称')
+        if (!String(newClothes.category || '').trim()) missingFields.push('分类部位')
+        if (!gameId) missingFields.push('短编号')
+        if (gameId && !/^\d+$/.test(gameId)) missingFields.push('数字短编号')
+        if (!newClothes.stars) missingFields.push('星级')
+        if (!newClothes.suit_id && newClothes.suit_status !== 'none') missingFields.push('套装状态')
+        ATTRIBUTE_PAIRS.forEach((pair, index) => {
+            if (!newClothes[pair.key] || !newClothes[pair.gradeKey]) {
+                missingFields.push(`第 ${index + 1} 组属性`)
+            }
+        })
+
+        if (missingFields.length) {
+            throw new Error(`请先补全核心字段：${missingFields.join('、')}。特殊标签为选填。`)
+        }
+
         isSubmitting.value = true
         try {
             const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
@@ -155,7 +176,7 @@ export function useAudit() {
             })
 
             const payload = {
-                id: `custom_${Date.now()}`, game_id: newClothes.game_id || 'N', name: newClothes.name,
+                id: `custom_${Date.now()}`, game_id: gameId, name: clothesName,
                 category: newClothes.category, stars: Number(newClothes.stars), scores: calculatedScores,
                 suit_id: newClothes.suit_id || null,
                 tags: normalizeClothingTags(newClothes.tags) || null

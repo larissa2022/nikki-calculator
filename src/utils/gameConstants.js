@@ -38,6 +38,7 @@ export const KNOWN_CLOTHING_TAGS = [
 
 export const createClothesEntryFormState = (overrides = {}) => ({
   suit_id: '',
+  suit_status: '',
   game_id: '',
   name: '',
   category: '发型',
