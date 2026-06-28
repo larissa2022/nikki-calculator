@@ -34,6 +34,12 @@ const normalizeOwnedIds = (ownedClothes) => {
   return [...new Set(ownedClothes.filter(Boolean).map(id => String(id)))]
 }
 
+const shouldBlockUnsafeShrink = (currentIds, nextIds) => {
+  const currentCount = currentIds.length
+  const nextCount = nextIds.length
+  return currentCount >= 500 && currentCount - nextCount >= 100 && nextCount < currentCount * 0.5
+}
+
 // ====== 🌟 本地硬盘 (IndexedDB) 驱动逻辑 ======
 const dbPromise = new Promise((resolve, reject) => {
   const request = indexedDB.open('NikkiCacheDB', 1)
@@ -128,11 +134,12 @@ export function useWardrobe() {
   }
 
   // 3. 🌟 将我的衣柜存入云端 (重构为：悲观更新安全版)
-  const saveWardrobeToCloud = async (userId, pendingIds = null) => { 
+  const saveWardrobeToCloud = async (userId, pendingIds = null, options = {}) => {
     if (!userId) throw new Error('用户未登录')
     
     // 如果传入了新的待存数组，就用新的；如果没有，就兜底用旧的
-    const dataToSave = normalizeOwnedIds(pendingIds || myWardrobeIds.value)
+    const inputIds = normalizeOwnedIds(pendingIds || myWardrobeIds.value)
+    const saveMode = options.mode || 'replace'
     
     isSaving.value = true // 🔒 开启界面锁
 
@@ -140,6 +147,23 @@ export function useWardrobe() {
       // 🛡️ 防御 1：强行查岗！防止移动端微信悄悄杀后台导致 Token 失效
       const { data: { session }, error: authErr } = await supabase.auth.getSession()
       if (authErr || !session) throw new Error('登录状态已过期，请重新登录！')
+
+      const { data: currentWardrobe, error: fetchError } = await supabase
+        .from('user_wardrobes')
+        .select('owned_clothes')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError
+
+      const cloudIds = normalizeOwnedIds(currentWardrobe?.owned_clothes)
+      const dataToSave = saveMode === 'merge'
+        ? normalizeOwnedIds([...cloudIds, ...inputIds])
+        : inputIds
+
+      if (saveMode !== 'merge' && shouldBlockUnsafeShrink(cloudIds, dataToSave)) {
+        throw new Error(`本次保存会把云端衣柜从 ${cloudIds.length} 件减少到 ${dataToSave.length} 件，已自动拦截。请刷新页面后重试。`)
+      }
 
       // 🛡️ 防御 2：强行写入数据库
       const { error } = await supabase
@@ -153,10 +177,10 @@ export function useWardrobe() {
       
       // 🛡️ 防御 3：只有数据库明确没报错，才允许前台数组更新！！！
       if (pendingIds) {
-        myWardrobeIds.value = [...new Set(pendingIds)] // 顺手去个重
+        myWardrobeIds.value = dataToSave // 顺手去个重
       }
       
-      return true // 告诉外部组件“保存成功了！”
+      return dataToSave // 告诉外部组件“保存成功了！”
     } catch (err) {
       console.error('保存云端失败:', err)
       throw err // 把错误抛出去，让录入按钮捕获并弹窗警告

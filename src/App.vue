@@ -31,9 +31,9 @@ onMounted(async () => {
   })
 })
 
-const handleSaveCloud = async () => {
+const handleSaveCloud = async (payload = {}) => {
   try {
-    await saveWardrobeToCloud(currentUser.value?.id)
+    await saveWardrobeToCloud(currentUser.value?.id, payload.ids || null, { mode: payload.mode || 'replace' })
     alert('🎉 录入成功！数据已同步至云端。')
   } catch (err) {
     alert('❌ 保存失败：' + err.message)
