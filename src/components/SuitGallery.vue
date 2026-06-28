@@ -216,7 +216,7 @@ const handleSuitImport = () => {
 
   if (addedCount > 0) {
     emit('update:ownedIds', updatedOwnedIds)
-    if (props.isLoggedIn) emit('save-cloud')
+    if (props.isLoggedIn) emit('save-cloud', { mode: 'merge', ids: updatedOwnedIds })
     alert(`✨ 琉璃共鸣！成功录入了 ${addedCount} 个套装部件！`)
   } else if (noPartSuits.length > 0) {
     alert(`⚠️ 以下套装已收录，但暂无部件数据，暂时无法一键集齐：\n${noPartSuits.join('、')}`)
@@ -241,7 +241,7 @@ const unlockSingleSuit = (suit) => {
     if (!updatedOwnedIds.includes(id)) updatedOwnedIds.push(id)
   })
   emit('update:ownedIds', updatedOwnedIds)
-  if (props.isLoggedIn) emit('save-cloud')
+  if (props.isLoggedIn) emit('save-cloud', { mode: 'merge', ids: updatedOwnedIds })
 }
 
 const submitMissingSuits = async (namesArray) => {

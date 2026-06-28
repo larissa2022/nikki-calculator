@@ -23,6 +23,9 @@ const isSaving = ref(false)
 const availableSuits = ref([])
 const IMPORT_DRAFT_KEY = 'nikki.importZoneDraft.v1'
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const PROCESS_BATCH_SIZE = 500
+
+const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0))
 
 const fullCategories = [
   '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', 
@@ -114,8 +117,9 @@ const handleImport = async () => {
     // 🌟 核心优化 3：建立集合 (Set)，把是否拥有的查重时间从 O(N) 降为 O(1)
     const ownedSet = new Set(props.ownedIds);
 
-    // 开始极速匹配
-    inputNames.forEach(name => {
+    // 开始极速匹配；大量录入时分批让出主线程，避免页面假死
+    for (let index = 0; index < inputNames.length; index++) {
+      const name = inputNames[index]
       const found = wardrobeMap.get(name); // 瞬间拿结果，不需要 find 遍历
       
       if (found) {
@@ -129,7 +133,8 @@ const handleImport = async () => {
       } else { 
         notFound.push(name); 
       }
-    });
+      if ((index + 1) % PROCESS_BATCH_SIZE === 0) await yieldToBrowser()
+    }
 
     // 重新转回纯净的数组，准备提交给云端
     const updatedOwnedIds = Array.from(ownedSet);
@@ -142,9 +147,11 @@ const handleImport = async () => {
         if (authErr || !user) throw new Error('登录状态已过期，请刷新页面重新登录！');
         
         // 提交云端
-        await saveWardrobeToCloud(user.id, updatedOwnedIds);
+        const savedOwnedIds = await saveWardrobeToCloud(user.id, updatedOwnedIds, { mode: 'merge' });
+        emit('update:ownedIds', savedOwnedIds);
+      } else {
+        emit('update:ownedIds', updatedOwnedIds);
       }
-      emit('update:ownedIds', updatedOwnedIds);
     }
     
     // 渲染统计结果
