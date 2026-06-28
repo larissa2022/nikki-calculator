@@ -1,6 +1,39 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
 
+const SUPABASE_PAGE_SIZE = 1000
+
+const fetchAllRows = async (table, selectColumns, applyQuery = query => query) => {
+  const rows = []
+  let from = 0
+
+  while (true) {
+    const to = from + SUPABASE_PAGE_SIZE - 1
+    let query = supabase
+      .from(table)
+      .select(selectColumns)
+      .range(from, to)
+
+    query = applyQuery(query)
+
+    const { data, error } = await query
+    if (error) throw error
+
+    const page = data || []
+    rows.push(...page)
+
+    if (page.length < SUPABASE_PAGE_SIZE) break
+    from += SUPABASE_PAGE_SIZE
+  }
+
+  return rows
+}
+
+const normalizeOwnedIds = (ownedClothes) => {
+  if (!Array.isArray(ownedClothes)) return []
+  return [...new Set(ownedClothes.filter(Boolean).map(id => String(id)))]
+}
+
 // ====== 🌟 本地硬盘 (IndexedDB) 驱动逻辑 ======
 const dbPromise = new Promise((resolve, reject) => {
   const request = indexedDB.open('NikkiCacheDB', 1)
@@ -53,17 +86,16 @@ export function useWardrobe() {
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
       } else {
-        const [cRes, sRes] = await Promise.all([
-          supabase.from('clothes').select('*, suits(name)'),
-          supabase.from('stages').select('*').order('id')
+        const [clothesRows, stageRows] = await Promise.all([
+          fetchAllRows('clothes', '*, suits(name)', query => query.order('id')),
+          fetchAllRows('stages', '*', query => query.order('id'))
         ])
         
-        const rawClothes = cRes.data || []
-        fullWardrobeData.value = rawClothes.map(item => ({
+        fullWardrobeData.value = clothesRows.map(item => ({
           ...item,
           suit_name: item.suits?.name || null
         }))
-        stagesData.value = sRes.data || []
+        stagesData.value = stageRows
 
         await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
         await saveToLocal('stagesData', stagesData.value)
@@ -88,7 +120,7 @@ export function useWardrobe() {
       if (error && error.code !== 'PGRST116') throw error
       
       if (data && data.owned_clothes) {
-        myWardrobeIds.value = data.owned_clothes
+        myWardrobeIds.value = normalizeOwnedIds(data.owned_clothes)
       }
     } catch (err) {
       console.error("☁️ 从云端同步衣柜失败:", err.message)
@@ -100,7 +132,7 @@ export function useWardrobe() {
     if (!userId) throw new Error('用户未登录')
     
     // 如果传入了新的待存数组，就用新的；如果没有，就兜底用旧的
-    const dataToSave = pendingIds || myWardrobeIds.value
+    const dataToSave = normalizeOwnedIds(pendingIds || myWardrobeIds.value)
     
     isSaving.value = true // 🔒 开启界面锁
 
