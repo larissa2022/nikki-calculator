@@ -2,7 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
 import { calculateItemScores } from '../composables/useScoreEngine'
-import { createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
 import ClothesEntryForm from './ClothesEntryForm.vue'
 
 
@@ -12,7 +12,8 @@ import ClothesEntryForm from './ClothesEntryForm.vue'
 const lastNotFoundNames = defineModel({ type: Array, required: true })
 // 🌟 把它赋值给 props 变量
 const props = defineProps({
-  availableSuits: { type: Array, required: true }
+  availableSuits: { type: Array, required: true },
+  prefills: { type: Object, default: () => ({}) }
 })
 
 // 2. 100% 移入原版本所需的独立表单状态
@@ -26,10 +27,14 @@ const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 const SUBMIT_TIMEOUT_MS = 12000
 const SLOW_REQUEST_HINT_MS = 5000
 
-const createContributionFormState = (name = '') => createClothesEntryFormState({
-  name,
-  category: '连衣裙'
-})
+const createContributionFormState = (name = '') => {
+  const prefill = props.prefills[name] || null
+  return createClothesEntryFormState({
+    name: prefill ? (prefill.name || '') : name,
+    category: prefill?.category || '连衣裙',
+    game_id: prefill?.game_id || ''
+  })
+}
 
 const contribForm = reactive(createContributionFormState())
 
@@ -113,6 +118,7 @@ watch(lastNotFoundNames, (names) => {
 const applyShadowSuit = (name) => {
   const cleanName = name.replace(/[《》]/g, '').trim();
   contribForm.suit_id = ''; // 故意留空，触发影子模式
+  contribForm.suit_status = 'new';
   suitSearchText.value = `《${cleanName}》`;
 }
 
@@ -121,16 +127,35 @@ const submitContribution = async (name) => {
   // ==========================================
   // 🛡️ 第一防线：前端格式拦截
   // ==========================================
-  if (!contribForm.game_id || contribForm.game_id.trim() === '') {
+  const hasPrefill = Boolean(props.prefills[name])
+  const itemName = String(contribForm.name || (hasPrefill ? '' : name) || '').trim()
+  const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
+  const missingFields = []
+
+  if (!itemName) missingFields.push('服装名称')
+  if (!String(contribForm.category || '').trim()) missingFields.push('分类部位')
+  if (!contribForm.stars) missingFields.push('星级')
+  if (!contribForm.suit_id && !typedSuitName && contribForm.suit_status !== 'none') {
+    missingFields.push('套装状态')
+  }
+  ATTRIBUTE_PAIRS.forEach((pair, index) => {
+    if (!contribForm[pair.key] || !contribForm[pair.gradeKey]) {
+      missingFields.push(`第 ${index + 1} 组属性`)
+    }
+  })
+
+  if (missingFields.length) {
+    return alert(`⚠️ 提交被拦截：请先补全核心字段：${missingFields.join('、')}。\n特殊标签为选填，可不填写。`);
+  }
+
+  if (!contribForm.game_id || String(contribForm.game_id).trim() === '') {
     return alert('⚠️ 提交被拦截：短编号为必填项！\n请填写游戏内数字短编号。');
   }
 
-  const gameIdStr = contribForm.game_id.trim();
+  const gameIdStr = String(contribForm.game_id).trim();
   if (!/^\d+$/.test(gameIdStr)) {
     return alert('⚠️ 提交被拦截：短编号只允许填写数字。');
   }
-
-  const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
 
   // ==========================================
   // 🛡️ 第二防线：套装名的模糊重复查询 (本地秒级计算)
@@ -205,7 +230,7 @@ const submitContribution = async (name) => {
       // ... 准备 payload ... (保留原有的 payload 定义)
       // ... 前面生成 payload 的代码保持不变 ...
       const payload = {
-        name: contribForm.name || name,
+        name: itemName,
         game_id: gameIdStr,
         category: contribForm.category,
         stars: Number(contribForm.stars),

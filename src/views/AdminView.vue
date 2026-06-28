@@ -98,6 +98,7 @@ const handleClusteredItem = (group) => {
 // 搜索下拉框相关逻辑
 const selectSuit = (suit) => {
   newClothes.suit_id = suit.id
+  newClothes.suit_status = suit.id ? 'existing' : ''
   suitSearchText.value = suit.id ? `《${suit.name}》` : ''
 }
 
