@@ -10,11 +10,12 @@ const emit = defineEmits(['back-to-main'])
 // 1. 本地纯 UI 状态
 const activeTab = ref('audit')
 const suitSearchText = ref('')
+const activeAuditFilter = ref('all')
 
 // 2. 引入后台仲裁大脑
 const {
   currentUserRole, currentUserId, allUsersList,
-  pendingSuitsList, suitList, isSubmitting, newClothes,
+  pendingSuitsList, suitList, isSubmitting, newClothes, auditSelectionInfo,
   fetchAllData, fetchSuits, clusteredPendingList,
   processClusteredItem, executeSubmit, rejectPendingItem,
   approvePendingSuit, rejectPendingSuit
@@ -23,11 +24,34 @@ const {
 // 🌟 1. 新增：消消乐模式的排队与热度排序逻辑
 const sortedPendingList = computed(() => {
   if (!clusteredPendingList.value) return []
-  // 按照玩家提交人数（items.length）降序排列，越热门的越靠前
-  return [...clusteredPendingList.value].sort((a, b) => b.items.length - a.items.length)
+  return [...clusteredPendingList.value].sort((a, b) => (
+    a.riskRank - b.riskRank
+    || b.topSubmitterCount - a.topSubmitterCount
+    || b.distinctSubmitterCount - a.distinctSubmitterCount
+    || b.items.length - a.items.length
+  ))
 })
-// 永远只显示前 6 个，审核掉一个，下一个自动补位
-const displayPendingList = computed(() => sortedPendingList.value.slice(0, 6))
+const auditFilterOptions = computed(() => {
+  const list = sortedPendingList.value
+  const countBy = (predicate) => list.filter(predicate).length
+  return [
+    { key: 'all', label: '全部', count: list.length },
+    { key: 'ready', label: '可入库', count: countBy(group => group.candidateStatus === 'ready') },
+    { key: 'conflict', label: '有不同意见', count: countBy(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict') },
+    { key: 'known', label: '正式库已有', count: countBy(group => group.candidateStatus === 'known') },
+    { key: 'insufficient', label: '人数不足', count: countBy(group => group.candidateStatus === 'insufficient') },
+    { key: 'legacy', label: '匿名历史数据', count: countBy(group => group.candidateStatus === 'legacy') }
+  ]
+})
+const filteredPendingList = computed(() => {
+  if (activeAuditFilter.value === 'all') return sortedPendingList.value
+  if (activeAuditFilter.value === 'conflict') {
+    return sortedPendingList.value.filter(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict')
+  }
+  return sortedPendingList.value.filter(group => group.candidateStatus === activeAuditFilter.value)
+})
+// 每次只展示一屏候选，审核掉一个，下一个自动补位
+const displayPendingList = computed(() => filteredPendingList.value.slice(0, 9))
 
 // 🌟 2. 新增：套装申请列表的去重与热度统计
 const uniquePendingSuits = computed(() => {
@@ -126,15 +150,58 @@ const submitNewClothes = async () => {
     </div>
 
     <div v-show="activeTab === 'audit'">
-      <section v-if="displayPendingList.length > 0" class="mb-8">
-        <h3 class="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">🔥 热门待仲裁散件</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+      <section v-if="sortedPendingList.length > 0" class="mb-8">
+        <div class="mb-4 flex flex-col gap-3">
+          <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">🔥 自动入库候选</h3>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="option in auditFilterOptions"
+              :key="option.key"
+              type="button"
+              @click="activeAuditFilter = option.key"
+              class="rounded-full border px-3 py-1.5 text-xs font-black transition-all"
+              :class="activeAuditFilter === option.key ? 'border-purple-300 bg-purple-50 text-purple-700 shadow-sm' : 'border-slate-100 bg-white text-slate-500 hover:border-purple-200 hover:text-purple-600'"
+            >
+              {{ option.label }} {{ option.count }}
+            </button>
+          </div>
+        </div>
+        <div v-if="displayPendingList.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-6 text-center text-sm font-bold text-slate-400">
+          当前筛选下暂无候选。
+        </div>
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <div v-for="group in displayPendingList" :key="group.key" @click="handleClusteredItem(group)" class="bg-white border-2 border-slate-100 hover:border-purple-300 p-4 rounded-xl cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md group">
             <div class="flex justify-between items-start mb-2">
               <span class="font-black text-slate-700 truncate pr-2 group-hover:text-purple-600">{{ group.name || group.items[0]?.name || '未命名散件' }}</span>
-              <span class="bg-rose-100 text-rose-600 font-black text-xs px-2 py-1 rounded-md shrink-0">{{ group.items.length }} 份</span>
+              <span class="font-black text-xs px-2 py-1 rounded-md shrink-0" :class="group.statusClass">{{ group.statusLabel }}</span>
             </div>
             <div class="text-xs font-bold text-slate-400 truncate">短编号: {{ group.items[0].game_id || 'N' }} | {{ group.items[0].category }}</div>
+            <div class="mt-3 space-y-1.5 text-xs font-bold text-slate-500">
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>提交人数</span>
+                <span class="text-slate-800">{{ group.distinctSubmitterCount }} 人</span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>总提交</span>
+                <span class="text-slate-800">{{ group.items.length }} 条</span>
+              </div>
+              <div v-if="group.hasConflict" class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>最多人认可</span>
+                <span class="text-slate-800">{{ group.topSubmitterCount }} 人</span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>资料一致情况</span>
+                <span
+                  :class="group.hasConflict ? 'text-amber-600' : (group.topSubmitterCount >= 5 ? 'text-emerald-600' : 'text-slate-800')"
+                >
+                  {{ group.hasConflict ? '有不同意见' : (group.topSubmitterCount >= 5 ? '全部一致' : '暂未足够') }}
+                </span>
+              </div>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-1 text-[11px] font-bold">
+              <span v-if="group.anonymousCount" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">匿名提交 {{ group.anonymousCount }} 条</span>
+              <span v-if="group.hasKnownClothes" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-500">正式库已存在</span>
+            </div>
           </div>
         </div>
       </section>
@@ -154,7 +221,38 @@ const submitNewClothes = async () => {
           suitNotFoundText="➕ 秒建套装"
           @submit="submitNewClothes"
           @create-suit="quickCreateSuit"
-        />
+        >
+          <template #admin-tips>
+            <div v-if="auditSelectionInfo" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 leading-relaxed">
+              <template v-if="auditSelectionInfo.conflictCount">
+                本次采用最多人认可的资料：{{ auditSelectionInfo.selectedSubmitterCount }} 人 / {{ auditSelectionInfo.selectedCount }} 条。
+                另有不同意见的提交，暂不入库。
+              </template>
+              <template v-else>
+                已有 {{ auditSelectionInfo.selectedSubmitterCount }} 人提交相同资料，可入库。
+              </template>
+              <div v-if="auditSelectionInfo.variants?.length > 1" class="mt-2 space-y-1.5">
+                <div
+                  v-for="variant in auditSelectionInfo.variants"
+                  :key="variant.key"
+                  class="rounded-lg border bg-white/70 px-2 py-1.5"
+                  :class="variant.selected ? 'border-emerald-200 text-emerald-700' : 'border-amber-100 text-amber-700'"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span>{{ variant.selected ? '本次采用' : '不同意见' }}</span>
+                    <span>{{ variant.submitterCount }} 人 / {{ variant.rowCount }} 条</span>
+                  </div>
+                  <div class="mt-1 text-[11px] font-bold text-slate-500">
+                    星级 {{ variant.stars }}；{{ variant.suitLabel }}；{{ variant.tags }}
+                  </div>
+                  <div class="mt-0.5 text-[10px] font-bold text-slate-400">
+                    pending: {{ variant.pendingIds }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </ClothesEntryForm>
       </section>
     </div>
 
