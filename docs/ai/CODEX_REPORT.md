@@ -159,3 +159,15 @@
 - 已明确职责边界：ChatGPT 负责整理任务、写任务单、判断下一步；Codex 负责按任务单执行；Gemini 负责 challenge、发现反例和风险；GitHub 是事实来源；用户本人负责最终审核、最终产品判断和正式 Rule 批准。
 
 本轮仅更新 `docs/ai/RULES.md` 和 `docs/ai/CODEX_REPORT.md`，未修改业务代码。
+
+## 技术实现文档收口结果
+
+已根据 `docs/ai/CODEX_REPORT.md`、`docs/ai/DECISIONS.md`、`docs/ai/RULES.md`、`docs/requirements/需求文档.md`、`docs/planning/开发文档.md`、`docs/planning/缺陷文档.md` 和最近 30 条 git log，在 `docs/planning/技术实现文档.md` 前部补充“当前实现状态”小节。
+
+本次收口标注：
+
+- 已实现：`complete_existing_clothes_from_pending`、按分类 + 短编号录入衣柜、衣柜云端合并保存保护、`clothes` / `stages` 分页加载、提交者衣柜写回、生产构建禁用 Vue DevTools。
+- 未实现 / 暂缓：`points_ledger` 积分流水、`jury_votes` 陪审团投票、`re_review_items` 重审池、`correction_requests` 报错修正、排行榜相关 RPC / view。
+- 待确认技术点：正式库已有资料补全覆盖规则、积分发放状态机、重审池第一版是否落库、低风险 / 高风险自动判定字段。
+
+本轮仅更新文档，未修改业务代码、Supabase 文件、数据库文件、需求文档、开发文档、缺陷文档或 `docs/ai/RULES.md`。
