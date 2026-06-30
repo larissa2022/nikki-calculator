@@ -90,3 +90,15 @@
 - 管理员审核卡片文案、正式库已有资料补全、pending 状态变化、生产环境 Vue DevTools 已作为回归通过事项记录。
 
 本轮仅更新文档，未修改业务代码、Supabase 文件或数据库文件。
+
+## 需求文档收口结果
+
+已根据 `docs/ai/CODEX_REPORT.md`、`docs/ai/DECISIONS.md`、`docs/ai/TEST_CHECKLIST.md`、`docs/planning/缺陷文档.md` 和最近 20 条 git log，在 `docs/requirements/需求文档.md` 中补充“当前实现状态”小节。
+
+本次收口标注：
+
+- 已实现：按分类 + 短编号录入衣柜、衣柜刷新后数量稳定、正式库已有但资料不全补全、提交者衣柜写回、管理员审核卡片文案口径、生产环境禁用 Vue DevTools。
+- 未实现 / 暂缓：`points_ledger` 积分流水、`jury_votes` 陪审团投票、`re_review_items` 重审池、`correction_requests` 报错修正、排行榜、普通管理员轮换。
+- 待确认：正式库已有资料补全覆盖规则、缺套装但编号完整的数据是否入库、积分发放状态、贡献者前 3 排序规则、低风险 / 高风险项判定规则。
+
+本轮仅更新文档，未修改业务代码、Supabase 文件、数据库文件、开发文档或技术实现文档。
