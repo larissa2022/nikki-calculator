@@ -75,11 +75,14 @@ git push origin feature/category-code-wardrobe-import
 - ChatGPT 不再提供“手动 push”流程。
 - Codex 是唯一执行提交主体。
 
-## 单任务原则（强约束）
+## 指令任务原则（强约束）
 
-- 一次 Codex 指令只能包含一个任务。
-- 禁止多个任务合并在同一指令中。
-- 每个任务必须可以独立 commit & rollback。
+- 一次 Codex 指令可以包含多个任务。
+- 多个任务必须明确合并在同一条指令中，不得依赖跨轮口头补充形成隐含任务。
+- 每条指令必须说明允许修改范围和禁止修改范围。
+- 每条指令必须形成可追踪 commit。
+- 每条指令必须具备清晰 rollback 路径。
+- 如果多个任务无法共享同一 commit 与 rollback 边界，应拆分为多条指令。
 
 ## Candidate Cleanup Policy
 
