@@ -1,7 +1,9 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
-import { GRADE_OPTIONS, calculateItemScores } from '../composables/useScoreEngine'
+import { calculateItemScores } from '../composables/useScoreEngine'
+import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import ClothesEntryForm from './ClothesEntryForm.vue'
 
 
 
@@ -10,7 +12,8 @@ import { GRADE_OPTIONS, calculateItemScores } from '../composables/useScoreEngin
 const lastNotFoundNames = defineModel({ type: Array, required: true })
 // 🌟 把它赋值给 props 变量
 const props = defineProps({
-  availableSuits: { type: Array, required: true }
+  availableSuits: { type: Array, required: true },
+  prefills: { type: Object, default: () => ({}) }
 })
 
 // 2. 100% 移入原版本所需的独立表单状态
@@ -18,53 +21,105 @@ const displayNotFoundNames = computed(() => lastNotFoundNames.value.slice(0, 3))
 const activeContribution = ref(null)
 const isSubmittingContrib = ref(false)
 const suitSearchText = ref('')
-const isSuitDropdownOpen = ref(false)
+const submitHint = ref('')
+const DRAFT_PREFIX = 'nikki.missingItemDraft.v1:'
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const SUBMIT_TIMEOUT_MS = 12000
+const SLOW_REQUEST_HINT_MS = 5000
 
-const fullCategories = [
-  '发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵',
-  '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链',
-  '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰',
-  '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤'
-]
+const createContributionFormState = (name = '') => {
+  const prefill = props.prefills[name] || null
+  return createClothesEntryFormState({
+    name: prefill ? (prefill.name || '') : name,
+    category: prefill?.category || '连衣裙',
+    game_id: prefill?.game_id || ''
+  })
+}
 
-const contribForm = reactive({
-  name: '',
-  suit_id: '', game_id: '', tags: '', category: '连衣裙', stars: 5,
-  pair1: 'simple', grade1: '完美', pair2: 'active', grade2: '完美',
-  pair3: 'cute', grade3: '完美', pair4: 'pure', grade4: '完美',
-  pair5: 'cool', grade5: '完美'
-})
+const contribForm = reactive(createContributionFormState())
+
+const getDraftKey = (name) => `${DRAFT_PREFIX}${encodeURIComponent(name || '')}`
+
+const readContributionDraft = (name) => {
+  try {
+    const raw = localStorage.getItem(getDraftKey(name))
+    if (!raw) return null
+    const draft = JSON.parse(raw)
+    if (!draft?.updatedAt || Date.now() - draft.updatedAt > DRAFT_TTL_MS) {
+      localStorage.removeItem(getDraftKey(name))
+      return null
+    }
+    return draft
+  } catch (err) {
+    console.warn('读取缺失项草稿失败:', err)
+    return null
+  }
+}
+
+const saveContributionDraft = (name) => {
+  if (!name) return
+  try {
+    localStorage.setItem(getDraftKey(name), JSON.stringify({
+      form: JSON.parse(JSON.stringify(contribForm)),
+      suitSearchText: suitSearchText.value,
+      updatedAt: Date.now()
+    }))
+  } catch (err) {
+    console.warn('保存缺失项草稿失败:', err)
+  }
+}
+
+const clearContributionDraft = (name) => {
+  if (!name) return
+  try {
+    localStorage.removeItem(getDraftKey(name))
+  } catch (err) {
+    console.warn('清理缺失项草稿失败:', err)
+  }
+}
+
+const withTimeout = (promise, timeoutMs = SUBMIT_TIMEOUT_MS) => Promise.race([
+  promise,
+  new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('网络请求超时')), timeoutMs)
+  })
+])
 
 watch(activeContribution, (newVal) => {
-  suitSearchText.value = '';
-  contribForm.suit_id = '';
-  contribForm.game_id = '';
-  contribForm.name = newVal || '';
+  suitSearchText.value = ''
+  Object.assign(contribForm, createContributionFormState(newVal || ''))
+  const draft = readContributionDraft(newVal)
+  if (draft?.form) {
+    Object.assign(contribForm, draft.form)
+    suitSearchText.value = draft.suitSearchText || ''
+  }
 })
 
-// 🌟 去掉 .value，加上 props.
-const filteredSuits = computed(() => {
-  const query = suitSearchText.value?.toLowerCase().trim() || '';
-  if (!query || query.startsWith('《')) return props.availableSuits;
-  return props.availableSuits.filter(s => s.name && s.name.toLowerCase().includes(query));
+watch(
+  () => ({
+    active: activeContribution.value,
+    suitSearchText: suitSearchText.value,
+    form: { ...contribForm }
+  }),
+  (draft) => {
+    if (draft.active) saveContributionDraft(draft.active)
+  },
+  { deep: true }
+)
+
+watch(lastNotFoundNames, (names) => {
+  if (activeContribution.value && !names.includes(activeContribution.value)) {
+    clearContributionDraft(activeContribution.value)
+    activeContribution.value = null
+  }
 })
-
-const handleSuitBlur = () => {
-  setTimeout(() => { isSuitDropdownOpen.value = false }, 200)
-}
-
-const selectSuit = (suit) => {
-  contribForm.suit_id = suit.id;
-  suitSearchText.value = suit.id ? `《${suit.name}》` : '';
-  isSuitDropdownOpen.value = false;
-}
 
 // 🌟 新增：玩家点击“一键申请并应用”时的逻辑
 const applyShadowSuit = (name) => {
   const cleanName = name.replace(/[《》]/g, '').trim();
   contribForm.suit_id = ''; // 故意留空，触发影子模式
+  contribForm.suit_status = 'new';
   suitSearchText.value = `《${cleanName}》`;
-  isSuitDropdownOpen.value = false;
 }
 
 // 🌟 替换：带【智能防重】与【自动自愈刷新】的最终提交逻辑
@@ -72,12 +127,35 @@ const submitContribution = async (name) => {
   // ==========================================
   // 🛡️ 第一防线：前端格式拦截
   // ==========================================
-  if (!contribForm.game_id || contribForm.game_id.trim() === '') {
-    return alert('⚠️ 提交被拦截：短编号为必填项！\n(如果该散件没有短编号，请填写 N)');
+  const hasPrefill = Boolean(props.prefills[name])
+  const itemName = String(contribForm.name || (hasPrefill ? '' : name) || '').trim()
+  const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
+  const missingFields = []
+
+  if (!itemName) missingFields.push('服装名称')
+  if (!String(contribForm.category || '').trim()) missingFields.push('分类部位')
+  if (!contribForm.stars) missingFields.push('星级')
+  if (!contribForm.suit_id && !typedSuitName && contribForm.suit_status !== 'none') {
+    missingFields.push('套装状态')
+  }
+  ATTRIBUTE_PAIRS.forEach((pair, index) => {
+    if (!contribForm[pair.key] || !contribForm[pair.gradeKey]) {
+      missingFields.push(`第 ${index + 1} 组属性`)
+    }
+  })
+
+  if (missingFields.length) {
+    return alert(`⚠️ 提交被拦截：请先补全核心字段：${missingFields.join('、')}。\n特殊标签为选填，可不填写。`);
   }
 
-  const gameIdStr = contribForm.game_id.trim();
-  const typedSuitName = suitSearchText.value.replace(/[《》]/g, '').trim();
+  if (!contribForm.game_id || String(contribForm.game_id).trim() === '') {
+    return alert('⚠️ 提交被拦截：短编号为必填项！\n请填写游戏内数字短编号。');
+  }
+
+  const gameIdStr = String(contribForm.game_id).trim();
+  if (!/^\d+$/.test(gameIdStr)) {
+    return alert('⚠️ 提交被拦截：短编号只允许填写数字。');
+  }
 
   // ==========================================
   // 🛡️ 第二防线：套装名的模糊重复查询 (本地秒级计算)
@@ -108,37 +186,38 @@ const submitContribution = async (name) => {
 
   // 锁住按钮，开始转圈圈
   isSubmittingContrib.value = true;
+  submitHint.value = '正在连接云端，请稍候...'
+  const slowHintTimer = setTimeout(() => {
+    if (isSubmittingContrib.value) {
+      submitHint.value = '网络响应较慢，可能是页面连接休眠。草稿已自动保存，可稍等或刷新后重试。'
+    }
+  }, SLOW_REQUEST_HINT_MS)
   
   try {
-    // ==========================================
-    // 🛡️ 第三防线：云端衣服编号精确查重 
-    // ==========================================
-    if (gameIdStr.toUpperCase() !== 'N') {
+    const executeSubmitRequest = async () => {
+      // ==========================================
+      // 🛡️ 第三防线：云端衣服编号精确查重
+      // ==========================================
       const { data: existClothes } = await supabase
         .from('clothes')
         .select('name')
         .eq('category', contribForm.category)
         .eq('game_id', gameIdStr)
         .limit(1);
-        
+
       if (existClothes && existClothes.length > 0) {
-        isSubmittingContrib.value = false; // 拦截时也要先解锁UI
-        return alert(`🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`);
+        return {
+          blocked: true,
+          message: `🛑 撞车拦截：\n分类【${contribForm.category}】的短编号【${gameIdStr}】已被占用！\n数据库中已有该服装：《${existClothes[0].name}》`
+        }
       }
-    }
 
-    // ==========================================
-    // 🚀 第四防线：10秒超时赛跑机制
-    // ==========================================
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('网络请求超时')), 10000)
-    );
-
-    const executeUpload = async () => {
-      const { data: authData, error: authErr } = await supabase.auth.getUser();
+      // ==========================================
+      // 🚀 第四防线：云端提交
+      // ==========================================
+      const { error: authErr } = await supabase.auth.getUser();
       if (authErr) throw new Error('登录校验失败: ' + authErr.message);
       
-      const userId = authData?.user?.id;
       const pairs = [
         { attr: contribForm.pair1, grade: contribForm.grade1 },
         { attr: contribForm.pair2, grade: contribForm.grade2 },
@@ -148,40 +227,50 @@ const submitContribution = async (name) => {
       ];
       const calculatedScores = calculateItemScores(contribForm.category, pairs);
 
+      // ... 准备 payload ... (保留原有的 payload 定义)
+      // ... 前面生成 payload 的代码保持不变 ...
       const payload = {
-        name: contribForm.name || name,
-        game_id: gameIdStr.toUpperCase() === 'N' ? 'N' : gameIdStr,
+        name: itemName,
+        game_id: gameIdStr,
         category: contribForm.category,
         stars: Number(contribForm.stars),
         scores: calculatedScores,
         suit_id: contribForm.suit_id || null,
         temp_suit_name: contribForm.suit_id ? null : (typedSuitName || null),
-        tags: contribForm.tags || null,
-        submitted_by: userId || null,
-        status: 'pending'
+        tags: normalizeClothingTags(contribForm.tags) || null
       };
 
-      const { error: dbErr } = await supabase.from('pending_clothes').insert(payload);
-      if (dbErr) throw new Error(dbErr.message);
+      const { error: submitErr } = await supabase.rpc('submit_clothing_contribution', {
+        p_name: payload.name,
+        p_game_id: payload.game_id,
+        p_category: payload.category,
+        p_stars: payload.stars,
+        p_scores: payload.scores,
+        p_suit_id: payload.suit_id,
+        p_temp_suit_name: payload.temp_suit_name,
+        p_tags: payload.tags
+      })
 
-      if (!contribForm.suit_id && typedSuitName) {
-        await supabase.from('pending_suits').upsert(
-          [{ name: typedSuitName }],
-          { onConflict: 'name', ignoreDuplicates: true }
-        );
-      }
-      return true; 
+      if (submitErr) throw new Error(submitErr.message)
+      return { success: true }
     };
 
-    // 执行赛跑
-    await Promise.race([executeUpload(), timeoutPromise]);
+    const result = await withTimeout(executeSubmitRequest());
+
+    if (result?.blocked) {
+      isSubmittingContrib.value = false;
+      submitHint.value = '';
+      return alert(result.message);
+    }
 
     // ==========================================
     // 🌟 成功：先关掉转圈圈，再弹窗
     // ==========================================
     isSubmittingContrib.value = false; 
+    submitHint.value = '';
     setTimeout(() => {
       alert(`🎉 提交成功！`);
+      clearContributionDraft(name);
       lastNotFoundNames.value = lastNotFoundNames.value.filter(n => n !== name);
       activeContribution.value = null;
     }, 50); // 延迟 50 毫秒，确保 Vue 已经把动画从屏幕上移除了
@@ -193,11 +282,12 @@ const submitContribution = async (name) => {
     // 🌟 失败：强制先关掉转圈圈，防止卡死！
     // ==========================================
     isSubmittingContrib.value = false;
+    submitHint.value = '';
     
     setTimeout(() => {
       // 既然刷新能解决，如果检测到超时或认证失败（僵尸状态），直接提示刷新！
       if (err.message.includes('超时') || err.message.includes('校验失败')) {
-        const needRefresh = confirm('⚠️ 页面离开太久，网络连接已休眠！\n\n为确保数据成功录入，需要刷新页面重新激活。是否立即刷新？');
+        const needRefresh = confirm('⚠️ 网络连接可能已休眠，提交没有完成。\n\n你填写的内容已自动保存在本地草稿中。建议刷新页面后重新提交。\n\n是否立即刷新？');
         if (needRefresh) {
           window.location.reload(); // 帮玩家一键刷新网页
         }
@@ -209,10 +299,11 @@ const submitContribution = async (name) => {
     if (typeof logErrorToCloud === 'function') {
       logErrorToCloud('submit_missing_item', err);
     }
+  } finally {
+    clearTimeout(slowHintTimer)
   }
 }
 </script>
-
 <template>
   <div v-if="lastNotFoundNames.length > 0" class="space-y-3">
     <div class="flex items-center gap-2 px-1">
@@ -221,94 +312,45 @@ const submitContribution = async (name) => {
     </div>
 
     <div class="space-y-3 pr-2">
-      <div v-for="name in displayNotFoundNames" :key="name"
-        class="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-sm">
-        <div class="flex justify-between items-center">
-          <span class="font-black text-slate-700">{{ name }}</span>
-          <button @click="activeContribution = (activeContribution === name ? null : name)"
-            class="btn btn-xs btn-outline btn-secondary rounded-full">
+      <div v-for="name in displayNotFoundNames" :key="name" class="bg-white border-2 border-slate-100 rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-center gap-3">
+          <span class="font-black text-slate-700 truncate">{{ name }}</span>
+          <button
+            type="button"
+            class="btn btn-xs btn-outline btn-secondary rounded-full shrink-0"
+            @click="activeContribution = (activeContribution === name ? null : name)"
+          >
             {{ activeContribution === name ? '收起' : '完善资料' }}
           </button>
         </div>
 
         <Transition name="slide">
-          <div v-if="activeContribution === name" class="mt-4 pt-4 border-t border-dashed space-y-4">
-            <div class="grid gap-4 text-xs">
-              <div class="flex flex-col gap-1">
-                <span class="font-bold text-slate-400">服装名称</span>
-                <input type="text" v-model="contribForm.name"
-                  class="input input-bordered w-full font-bold text-slate-700" />
-              </div>
-              <div class="flex flex-col gap-1">
-                <span class="font-bold text-slate-400">所属套装</span>
-                <div class="relative w-full">
-                  <input type="text" v-model="suitSearchText" @focus="isSuitDropdownOpen = true" @blur="handleSuitBlur" placeholder="搜索或输入新套装..." class="input input-sm input-bordered w-full font-bold bg-slate-50 focus:bg-white" />
-                  
-                  <div v-show="isSuitDropdownOpen" class="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-40 overflow-y-auto">
-                    <div class="p-2 hover:bg-pink-50 font-bold cursor-pointer text-slate-500" @mousedown.prevent="selectSuit({id: '', name: ''})">-- 无关联套装 --</div>
-                    <div v-for="s in filteredSuits" :key="s.id" class="p-2 hover:bg-pink-50 font-bold cursor-pointer" @mousedown.prevent="selectSuit(s)">《{{ s.name }}》</div>
-                    
-                    <div 
-                      v-if="filteredSuits.length === 0 && suitSearchText.trim() !== ''" 
-                      class="p-2 bg-purple-50 text-purple-600 font-bold cursor-pointer border-t border-purple-100 flex justify-between items-center"
-                      @mousedown.prevent="applyShadowSuit(suitSearchText)"
-                    >
-                      <span class="text-xs">⚠️ 暂无《{{ suitSearchText.replace(/[《》]/g, '') }}》</span>
-                      <span class="bg-purple-500 text-white px-2 py-0.5 rounded text-[10px] shadow-sm">一键申请并应用</span>
-                    </div>
-                  </div>
+          <div v-if="activeContribution === name" class="mt-4 pt-4 border-t border-dashed">
+            <ClothesEntryForm
+              :key="activeContribution"
+              :form="contribForm"
+              v-model:suitSearchText="suitSearchText"
+          :availableSuits="props.availableSuits"
+          :isSubmitting="isSubmittingContrib"
+          submitText="🚀 提交图鉴申请"
+          submitLoadingText="正在提交申请..."
+          suitNotFoundText="一键申请并应用"
+              :showGameIdWarning="true"
+              @submit="submitContribution(name)"
+              @create-suit="applyShadowSuit"
+            >
+              <template #admin-tips>
+                <div v-if="submitHint" class="submit-hint">
+                  {{ submitHint }}
                 </div>
-              </div>
-              
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <span class="font-bold text-rose-500 mb-1 block">短编号 (必填)</span>
-                  <input type="text" v-model="contribForm.game_id" class="input input-bordered w-full font-bold border-rose-200 focus:border-rose-400 bg-rose-50/30" placeholder="请辛苦一下在游戏中查找哦" />
-                </div>
-                <div><span class="font-bold text-slate-400 mb-1 block">分类部位</span><select v-model="contribForm.category" class="select select-bordered font-bold w-full"><option v-for="cat in fullCategories" :key="cat">{{cat}}</option></select></div>
-                <div><span class="font-bold text-slate-400 mb-1 block">星级</span><select v-model="contribForm.stars" class="select select-bordered font-bold w-full"><option v-for="s in 6" :key="s" :value="s">{{s}} 星</option></select></div>
-              </div>
-
-              <div>
-                <span class="font-bold text-slate-400 mb-1 block">特殊标签</span>
-                <input type="text" v-model="contribForm.tags" class="input input-sm input-bordered w-full font-bold"
-                  placeholder="如: 洛丽塔, 中式古典..." />
-              </div>
-
-              <div class="flex flex-col gap-3">
-                <div v-for="i in 5" :key="i" class="grid grid-cols-2 gap-3">
-                  <select v-model="contribForm['pair' + i]" class="select select-bordered w-full font-bold">
-                    <option v-if="i == 1" value="simple">简约</option>
-                    <option v-if="i == 1" value="gorgeous">华丽</option>
-                    <option v-if="i == 2" value="active">活泼</option>
-                    <option v-if="i == 2" value="elegant">优雅</option>
-                    <option v-if="i == 3" value="cute">可爱</option>
-                    <option v-if="i == 3" value="mature">成熟</option>
-                    <option v-if="i == 4" value="pure">清纯</option>
-                    <option v-if="i == 4" value="sexy">性感</option>
-                    <option v-if="i == 5" value="cool">清凉</option>
-                    <option v-if="i == 5" value="warm">保暖</option>
-                  </select>
-                  <select v-model="contribForm['grade' + i]"
-                    class="select select-bordered w-full font-bold bg-pink-50 text-pink-500 border-pink-200">
-                    <option v-for="g in GRADE_OPTIONS" :key="g">{{ g }}</option>
-                  </select>
-                </div>
-              </div>
-
-              <button class="btn btn-primary w-full shadow-md font-black mt-2" @click="submitContribution(name)"
-                :disabled="isSubmittingContrib">
-                <span v-if="isSubmittingContrib" class="loading loading-spinner loading-sm"></span>
-                {{ isSubmittingContrib ? '上传中...' : '🚀 确认提交申请' }}
-              </button>
-            </div>
+              </template>
+            </ClothesEntryForm>
           </div>
         </Transition>
       </div>
 
-      <div v-if="lastNotFoundNames.length > 3"
-        class="text-center py-2 text-xs font-bold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-        👇 还有 {{ lastNotFoundNames.length - 3 }} 件缺失服装正在排队...
+      <div v-if="lastNotFoundNames.length > 3" class="text-center py-2 text-xs font-bold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        还有 {{ lastNotFoundNames.length - 3 }} 件缺失服装正在排队
       </div>
     </div>
   </div>
@@ -510,6 +552,17 @@ const submitContribution = async (name) => {
   cursor: not-allowed;
   background: #cbd5e1;
   box-shadow: none;
+}
+
+.submit-hint {
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  color: #c2410c;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 /* =========================================

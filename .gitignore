@@ -13,6 +13,9 @@ dist
 dist-ssr
 coverage
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
@@ -39,3 +42,12 @@ __screenshots__/
 *.timestamp-*-*.mjs
 
 .vercel
+
+# Supabase local link/cache state.
+# This directory contains project refs and local CLI metadata and must not be
+# shared between production and development environments.
+supabase/.temp/
+
+# Local database operation scripts that may contain production snapshots or
+# destructive SQL. Keep them out of the repository.
+docs/database/local-only/

@@ -2,6 +2,8 @@
 import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
+import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
 
@@ -11,17 +13,18 @@ export function useAudit() {
     const currentUserId = ref(null)
     const allUsersList = ref([])
     const pendingList = ref([])
+    const existingClothesList = ref([])
     const pendingSuitsList = ref([])
     const suitList = ref([])
     const isPendingLoading = ref(false)
     const isSubmitting = ref(false)
+    const auditSelectionInfo = ref(null)
 
     // 待提交的新图鉴表单数据
     // 将 newClothes 替换为：
     const newClothes = reactive({
-        pendingIds: [], suit_id: '', game_id: '', name: '', category: '发型', stars: 5, tags: '',
-        // 🌟 活泼 active 变成了 pair2
-        pair1: 'simple', grade1: '完美', pair2: 'active', grade2: '完美', pair3: 'cute', grade3: '完美', pair4: 'pure', grade4: '完美', pair5: 'cool', grade5: '完美'
+        pendingIds: [],
+        ...createClothesEntryFormState()
     })
     // 2. 官方分值矩阵 (内部常量)
     
@@ -31,6 +34,129 @@ export function useAudit() {
         const counts = {}
         arr.forEach(v => counts[v] = (counts[v] || 0) + 1)
         return Object.keys(counts).reduce((a, b) => counts[a] >= counts[b] ? a : b)
+    }
+
+    const normalizeText = (value) => String(value ?? '').trim()
+
+    const stableStringify = (value) => {
+        if (value === null || value === undefined) return ''
+        if (typeof value !== 'object') return String(value)
+        if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+        return `{${Object.keys(value).sort().map(key => `${key}:${stableStringify(value[key])}`).join(',')}}`
+    }
+
+    const getPendingItemKey = (item) => {
+        const gameId = normalizeText(item.game_id)
+        return gameId && gameId !== 'N'
+            ? `${normalizeText(item.category)}::${gameId}`
+            : `NAME::${normalizeText(item.name)}`
+    }
+
+    const getVariantKey = (item) => [
+        normalizeText(item.name),
+        normalizeText(item.category),
+        normalizeText(item.game_id),
+        normalizeText(item.stars),
+        normalizeText(item.suit_id),
+        normalizeText(item.temp_suit_name),
+        normalizeClothingTags(item.tags) || '',
+        stableStringify(item.scores || {})
+    ].join('||')
+
+    const countSubmitters = (items) => new Set(
+        items.map(item => item.submitted_by).filter(Boolean)
+    ).size
+
+    const createKnownClothesMap = () => {
+        const map = new Map()
+        existingClothesList.value.forEach(item => {
+            const gameId = normalizeText(item.game_id)
+            const category = normalizeText(item.category)
+            if (!gameId || !category) return
+            const key = `${category}::${gameId}`
+            if (!map.has(key)) map.set(key, [])
+            map.get(key).push(item)
+        })
+        return map
+    }
+
+    const analyzePendingGroup = (group, knownClothesMap) => {
+        const variants = new Map()
+        group.items.forEach(item => {
+            const key = getVariantKey(item)
+            if (!variants.has(key)) variants.set(key, [])
+            variants.get(key).push(item)
+        })
+
+        const variantList = Array.from(variants.values())
+            .map(items => ({
+                items,
+                rowCount: items.length,
+                submitterCount: countSubmitters(items),
+                sample: items[0]
+            }))
+            .sort((a, b) => b.submitterCount - a.submitterCount || b.rowCount - a.rowCount)
+
+        const gameId = normalizeText(group.items[0]?.game_id)
+        const category = normalizeText(group.items[0]?.category)
+        const knownClothes = knownClothesMap.get(`${category}::${gameId}`) || []
+        const topVariant = variantList[0] || null
+        const distinctSubmitterCount = countSubmitters(group.items)
+        const anonymousCount = group.items.filter(item => !item.submitted_by).length
+        const hasConflict = variantList.length > 1
+        const hasKnownClothes = knownClothes.length > 0
+        const topSubmitterCount = topVariant?.submitterCount || 0
+        const legacyOnly = distinctSubmitterCount === 0 && group.items.length > 0
+
+        let candidateStatus = 'insufficient'
+        let statusLabel = '人数不足'
+        let statusClass = 'bg-slate-100 text-slate-500'
+        let riskRank = 4
+
+        if (hasKnownClothes) {
+            candidateStatus = 'known'
+            statusLabel = '正式库已有'
+            statusClass = 'bg-blue-100 text-blue-600'
+            riskRank = 3
+        } else if (legacyOnly) {
+            candidateStatus = 'legacy'
+            statusLabel = '匿名历史数据'
+            statusClass = 'bg-slate-100 text-slate-500'
+            riskRank = 5
+        } else if (topSubmitterCount >= 5 && hasConflict) {
+            candidateStatus = 'conflict'
+            statusLabel = '可按多数入库'
+            statusClass = 'bg-amber-100 text-amber-700'
+            riskRank = 1
+        } else if (topSubmitterCount >= 5) {
+            candidateStatus = 'ready'
+            statusLabel = '可入库'
+            statusClass = 'bg-emerald-100 text-emerald-700'
+            riskRank = 0
+        } else if (hasConflict) {
+            candidateStatus = 'weak_conflict'
+            statusLabel = '需要继续收集'
+            statusClass = 'bg-orange-100 text-orange-600'
+            riskRank = 2
+        }
+
+        return {
+            ...group,
+            totalRows: group.items.length,
+            distinctSubmitterCount,
+            anonymousCount,
+            variantCount: variantList.length,
+            variants: variantList,
+            topVariant,
+            topSubmitterCount,
+            knownClothes,
+            hasKnownClothes,
+            hasConflict,
+            candidateStatus,
+            statusLabel,
+            statusClass,
+            riskRank
+        }
     }
 
     // 3. 数据拉取方法 (🚀 极速且防崩溃版)
@@ -52,12 +178,13 @@ export function useAudit() {
             currentUserRole.value = role
 
             // 🌟 3. 结算待办数据
-            const { pendingClothes, pendingSuits, countsMap } = await pendingPromise
+            const { pendingClothes, pendingSuits, countsMap, existingClothes } = await pendingPromise
             pendingList.value = pendingClothes || []
+            existingClothesList.value = existingClothes || []
             pendingSuitsList.value = pendingSuits || []
 
             // 🌟 4. 只有确认为站长后，才去拉取人员名单（同样加上防崩溃保护）
-            if (role === 'super_admin' || role === 'admin') {
+            if (isAdminRole(role)) {
                 allUsersList.value = await adminService.getAllUsers(countsMap).catch(err => {
                     console.error("获取全站用户名单失败:", err)
                     return []
@@ -80,20 +207,42 @@ export function useAudit() {
     const clusteredPendingList = computed(() => {
         const groups = {}
         if (!pendingList.value || !Array.isArray(pendingList.value)) return [] // 👈 增加这行绝对防御
+        const knownClothesMap = createKnownClothesMap()
 
         pendingList.value.forEach(item => {
-            const key = (item.game_id && item.game_id !== 'N') ? `${item.category}_${item.game_id}` : `NAME_${item.name}`
-            if (!groups[key]) groups[key] = { key, items: [] }
+            const key = getPendingItemKey(item)
+            if (!groups[key]) groups[key] = { key, name: item.name || '未命名散件', items: [] }
             groups[key].items.push(item)
         })
-        return Object.values(groups)
+        return Object.values(groups).map(group => analyzePendingGroup(group, knownClothesMap))
     })
 
     // 5. 仲裁处理逻辑
     const processClusteredItem = (group) => {
-        const items = group.items
+        const items = group.topVariant?.items?.length ? group.topVariant.items : group.items
         const userMap = Object.fromEntries(allUsersList.value.map(u => [u.id, u.contribCount]))
         const bestItem = items.reduce((prev, curr) => (userMap[curr.submitted_by] || 0) > (userMap[prev.submitted_by] || 0) ? curr : prev)
+        auditSelectionInfo.value = {
+            selectedCount: items.length,
+            totalCount: group.items.length,
+            selectedSubmitterCount: countSubmitters(items),
+            totalSubmitterCount: group.distinctSubmitterCount || countSubmitters(group.items),
+            conflictCount: Math.max((group.variantCount || 1) - 1, 0),
+            statusLabel: group.statusLabel || '',
+            variants: (group.variants || []).map((variant, index) => ({
+                key: `${group.key}_${index}`,
+                selected: variant === group.topVariant,
+                rowCount: variant.rowCount,
+                submitterCount: variant.submitterCount,
+                name: variant.sample?.name || '',
+                stars: variant.sample?.stars || '',
+                suitLabel: variant.sample?.suit_id
+                    ? '已关联套装'
+                    : (variant.sample?.temp_suit_name ? `新套装：${variant.sample.temp_suit_name}` : '无关联套装'),
+                tags: normalizeClothingTags(variant.sample?.tags) || '无标签',
+                pendingIds: variant.items.map(item => item.id).join(', ')
+            }))
+        }
 
         newClothes.pendingIds = items.map(i => i.id)
         newClothes.name = bestItem.name
@@ -101,9 +250,9 @@ export function useAudit() {
         newClothes.category = bestItem.category
         newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)))
         newClothes.suit_id = bestItem.suit_id || ''
+        newClothes.suit_status = bestItem.suit_id ? 'existing' : ''
 
-        const allTags = items.flatMap(i => i.tags ? (Array.isArray(i.tags) ? i.tags : i.tags.split(/[,，\s]+/)) : []).map(t => t.trim())
-        newClothes.tags = [...new Set(allTags)].filter(t => t).join(', ')
+        newClothes.tags = normalizeClothingTags(items.map(i => i.tags))
 
         if (bestItem.scores) {
             const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
@@ -143,7 +292,27 @@ export function useAudit() {
 
     // 6. 最终执行入库
     const executeSubmit = async () => {
-        if (!newClothes.name) throw new Error('名字是必填项哦！')
+        const missingFields = []
+        const gameId = String(newClothes.game_id || '').trim()
+
+        const clothesName = String(newClothes.name || '').trim()
+
+        if (!clothesName) missingFields.push('服装名称')
+        if (!String(newClothes.category || '').trim()) missingFields.push('分类部位')
+        if (!gameId) missingFields.push('短编号')
+        if (gameId && !/^\d+$/.test(gameId)) missingFields.push('数字短编号')
+        if (!newClothes.stars) missingFields.push('星级')
+        if (!newClothes.suit_id && newClothes.suit_status !== 'none') missingFields.push('套装状态')
+        ATTRIBUTE_PAIRS.forEach((pair, index) => {
+            if (!newClothes[pair.key] || !newClothes[pair.gradeKey]) {
+                missingFields.push(`第 ${index + 1} 组属性`)
+            }
+        })
+
+        if (missingFields.length) {
+            throw new Error(`请先补全核心字段：${missingFields.join('、')}。特殊标签为选填。`)
+        }
+
         isSubmitting.value = true
         try {
             const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
@@ -155,17 +324,30 @@ export function useAudit() {
             })
 
             const payload = {
-                id: `custom_${Date.now()}`, game_id: newClothes.game_id || 'N', name: newClothes.name,
+                id: `custom_${Date.now()}`, game_id: gameId, name: clothesName,
                 category: newClothes.category, stars: Number(newClothes.stars), scores: calculatedScores,
                 suit_id: newClothes.suit_id || null,
-                // 🌟 修复：确保 tags 哪怕被意外清空也是个安全字符串，再进行拆分
-                tags: (newClothes.tags || '').split(/[,，\s]+/).filter(t => t)
+                tags: normalizeClothingTags(newClothes.tags) || null
             }
 
-            await adminService.submitArbitration(payload, newClothes.pendingIds)
+            const pendingIds = newClothes.pendingIds || []
+            const existingClothes = await adminService.findClothesByNameCategory(clothesName, newClothes.category)
+            if (existingClothes) {
+                if (!pendingIds.length) {
+                    throw new Error(`正式库已存在「${existingClothes.name}」（${existingClothes.category}，短编号 ${existingClothes.game_id || '无'}），不能重复发布。`)
+                }
+
+                await adminService.completeExistingClothes(
+                    { ...payload, id: existingClothes.id },
+                    pendingIds
+                )
+            } else {
+                await adminService.submitArbitration(payload, pendingIds)
+            }
 
             const successName = newClothes.name
-            Object.assign(newClothes, { name: '', game_id: '', tags: '', suit_id: '', pendingIds: [] })
+            Object.assign(newClothes, { ...createClothesEntryFormState(), pendingIds: [] })
+            auditSelectionInfo.value = null
             await fetchAllData()
             return successName
         } finally {
@@ -178,20 +360,20 @@ export function useAudit() {
         await fetchAllData()
     }
 
-    // 🌟 补充：新增套装专用的批准与驳回方法
-    const approvePendingSuit = async (id, name) => {
-        await adminService.approveSuit(id, name)
+    const approvePendingSuit = async (suitName) => {
+        await adminService.approveSuit(suitName)
         await fetchAllData()
+        await fetchSuits()
     }
-    const rejectPendingSuit = async (id) => {
-        await adminService.rejectPending('pending_suits', id)
+    const rejectPendingSuit = async (suitName) => {
+        await adminService.rejectPendingSuitsByName(suitName)
         await fetchAllData()
     }
 
     // 对外暴露的属性和方法
     return {
         currentUserRole, currentUserId, allUsersList,
-        pendingSuitsList, suitList, isPendingLoading, isSubmitting, newClothes,
+        pendingSuitsList, suitList, isPendingLoading, isSubmitting, newClothes, auditSelectionInfo,
         fetchAllData, fetchSuits, clusteredPendingList,
         processClusteredItem, executeSubmit, rejectPendingItem,
         approvePendingSuit, rejectPendingSuit // 👈 🌟 记得在这里把它们暴露出去！

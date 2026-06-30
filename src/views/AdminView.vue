@@ -2,19 +2,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAudit } from '../composables/useAudit'
 import UserManageBoard from '../components/UserManageBoard.vue'
-import ScoreAttributePanel from '../components/ScoreAttributePanel.vue'
 import { supabase } from '../api/supabase' // 🌟 新增这一行：引入数据库实例
+import ClothesEntryForm from '../components/ClothesEntryForm.vue'
+import { isSuperAdminRole } from '../utils/roles'
 const emit = defineEmits(['back-to-main'])
 
 // 1. 本地纯 UI 状态
 const activeTab = ref('audit')
 const suitSearchText = ref('')
-const isSuitDropdownOpen = ref(false)
+const activeAuditFilter = ref('all')
 
 // 2. 引入后台仲裁大脑
 const {
   currentUserRole, currentUserId, allUsersList,
-  pendingSuitsList, suitList, isSubmitting, newClothes,
+  pendingSuitsList, suitList, isSubmitting, newClothes, auditSelectionInfo,
   fetchAllData, fetchSuits, clusteredPendingList,
   processClusteredItem, executeSubmit, rejectPendingItem,
   approvePendingSuit, rejectPendingSuit
@@ -23,11 +24,34 @@ const {
 // 🌟 1. 新增：消消乐模式的排队与热度排序逻辑
 const sortedPendingList = computed(() => {
   if (!clusteredPendingList.value) return []
-  // 按照玩家提交人数（items.length）降序排列，越热门的越靠前
-  return [...clusteredPendingList.value].sort((a, b) => b.items.length - a.items.length)
+  return [...clusteredPendingList.value].sort((a, b) => (
+    a.riskRank - b.riskRank
+    || b.topSubmitterCount - a.topSubmitterCount
+    || b.distinctSubmitterCount - a.distinctSubmitterCount
+    || b.items.length - a.items.length
+  ))
 })
-// 永远只显示前 6 个，审核掉一个，下一个自动补位
-const displayPendingList = computed(() => sortedPendingList.value.slice(0, 6))
+const auditFilterOptions = computed(() => {
+  const list = sortedPendingList.value
+  const countBy = (predicate) => list.filter(predicate).length
+  return [
+    { key: 'all', label: '全部', count: list.length },
+    { key: 'ready', label: '可入库', count: countBy(group => group.candidateStatus === 'ready') },
+    { key: 'conflict', label: '有不同意见', count: countBy(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict') },
+    { key: 'known', label: '正式库已有', count: countBy(group => group.candidateStatus === 'known') },
+    { key: 'insufficient', label: '人数不足', count: countBy(group => group.candidateStatus === 'insufficient') },
+    { key: 'legacy', label: '匿名历史数据', count: countBy(group => group.candidateStatus === 'legacy') }
+  ]
+})
+const filteredPendingList = computed(() => {
+  if (activeAuditFilter.value === 'all') return sortedPendingList.value
+  if (activeAuditFilter.value === 'conflict') {
+    return sortedPendingList.value.filter(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict')
+  }
+  return sortedPendingList.value.filter(group => group.candidateStatus === activeAuditFilter.value)
+})
+// 每次只展示一屏候选，审核掉一个，下一个自动补位
+const displayPendingList = computed(() => filteredPendingList.value.slice(0, 9))
 
 // 🌟 2. 新增：套装申请列表的去重与热度统计
 const uniquePendingSuits = computed(() => {
@@ -98,15 +122,9 @@ const handleClusteredItem = (group) => {
 // 搜索下拉框相关逻辑
 const selectSuit = (suit) => {
   newClothes.suit_id = suit.id
+  newClothes.suit_status = suit.id ? 'existing' : ''
   suitSearchText.value = suit.id ? `《${suit.name}》` : ''
-  isSuitDropdownOpen.value = false
 }
-
-const filteredSuits = computed(() => {
-  const query = suitSearchText.value.toLowerCase().trim()
-  if (!query || query.startsWith('《')) return suitList.value.slice(0, 50)
-  return suitList.value.filter(s => s.name.includes(query)).slice(0, 50)
-})
 
 // 提交入库
 const submitNewClothes = async () => {
@@ -121,196 +139,147 @@ const submitNewClothes = async () => {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto p-4 md:p-6 min-h-screen pb-20 animate-[fadeIn_0.4s_ease]">
-    
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-sm mb-6 border border-slate-100">
-      <button class="btn btn-sm btn-ghost bg-slate-100 text-slate-600 font-bold hover:bg-slate-200" @click="emit('back-to-main')">
-        ⬅️ 返回玩家前台
-      </button>
-      <div class="flex items-center gap-2 text-sm font-bold text-slate-500">
-        当前登录身份：<span class="badge badge-primary badge-outline font-black">{{ currentUserRole }}</span>
+  <div class="admin-container pb-20 max-w-4xl mx-auto">
+    <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-6 border border-slate-100">
+      <div class="flex gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 w-full md:w-auto">
+        <button @click="activeTab = 'audit'" :class="activeTab === 'audit' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">👗 散件仲裁</button>
+        <button @click="activeTab = 'suits'" :class="activeTab === 'suits' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📦 套装审核</button>
+        <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'users'" :class="activeTab === 'users' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🛡️ 权限大盘</button>
       </div>
+      <button @click="emit('back-to-main')" class="mt-4 md:mt-0 text-sm font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"><span class="text-lg">🏠</span> 返回前台</button>
     </div>
 
-    <div class="tabs tabs-boxed bg-white/60 p-1 mb-6 shadow-sm border border-slate-100 rounded-xl">
-      <a class="tab font-bold text-sm h-10 flex-1 transition-all" 
-         :class="{'tab-active !bg-primary !text-white shadow-md': activeTab === 'audit'}" 
-         @click="activeTab = 'audit'">📋 聚类审核中心</a>
-      <a v-if="currentUserRole === 'super_admin'" 
-         class="tab font-bold text-sm h-10 flex-1 transition-all" 
-         :class="{'tab-active !bg-primary !text-white shadow-md': activeTab === 'users'}" 
-         @click="activeTab = 'users'">👑 全站用户与权限</a>
-    </div>
-
-    <div v-show="activeTab === 'audit'" class="space-y-6">
-      
-      <section class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-50">
-          <h3 class="text-lg md:text-xl font-black text-purple-600 m-0">🎁 套装建档申请</h3>
-          <span class="badge badge-sm badge-ghost font-bold">{{ uniquePendingSuits.length }} 组待办</span>
-        </div>
-        
-        <div v-if="uniquePendingSuits.length > 0" class="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-2 custom-scroll">
-          <div v-for="suit in uniquePendingSuits" :key="suit.name" class="flex justify-between items-center bg-slate-50 hover:bg-white p-3 md:p-4 rounded-xl border border-slate-100 hover:border-purple-200 transition-all shadow-sm">
-            
-            <div class="flex items-center gap-2">
-              <span class="font-black text-purple-600 text-sm">《{{ suit.name }}》</span>
-              <span v-if="suit.count > 1" class="text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-md">
-                🔥 {{ suit.count }} 人提交
-              </span>
-            </div>
-            
-            <div class="flex gap-2">
-              <button class="btn btn-xs md:btn-sm btn-success text-white font-bold" @click="approvePendingSuit(suit.id, suit.name)">✅ 批准建档</button>
-              <button class="btn btn-xs md:btn-sm btn-error btn-outline font-bold" @click="rejectPendingSuit(suit.id)">❌</button>
-            </div>
+    <div v-show="activeTab === 'audit'">
+      <section v-if="sortedPendingList.length > 0" class="mb-8">
+        <div class="mb-4 flex flex-col gap-3">
+          <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">🔥 自动入库候选</h3>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="option in auditFilterOptions"
+              :key="option.key"
+              type="button"
+              @click="activeAuditFilter = option.key"
+              class="rounded-full border px-3 py-1.5 text-xs font-black transition-all"
+              :class="activeAuditFilter === option.key ? 'border-purple-300 bg-purple-50 text-purple-700 shadow-sm' : 'border-slate-100 bg-white text-slate-500 hover:border-purple-200 hover:text-purple-600'"
+            >
+              {{ option.label }} {{ option.count }}
+            </button>
           </div>
         </div>
-        <div v-else class="py-8 text-center text-slate-400 font-bold text-sm bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-          🎉 太棒了，目前没有任何套装申请待处理！
+        <div v-if="displayPendingList.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-6 text-center text-sm font-bold text-slate-400">
+          当前筛选下暂无候选。
         </div>
-      </section>
-
-      <section class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-50">
-          <h3 class="text-lg md:text-xl font-black text-pink-500 m-0">🔔 散件众筹审核</h3>
-          <span class="badge badge-sm badge-ghost font-bold">{{ clusteredPendingList?.length || 0 }} 组待办</span>
-        </div>
-
-        <div v-if="sortedPendingList && sortedPendingList.length > 0" class="flex flex-col gap-4">
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div v-for="group in displayPendingList" :key="group.key" class="bg-white border-2 border-slate-100 hover:border-purple-200 rounded-2xl p-4 flex flex-col gap-3 relative overflow-hidden shadow-sm transition-all hover:shadow-md hover:-translate-y-1">
-              <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-pink-400 to-purple-500"></div>
-              
-              <div class="flex flex-col gap-2">
-                <h4 class="font-black text-slate-800 text-base m-0">{{ group.items[0].name }}</h4>
-                <div class="flex flex-wrap gap-1.5">
-                  <span class="text-[10px] font-bold bg-purple-50 text-purple-600 px-2 py-0.5 rounded-md">{{ group.items[0].category }}</span>
-                  <span v-if="group.items[0].game_id && group.items[0].game_id !== 'N'" class="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">#{{ group.items[0].game_id }}</span>
-                  <span class="text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100 px-2 py-0.5 rounded-md">🔥 {{ group.items.length }} 人提交</span>
-                </div>
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div v-for="group in displayPendingList" :key="group.key" @click="handleClusteredItem(group)" class="bg-white border-2 border-slate-100 hover:border-purple-300 p-4 rounded-xl cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md group">
+            <div class="flex justify-between items-start mb-2">
+              <span class="font-black text-slate-700 truncate pr-2 group-hover:text-purple-600">{{ group.name || group.items[0]?.name || '未命名散件' }}</span>
+              <span class="font-black text-xs px-2 py-1 rounded-md shrink-0" :class="group.statusClass">{{ group.statusLabel }}</span>
+            </div>
+            <div class="text-xs font-bold text-slate-400 truncate">短编号: {{ group.items[0].game_id || 'N' }} | {{ group.items[0].category }}</div>
+            <div class="mt-3 space-y-1.5 text-xs font-bold text-slate-500">
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>提交人数</span>
+                <span class="text-slate-800">{{ group.distinctSubmitterCount }} 人</span>
               </div>
-              
-              <div class="grid grid-cols-2 gap-2 mt-auto pt-3 border-t border-dashed border-slate-100">
-                <button class="btn btn-sm px-0 text-xs whitespace-nowrap bg-purple-50 text-purple-600 border-purple-100 hover:bg-purple-500 hover:text-white transition-all" @click="handleClusteredItem(group)">✍️ 仲裁</button>
-                <button class="btn btn-sm px-0 text-xs whitespace-nowrap bg-slate-50 text-slate-500 border-slate-200 hover:bg-rose-500 hover:text-white transition-colors" @click="rejectPendingItem(group.items[0].id)">🗑️ 驳回</button>
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>总提交</span>
+                <span class="text-slate-800">{{ group.items.length }} 条</span>
+              </div>
+              <div v-if="group.hasConflict" class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>最多人认可</span>
+                <span class="text-slate-800">{{ group.topSubmitterCount }} 人</span>
+              </div>
+              <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span>资料一致情况</span>
+                <span
+                  :class="group.hasConflict ? 'text-amber-600' : (group.topSubmitterCount >= 5 ? 'text-emerald-600' : 'text-slate-800')"
+                >
+                  {{ group.hasConflict ? '有不同意见' : (group.topSubmitterCount >= 5 ? '全部一致' : '暂未足够') }}
+                </span>
               </div>
             </div>
+            <div class="mt-2 flex flex-wrap gap-1 text-[11px] font-bold">
+              <span v-if="group.anonymousCount" class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">匿名提交 {{ group.anonymousCount }} 条</span>
+              <span v-if="group.hasKnownClothes" class="rounded-full bg-blue-50 px-2 py-0.5 text-blue-500">正式库已存在</span>
+            </div>
           </div>
-          
-          <div v-if="sortedPendingList.length > 6" class="text-center py-2 text-xs font-bold text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-            👇 还有 {{ sortedPendingList.length - 6 }} 组申请正在排队...
-          </div>
-        </div>
-        <div v-else class="py-8 text-center text-slate-400 font-bold text-sm bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-          🎉 太棒了，目前没有任何散件申请待处理！
         </div>
       </section>
 
       <section id="entry-form" class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 border-t-4 border-t-primary mt-6">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-5 pb-4 border-b border-slate-50">
+        <div class="flex justify-between items-center mb-5 pb-4 border-b border-slate-50">
           <h3 class="text-lg md:text-xl font-black text-slate-800 m-0">👑 图鉴仲裁入库</h3>
-          <span v-if="newClothes.pendingIds.length" class="text-xs font-bold bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full border border-emerald-100">
-            正在合并处理 {{ newClothes.pendingIds.length }} 份玩家数据
-          </span>
         </div>
         
-        <div class="mini-form-body">
-          
-          <div class="form-row" style="grid-template-columns: 1fr;">
-            <div class="form-group">
-              <label>服装名称</label>
-              <input type="text" v-model="newClothes.name" class="custom-input" placeholder="确认官方精准名称" />
-            </div>
-          </div>
-          
-          <div class="form-row" style="grid-template-columns: 1fr;">
-            <div class="form-group">
-              <label>归属套装</label>
-              <div style="display: flex; gap: 8px;">
-                <div class="searchable-select" style="flex: 1;">
-                  <input 
-                    type="text" 
-                    v-model="suitSearchText" 
-                    @focus="isSuitDropdownOpen = true"
-                    @blur="setTimeout(() => isSuitDropdownOpen = false, 200)"
-                    placeholder="🔍 搜索并选择套装..."
-                    class="search-input"
-                  />
-                  <Transition name="slide">
-                    <div v-if="isSuitDropdownOpen" class="select-dropdown">
-                      <div class="option" @click="selectSuit({id: '', name: ''})">-- 纯散件 (无关联套装) --</div>
-                      
-                      <div v-for="s in filteredSuits" :key="s.id" class="option" @click="selectSuit(s)">
-                        《{{ s.name }}》
-                      </div>
-
-                      <div 
-                        v-if="filteredSuits.length === 0 && suitSearchText.trim() !== ''" 
-                        class="option bg-purple-50 text-purple-600 font-bold flex justify-between items-center border border-purple-100 hover:bg-purple-100"
-                        @click="quickCreateSuit(suitSearchText)"
-                      >
-                        <span class="text-xs">⚠️ 库中暂无《{{ suitSearchText.replace(/[《》]/g, '') }}》</span>
-                        <span class="bg-purple-500 text-white px-2 py-1 rounded-md text-xs shadow-sm">➕ 秒建套装</span>
-                      </div>
-
-                    </div>
-                  </Transition>
+        <ClothesEntryForm 
+          :form="newClothes"
+          v-model:suitSearchText="suitSearchText"
+          :availableSuits="suitList"
+          :isSubmitting="isSubmitting"
+          :submitText="newClothes.pendingIds.length ? '✅ 仲裁完毕：一键入库并结案' : '🚀 发布全新图鉴'"
+          submitLoadingText="正在合并入库..."
+          suitNotFoundText="➕ 秒建套装"
+          @submit="submitNewClothes"
+          @create-suit="quickCreateSuit"
+        >
+          <template #admin-tips>
+            <div v-if="auditSelectionInfo" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 leading-relaxed">
+              <template v-if="auditSelectionInfo.conflictCount">
+                本次采用最多人认可的资料：{{ auditSelectionInfo.selectedSubmitterCount }} 人 / {{ auditSelectionInfo.selectedCount }} 条。
+                另有不同意见的提交，暂不入库。
+              </template>
+              <template v-else>
+                已有 {{ auditSelectionInfo.selectedSubmitterCount }} 人提交相同资料，可入库。
+              </template>
+              <div v-if="auditSelectionInfo.variants?.length > 1" class="mt-2 space-y-1.5">
+                <div
+                  v-for="variant in auditSelectionInfo.variants"
+                  :key="variant.key"
+                  class="rounded-lg border bg-white/70 px-2 py-1.5"
+                  :class="variant.selected ? 'border-emerald-200 text-emerald-700' : 'border-amber-100 text-amber-700'"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span>{{ variant.selected ? '本次采用' : '不同意见' }}</span>
+                    <span>{{ variant.submitterCount }} 人 / {{ variant.rowCount }} 条</span>
+                  </div>
+                  <div class="mt-1 text-[11px] font-bold text-slate-500">
+                    星级 {{ variant.stars }}；{{ variant.suitLabel }}；{{ variant.tags }}
+                  </div>
+                  <div class="mt-0.5 text-[10px] font-bold text-slate-400">
+                    pending: {{ variant.pendingIds }}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div class="form-row three-cols">
-            <div class="form-group">
-              <label>短编号(如001)</label>
-              <input type="text" v-model="newClothes.game_id" class="custom-input" placeholder="选填" />
-            </div>
-            <div class="form-group">
-              <label>分类部位</label>
-              <select v-model="newClothes.category" class="custom-input">
-                <option v-for="cat in ['发型', '连衣裙', '外套', '上装', '下装', '袜子-袜套', '袜子-袜子', '鞋子', '妆容', '萤光之灵', '饰品-头饰-发饰', '饰品-头饰-头纱', '饰品-头饰-发卡', '饰品-头饰-耳朵', '饰品-耳饰', '饰品-颈饰-围巾', '饰品-颈饰-项链', '饰品-手饰-右', '饰品-手饰-左', '饰品-手饰-双', '饰品-手持-右', '饰品-手持-左', '饰品-手持-双', '饰品-腰饰', '饰品-特殊-面饰', '饰品-特殊-胸饰', '饰品-特殊-纹身', '饰品-特殊-翅膀', '饰品-特殊-尾巴', '饰品-特殊-前景', '饰品-特殊-后景', '饰品-特殊-顶饰', '饰品-特殊-地面', '饰品-皮肤']" :key="cat">{{cat}}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>星级</label>
-              <select v-model="newClothes.stars" class="custom-input">
-                <option v-for="s in 6" :key="s" :value="s">{{s}} 星</option>
-              </select>
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label>特殊标签</label>
-              <input type="text" v-model="newClothes.tags" class="custom-input" placeholder="如: 洛丽塔, 中式古典..." />
-            </div>
-          </div>
+          </template>
+        </ClothesEntryForm>
+      </section>
+    </div>
 
-          <div class="bg-pink-50/40 border border-pink-100 border-dashed rounded-2xl p-4 md:p-5 mb-5 mt-3">
-            <p class="text-xs text-pink-600 font-bold mb-4">🎨 智能推荐：基于 {{ newClothes.pendingIds.length || 0 }} 份数据的众数计算</p>
-            <ScoreAttributePanel :form="newClothes" />
+    <div v-show="activeTab === 'suits'">
+      <section class="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-100 border-t-4 border-t-blue-500">
+        <h3 class="text-lg md:text-xl font-black text-slate-800 mb-5 pb-4 border-b border-slate-50">📦 待审核新建套装</h3>
+        <div v-if="uniquePendingSuits.length === 0" class="text-center py-10 text-slate-400 font-bold">暂无需要审核的套装申请哦~</div>
+        <div v-else class="space-y-3">
+          <div v-for="suit in uniquePendingSuits" :key="suit.name" class="flex flex-col sm:flex-row justify-between sm:items-center bg-slate-50 border border-slate-100 p-4 rounded-xl gap-3">
+            <div>
+              <div class="font-black text-slate-700 text-lg flex items-center gap-2">《{{ suit.name }}》 <span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded">{{ suit.count }} 人申请</span></div>
+              <div class="text-xs text-slate-400 font-bold mt-1">首次申请时间: {{ new Date(suit.created_at).toLocaleString() }}</div>
+            </div>
+            <div class="flex gap-2 shrink-0">
+              <button @click="rejectPendingSuit(suit.name)" class="px-4 py-2 bg-white border border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-200 font-bold text-sm rounded-lg transition-colors">驳回</button>
+              <button @click="approvePendingSuit(suit.name)" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm rounded-lg transition-colors shadow-sm shadow-blue-500/30">✅ 批准入库</button>
+            </div>
           </div>
-
-          <button class="btn-submit-contrib w-full" @click="submitNewClothes" :disabled="isSubmitting">
-            <span v-if="isSubmitting" class="loading loading-spinner loading-sm mr-2 inline-block"></span>
-            {{ isSubmitting ? '正在合并入库...' : (newClothes.pendingIds.length ? '✅ 仲裁完毕：一键入库并结案' : '🚀 发布全新图鉴') }}
-          </button>
-
         </div>
       </section>
     </div>
 
-    <div v-show="activeTab === 'users' && currentUserRole === 'super_admin'">
-      <UserManageBoard 
-        :allUsersList="allUsersList" 
-        :currentUserId="currentUserId || ''" 
-        @refresh-data="fetchAllData"
-      />
+    <div v-show="activeTab === 'users' && isSuperAdminRole(currentUserRole)">
+      <UserManageBoard :allUsersList="allUsersList" :currentUserId="currentUserId || ''" @refresh-data="fetchAllData" />
     </div>
   </div>
 </template>
-
 <style scoped>
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
