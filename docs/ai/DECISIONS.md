@@ -129,6 +129,18 @@
 - 积分由 delta 汇总计算。
 - `points_ledger` 记录积分来源与来源对象。
 
+### 数据库约束规则（v1）
+
+- `jury_votes` 必须具备 UNIQUE(user_id, audit_id) 约束。
+- `jury_votes` 不允许 UPDATE vote，只允许插入。
+- `jury_votes.vote` 只能是 approve / reject。
+- `points_ledger` 只允许 INSERT。
+- `points_ledger` 禁止 UPDATE / DELETE。
+- 积分由 SUM(delta) 计算。
+- `re_review_items.status` 只能是 pending / voting / approved / rejected / failed。
+- `re_review_items` 状态流转由 service 层控制。
+- DB 只负责约束 `re_review_items.status` 合法值。
+
 ### 前 5 有效提交者规则
 
 - 有效提交者必须满足：提交数据与最终入库数据一致，且 `submitted_by` 可识别为真实用户。

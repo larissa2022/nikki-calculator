@@ -57,6 +57,8 @@ Candidate Rule → Verified Pattern → Rule
 - 系统应优先采用“事件记录”而非“状态覆盖”。
 - 核心数据必须可重算（Reconstructable State Principle）。
 - 不得仅依赖最终状态存储业务结果。
+- 核心业务数据必须具备数据库层约束（唯一性 / 不可变性 / 状态合法性）。
+- 不可仅依赖应用层逻辑保证一致性。
 
 ## Codex Execution Protocol（执行协议）
 

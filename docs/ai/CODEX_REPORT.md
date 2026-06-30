@@ -333,6 +333,14 @@ Rule Pruning Phase completed。
 
 本轮仅文档修改，无代码/数据库变更。
 
+## 数据库约束已最小化定义
+
+- 已在 `docs/ai/DECISIONS.md` 补充数据库约束规则（v1），覆盖 `jury_votes`、`points_ledger`、`re_review_items` 的最小约束口径。
+- 已在 `docs/ai/RULES.md` 补充跨项目数据库一致性原则：核心业务数据必须具备数据库层约束，不可仅依赖应用层逻辑保证一致性。
+- `docs/ai/CURRENT_TASK.md` 已更新为进入 Codex 实现阶段（开始对接 service layer）。
+
+本轮仅文档修改，无代码/数据库变更。
+
 ## 陪审团投票幂等性规则第一版完成
 
 已补充陪审团投票幂等性规则到 `docs/ai/DECISIONS.md` Final：
