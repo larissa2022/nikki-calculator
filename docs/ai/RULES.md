@@ -44,13 +44,32 @@ Candidate Rule → Verified Pattern → Rule
 - Candidate Rule 保留最多 10 条。
 - 超过 10 条时，必须进入 Verified Pattern，或移入 Rejected Ideas 并从 Rule Candidates 移除。
 - Candidate Rule 超过 30 天未验证时，自动标记为 stale。
-- stale Candidate Rule 不自动删除，需在后续复盘中处理。
+- stale Candidate Rule 不自动删除，必须进入 Review Queue。
+- Review Queue 每次复盘必须清理或升级：清理到 Rejected Ideas，或升级为 Verified Pattern。
 
 ## Pattern Registry
 
 - Verified Pattern 必须有唯一编号，例如 `Pattern-01`、`Pattern-02`。
 - Verified Pattern 必须基于至少 2 次 GitHub 可验证行为。
 - Verified Pattern 不自动升级为 Rule，必须经用户确认后才能进入正式 Rule。
+- Pattern 状态包括：
+  - Active：当前仍适用。
+  - Deprecated：已废弃但不删除，用于保留历史判断。
+  - Superseded：已被新的 Pattern 或 Rule 替代。
+- 每个 Pattern 必须记录来源说明，且来源至少包含 2 次 GitHub 可验证行为。
+- 每个 Pattern 必须记录对应 Rule；如尚未升级为 Rule，则标记为“未升级”。
+
+## Rule Evolution Log
+
+记录 Candidate Rule → Verified Pattern → Rule 的转化历史。
+
+每条记录必须包含：
+
+- Candidate Rule 名称或摘要。
+- Pattern 编号。
+- Rule 归属位置：Project Rules 或 Personal Rules。
+- 用户确认时间。
+- GitHub commit reference；如果不存在，标记为“无”。
 
 ## Project Rules
 
