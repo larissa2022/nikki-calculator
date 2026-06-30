@@ -2,6 +2,17 @@
 
 本文档目录用于集中管理需求、开发计划、技术实现和数据库安全记录。
 
+AI / Codex 开始任何任务前，必须先阅读：
+
+- [AI 协作规则](ai/RULES.md)
+- [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)
+
+## 治理
+
+| 文档 | 作用 |
+| --- | --- |
+| [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md) | 规定 main / develop / feature 分支与 Vercel、Supabase 环境的对应关系 |
+
 ## 需求与规划
 
 | 文档 | 作用 |
@@ -26,10 +37,11 @@
 
 ## 阅读顺序
 
-1. 先看 [产品设计书](requirements/产品设计书.md)，确认产品定位和用户优先级。
-2. 再看 [需求文档](requirements/需求文档.md)，确认业务口径。
-3. 再看 [开发文档](planning/开发文档.md)，确认阶段与阻塞点。
-4. 进入实现前看 [技术实现文档](planning/技术实现文档.md)。
-5. 涉及数据库前，必须先看 [数据库开发安全方案](database/数据库开发安全方案.md)。
-6. 切换环境前，确认 [数据库环境信息](database/环境信息.md)。
-7. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
+1. AI / Codex 先看 [AI 协作规则](ai/RULES.md) 和 [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)。
+2. 再看 [产品设计书](requirements/产品设计书.md)，确认产品定位和用户优先级。
+3. 再看 [需求文档](requirements/需求文档.md)，确认业务口径。
+4. 再看 [开发文档](planning/开发文档.md)，确认阶段与阻塞点。
+5. 进入实现前看 [技术实现文档](planning/技术实现文档.md)。
+6. 涉及数据库前，必须先看 [数据库开发安全方案](database/数据库开发安全方案.md)。
+7. 切换环境前，确认 [数据库环境信息](database/环境信息.md)。
+8. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
