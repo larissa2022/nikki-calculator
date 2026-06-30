@@ -39,6 +39,19 @@ Candidate Rule → Verified Pattern → Rule
 
 禁止跳级：Candidate Rule 不得直接升级为 Rule。
 
+## Candidate Cleanup Policy
+
+- Candidate Rule 保留最多 10 条。
+- 超过 10 条时，必须进入 Verified Pattern，或移入 Rejected Ideas 并从 Rule Candidates 移除。
+- Candidate Rule 超过 30 天未验证时，自动标记为 stale。
+- stale Candidate Rule 不自动删除，需在后续复盘中处理。
+
+## Pattern Registry
+
+- Verified Pattern 必须有唯一编号，例如 `Pattern-01`、`Pattern-02`。
+- Verified Pattern 必须基于至少 2 次 GitHub 可验证行为。
+- Verified Pattern 不自动升级为 Rule，必须经用户确认后才能进入正式 Rule。
+
 ## Project Rules
 
 项目级规则，用于约束本仓库开发、测试、数据库和文档协作。
