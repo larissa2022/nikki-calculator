@@ -322,6 +322,17 @@ Rule Pruning Phase completed。
 
 本轮仅文档设计，无代码与数据库变更。
 
+## 积分可重算系统（Event Sourcing Lite）设计完成
+
+- 已在 `docs/ai/DECISIONS.md` 记录积分系统升级为可重算模型（Event Sourcing Lite）。
+- 已明确当前积分由 `points_ledger` 聚合计算，`points_ledger` 为积分唯一事实源。
+- 已明确陪审团通过、重审通过、报错通过、系统奖励 / 扣减等业务行为必须写入 ledger。
+- 已记录积分重算机制、时间回溯计算和 `snapshot_flag` 性能优化口径。
+- 已在 `docs/ai/RULES.md` 补充跨项目事件记录、核心数据可重算、不得仅依赖最终状态的原则。
+- `docs/ai/CURRENT_TASK.md` 已更新为确认是否将陪审团投票也纳入“完全事件化模型（jury_events）”。
+
+本轮仅文档修改，无代码/数据库变更。
+
 ## 陪审团投票幂等性规则第一版完成
 
 已补充陪审团投票幂等性规则到 `docs/ai/DECISIONS.md` Final：

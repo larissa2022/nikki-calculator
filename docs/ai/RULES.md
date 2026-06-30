@@ -54,6 +54,9 @@ Candidate Rule → Verified Pattern → Rule
 - 所有核心系统必须满足“事实可重算”。
 - 不允许依赖可变状态存储最终结果。
 - 所有关键行为必须写入不可变日志（ledger 思维）。
+- 系统应优先采用“事件记录”而非“状态覆盖”。
+- 核心数据必须可重算（Reconstructable State Principle）。
+- 不得仅依赖最终状态存储业务结果。
 
 ## Codex Execution Protocol（执行协议）
 
