@@ -29,14 +29,19 @@
 - git commit 信息使用中文。
 - 遇到需求风险、规则冲突、字段缺失或会改变用户行为的地方，先暂停并向用户确认。
 
+### AIOS 轻量协作边界
+
+- 来源：AIOS v1.1 初始化。
+- 类型：Personal Rule。
+- 批准人：用户本人。
+- ChatGPT 负责整理任务、写任务单、判断下一步。
+- Codex 负责按任务单执行。
+- Gemini 负责 challenge、发现反例和风险。
+- GitHub 是事实来源，用于确认提交、分支、PR、历史记录和代码变更状态。
+- 用户本人负责最终审核、最终产品判断和正式 Rule 批准。
+
 ## Rule Candidates
 
 待用户本人审核的候选规则。审核通过后才能移动到 Project Rules 或 Personal Rules。
 
-### Candidate: AIOS 轻量协作边界
-
-- 提出来源：AIOS v1.1 初始化
-- 候选内容：ChatGPT 负责整理任务、写任务单、判断下一步；Codex 负责按任务单执行；Gemini 负责 challenge；用户本人负责最终审核和批准。
-- 待审核原因：需要用户确认是否作为长期协作规则。
-- 状态：待用户审核
-
+暂无。

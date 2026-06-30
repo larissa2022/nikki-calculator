@@ -146,3 +146,16 @@
 - `REJECTED_IDEAS.md` 用于记录未采纳方案、拒绝原因和未来重新考虑条件。
 
 本轮未修改业务代码、Supabase 文件、数据库文件、需求文档、开发文档、技术实现文档或数据库文档。
+
+## Rule 审核结果
+
+用户本人已审核并批准 Rule Candidate「AIOS 轻量协作边界」。
+
+处理结果：
+
+- 已从 `Rule Candidates` 移动到 `Personal Rules`。
+- 类型：Personal Rule。
+- 来源保留为：AIOS v1.1 初始化。
+- 已明确职责边界：ChatGPT 负责整理任务、写任务单、判断下一步；Codex 负责按任务单执行；Gemini 负责 challenge、发现反例和风险；GitHub 是事实来源；用户本人负责最终审核、最终产品判断和正式 Rule 批准。
+
+本轮仅更新 `docs/ai/RULES.md` 和 `docs/ai/CODEX_REPORT.md`，未修改业务代码。
