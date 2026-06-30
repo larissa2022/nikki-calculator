@@ -97,6 +97,22 @@
 - 管理员终审不写入 `jury_votes`，单独建立终审记录。
 - 不新增未经确认的字段名、表字段、状态值。
 
+### 陪审团系统最小数据库结构第一版
+
+- `jury_votes` 为投票事实表。
+- `jury_votes` 记录 user_id + audit_id + vote。
+- `jury_votes` 不允许修改历史记录。
+- `jury_votes` 遵循一票定稿逻辑约束。
+- `jury_votes` 中所有投票必须可追溯。
+- `re_review_items` 为陪审团审核池。
+- `re_review_items` 存储所有进入陪审团的争议项。
+- `re_review_items` 支持 pending / voting / approved / rejected / failed。
+- `re_review_items` 负责所有复杂审核流转。
+- `points_ledger` 为积分事实表。
+- `points_ledger` 中所有积分变化只追加不修改。
+- 积分由 delta 汇总计算。
+- `points_ledger` 记录积分来源与来源对象。
+
 ### 前 5 有效提交者规则
 
 - 有效提交者必须满足：提交数据与最终入库数据一致，且 `submitted_by` 可识别为真实用户。

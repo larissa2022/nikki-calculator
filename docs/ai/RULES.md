@@ -49,6 +49,12 @@ Candidate Rule → Verified Pattern → Rule
 - 所有实现细节必须进入 `DECISIONS.md` 或项目实现层。
 - ChatGPT / Codex 不得将实现方案升级为 Rule，除非用户明确确认且跨项目适用。
 
+## Fact Rebuildability Principles（事实可重算原则）
+
+- 所有核心系统必须满足“事实可重算”。
+- 不允许依赖可变状态存储最终结果。
+- 所有关键行为必须写入不可变日志（ledger 思维）。
+
 ## Codex Execution Protocol（执行协议）
 
 - Codex 必须默认执行 commit + push。

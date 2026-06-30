@@ -314,6 +314,14 @@ Rule Pruning Phase completed。
 
 本轮仅文档修改，无业务代码变更。
 
+## 陪审团数据库最小结构第一版已完成
+
+- 已在 `docs/ai/DECISIONS.md` 记录陪审团系统最小数据库结构第一版：`jury_votes`、`re_review_items`、`points_ledger`。
+- 已在 `docs/ai/RULES.md` 补充跨项目“事实可重算”原则，不写入单项目具体实现细节。
+- `docs/ai/CURRENT_TASK.md` 已更新为确认是否需要引入“自动重算积分机制”。
+
+本轮仅文档设计，无代码与数据库变更。
+
 ## 陪审团投票幂等性规则第一版完成
 
 已补充陪审团投票幂等性规则到 `docs/ai/DECISIONS.md` Final：
