@@ -333,6 +333,69 @@ Rule Pruning Phase completed。
 
 本轮仅文档修改，无代码/数据库变更。
 
+## 分支与环境治理恢复报告
+
+本轮目标：恢复项目分支与环境治理，不开发业务功能，不运行数据库命令，不连接 production，不修改业务代码、migration、Vercel 配置或 Supabase 远程数据库。
+
+已建立 / 更新的治理文档：
+- `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`：明确 `main = production`、`develop = development / preview`，以及 feature / fix / docs 分支默认从 `develop` 拉出并合回 `develop`。
+- `docs/ai/RULES.md`：补充分支与环境治理入口，明确 Vercel production 只对应 `main`，Vercel preview / dev 只对应 `develop` 或短期 feature 分支，数据库任务必须先确认 Supabase project ref。
+- `README.md` 与 `docs/README.md`：新增 AI / Codex 开始任务前必须先读 `docs/ai/RULES.md` 和环境治理文档的入口。
+- `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/planning/工作流优化方案.md`：补充分支、Vercel、Supabase 环境对应关系和检查要求。
+
+当前 GitHub / Git 状态盘点：
+- 默认分支：本地远端引用显示 `origin/HEAD -> origin/main`，因此按当前本地可见状态判断默认分支为 `main`。`gh` CLI 在本环境不可用，GitHub repo metadata 只能部分通过连接器读取。
+- `develop` 分支：远端存在 `origin/develop`，当前指向 `8233bd26`。
+- PR #1：仍为 open，base=`develop`，head=`chore/dev-environment-and-bugfixes`，未合并；GitHub 连接器显示 mergeable=true。
+- PR #2：已 closed 且 merged，base=`main`，head=`chore/dev-environment-and-bugfixes`，merge commit 为 `3853f5c9`。
+- 当前分支 `feature/category-code-wardrobe-import` 已与远端 feature 分支整合；远端独有提交 `d3a3936` 已通过 rebase 纳入本地。
+- 当前 feature 相对 `origin/main`：`origin/main` 侧有 1 个提交未在 feature 中，feature 侧有 32 个提交未在 `origin/main` 中。
+- 当前 feature 相对 `origin/develop`：feature 侧有 62 个提交未在 `origin/develop` 中。
+- `docs/ai`：`origin/main` 和 `origin/develop` 中均不存在；当前仅存在于 `origin/feature/category-code-wardrobe-import` 及本地 feature 分支。
+
+当前发现的问题：
+- 分支流向曾被打乱：`chore/dev-environment-and-bugfixes` 已通过 PR #2 直接进入 `main`，但 PR #1 仍打开且目标为 `develop`。
+- `develop` 明显落后于 `main` 和当前 feature，无法承担 development / preview 集成分支职责。
+- `feature/category-code-wardrobe-import` 混有多类内容：已进入 `main` 的业务修复历史、仍未进 `main` 的文档 / AIOS 治理、数据库设计文档、以及至少一个 migration / 业务相关差异。
+- `docs/ai` 作为当前协作事实入口尚未进入 `develop` 或 `main`，导致治理规则还停留在 feature 分支。
+- Vercel production / preview 与 Git 分支的实际绑定状态未在仓库中可验证，仍需用户到 Vercel Dashboard 确认。
+- 本轮未运行 Supabase 命令，未检查远程 Supabase 当前 linked project，避免触碰 production。
+
+当前不能操作的内容：
+- 不删除分支。
+- 不关闭 PR。
+- 不改 Vercel 配置。
+- 不运行数据库命令。
+- 不连接 production。
+- 不修改 `src/`、`supabase/migrations/`、`supabase/schema.sql`、`supabase/seed.sql`、`package.json` 或业务逻辑代码。
+
+分支治理建议：
+- PR #1 建议用户确认后关闭，理由：它的 head 分支已通过 PR #2 合入 `main`，当前 PR #1 已成为历史遗留 PR；继续保留容易让 develop 修复流程和 production 合并历史混淆。关闭前建议先决定如何把 `main` 中已上线内容回填到 `develop`。
+- `docs/ai` 和本轮治理文档建议先合入 `develop`，再由 `develop` 验证后通过 PR 合入 `main`；不建议从当前 feature 直接合入 `main`。
+- `feature/category-code-wardrobe-import` 剩余内容建议拆分：
+  - 治理文档 / AIOS 文档：单独 PR 到 `develop`。
+  - 已验证且已进入 `main` 的业务修复历史：不再重复从 feature 合并，必要时只用 `main` 回填 `develop`。
+  - 未实现的陪审团 / 积分数据库设计文档：保留为设计 PR，不包含 migration。
+  - 任何 `src/` 或 `supabase/migrations/` 差异：另开实现分支，等治理完成后从 `develop` 重新拉出。
+- 后续 PR 流程建议：
+  - 常规：`develop` -> feature / fix / docs -> PR 回 `develop` -> 验证 -> PR `develop` 到 `main`。
+  - 紧急：`main` -> hotfix -> PR 到 `main`，合并后再回填 `develop`。
+
+建议用户确认的事项：
+- 是否关闭 PR #1。
+- 是否创建一次“main 回填 develop”的同步 PR，用于恢复 `develop` 为 development / preview 集成基线。
+- 是否先把 `docs/ai` 与 `docs/governance` 作为纯文档 PR 合入 `develop`。
+- Vercel Dashboard 中 production 是否仅绑定 `main`，preview 是否绑定 `develop` / feature。
+- Supabase Dashboard 中 production ref 与 development ref 是否仍分别为 `fopyjewbsvusftpqbtml` 和 `tfwejruvdahonacyldrg`。
+
+下一步最安全的操作顺序：
+1. 用户确认 Vercel 和 Supabase 双环境绑定。
+2. 用户确认 PR #1 处理方式。
+3. 先恢复 `develop` 基线：用明确的同步 PR 将 `main` 当前已上线内容回填到 `develop`，或按用户指定方式重建 develop。
+4. 将 `docs/ai` 与治理文档以纯文档 PR 合入 `develop`。
+5. 验证 develop / preview 后，再由 `develop` 发 PR 到 `main`。
+6. 治理稳定后，再从 `develop` 新建业务实现分支。
+
 ## 数据库约束已最小化定义
 
 - 已在 `docs/ai/DECISIONS.md` 补充数据库约束规则（v1），覆盖 `jury_votes`、`points_ledger`、`re_review_items` 的最小约束口径。
