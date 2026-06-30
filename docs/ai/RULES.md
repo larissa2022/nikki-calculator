@@ -2,64 +2,42 @@
 
 用途：记录已经生效或待审核的协作规则。正式 Rule 只能由用户本人批准，ChatGPT、Codex、Gemini 都不能自行批准正式 Rule。
 
-## Rule 审核机制
+## Core Governance Layer
 
-- 用户本人是最终决策者。
-- 用户本人是正式 Rule 的唯一批准者。
-- ChatGPT 只能提出 Lesson、Pattern、Rule Candidate。
-- Codex 只能按已批准 Rule 和当前任务单执行。
-- Gemini 可用于挑战方案、发现盲点和提出反例，但不能批准 Rule。
-- 未经用户本人明确确认的规则，只能放在 Rule Candidates。
+### Core Governance Rules
 
-## Rule System v2
-
-规则系统采用三层结构，禁止跳级：
-
-1. Candidate Rule
-   - 来源：一次任务、一次复盘、一次风险发现或一次用户反馈。
-   - 状态：候选规则。
-   - 限制：不得作为正式执行依据，只能用于后续观察和验证。
-
-2. Verified Pattern
-   - 来源：Candidate Rule 经重复行为验证后形成。
-   - 状态：已验证模式。
-   - 验证要求：同类行为至少重复 2~3 次，并能被 GitHub 提交、PR、文档记录或用户测试结果支持。
-   - 限制：仍不是正式 Rule，必须等待用户确认。
-
-3. Rule
-   - 来源：Verified Pattern + 用户本人确认。
-   - 状态：正式规则。
-   - 作用：进入 Project Rules 或 Personal Rules，作为后续 Codex、ChatGPT、Gemini 协作的执行依据。
-
-升级路径：
-
-Candidate Rule → Verified Pattern → Rule
-
-禁止：
-
-- 禁止 Candidate Rule 直接升级为 Rule。
-- 禁止单轮讨论直接生成 Rule。
-- 禁止未经验证的设计进入 Rule。
-
-## Rule Gate
-
-一条规则进入正式 Rule 前，必须通过以下强制验证：
-
-- Codex 实现：规则相关行为已经由 Codex 在实际任务中执行。
-- GitHub commit / push 验证：对应变更必须能在 GitHub 事实源中追踪；未 push 的内容不作为已完成事实。
-- 重复行为验证：同类行为至少重复 2~3 次，确认不是偶发经验。
-- 用户确认：用户本人明确批准后，才能进入 Project Rules 或 Personal Rules。
-
-## ChatGPT Constraint v2
-
-- ChatGPT 不得直接生成正式 Rule。
-- ChatGPT 不得跳过验证生成规则。
-- ChatGPT 只能输出 Candidate、Pattern 或 Rule Proposal。
-- GitHub 是唯一事实源。
-- 未 push = 不存在。
+- 用户本人是最终决策者，也是正式 Rule 的唯一批准者。
+- GitHub 是唯一事实源；未 push = 不存在。
+- ChatGPT 负责整理任务、写任务单、判断下一步，但不得直接生成正式 Rule。
+- ChatGPT 只能输出 Candidate Rule、Verified Pattern 或 Rule Proposal。
+- Codex 负责按当前任务单和已批准 Rule 执行。
+- Gemini 负责 challenge、发现反例和风险，不批准规则。
 - Rule 只能来自 Verified Pattern + 用户确认。
 - 禁止 ChatGPT 单轮升级规则。
 - 禁止未验证设计进入 Rule。
+- 遇到需求风险、规则冲突、字段缺失或会改变用户行为的地方，先暂停并向用户确认。
+
+### Rule Gate
+
+一条规则进入正式 Rule 前，必须同时满足：
+
+- GitHub 已 push。
+- Codex 已执行。
+- 用户已确认。
+
+说明：重复行为验证可作为形成 Verified Pattern 的依据，但不作为独立强制门槛。
+
+## Rule System v2.1
+
+保留三层结构，升级路径固定为：
+
+Candidate Rule → Verified Pattern → Rule
+
+- Candidate Rule：候选规则，来自任务、复盘、风险发现或用户反馈；不得作为正式执行依据。
+- Verified Pattern：已验证模式，来自 Candidate Rule 的实际执行和事实验证；仍需用户确认。
+- Rule：正式规则，来自 Verified Pattern + 用户确认；进入 Project Rules 或 Personal Rules 后生效。
+
+禁止跳级：Candidate Rule 不得直接升级为 Rule。
 
 ## Project Rules
 
@@ -67,7 +45,7 @@ Candidate Rule → Verified Pattern → Rule
 
 - 不直接操作 production。
 - production 写库脚本不放入可提交路径。
-- 涉及数据库前必须确认 dev/prod 状态。
+- 涉及数据库前必须确认 dev / prod 状态。
 - 数据库任务必须先看数据库安全文档和变更记录。
 - 文档收口任务不得顺手修改业务代码。
 
@@ -77,18 +55,6 @@ Candidate Rule → Verified Pattern → Rule
 
 - 用户本人负责最终产品判断、功能审核、流程把控和产品测试。
 - git commit 信息使用中文。
-- 遇到需求风险、规则冲突、字段缺失或会改变用户行为的地方，先暂停并向用户确认。
-
-### AIOS 轻量协作边界
-
-- 来源：AIOS v1.1 初始化。
-- 类型：Personal Rule。
-- 批准人：用户本人。
-- ChatGPT 负责整理任务、写任务单、判断下一步。
-- Codex 负责按任务单执行。
-- Gemini 负责 challenge、发现反例和风险。
-- GitHub 是事实来源，用于确认提交、分支、PR、历史记录和代码变更状态。
-- 用户本人负责最终审核、最终产品判断和正式 Rule 批准。
 
 ## Rule Candidates
 

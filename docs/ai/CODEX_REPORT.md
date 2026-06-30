@@ -242,3 +242,17 @@ Rule Lock Phase 1 已完整完成。
 剩余未决策项数量：21 条。
 
 本轮未修改业务代码、未修改数据库结构、未修改 `src/`、未修改 `supabase/`。
+
+## Rule Pruning Phase
+
+Rule Pruning Phase completed。
+
+本次将 Rule System 从 v2 收敛为 v2.1：
+- `RULES.md` 合并重复治理规则，形成 `Core Governance Layer`。
+- `ChatGPT Constraint v2`、`Rule Gate`、`AIOS 协作边界` 已收敛为统一的 `Core Governance Rules`。
+- Rule System 保留三层结构：Candidate Rule → Verified Pattern → Rule。
+- Rule Gate 收敛为三个强制条件：GitHub 已 push、Codex 已执行、用户已确认。
+- 重复行为验证保留为形成 Verified Pattern 的说明，不再作为独立强制门槛。
+- `DECISIONS.md` 清理为 Final Only，只保留已确认的产品与技术决策。
+
+本轮未修改业务代码、未修改数据库结构、未修改 `src/`、未修改 `supabase/`。
