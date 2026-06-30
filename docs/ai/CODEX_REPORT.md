@@ -341,6 +341,27 @@ Rule Pruning Phase completed。
 
 本轮仅文档修改，无代码/数据库变更。
 
+## 数据库约束对照审计结果
+
+审计范围：仅检查仓库内当前数据库设计文件，包括 `supabase/schema.sql`、`supabase/migrations/`、`docs/database/schema.md` 和 `docs/database/数据库变更记录.md`。本轮未连接或修改实际数据库，未修改业务代码。
+
+审计结论：
+- `jury_votes`：未满足。
+  - 当前 `supabase/schema.sql` 和 `supabase/migrations/` 中未发现 `jury_votes` 表定义。
+  - 未发现 UNIQUE(user_id, audit_id)。
+  - 未发现禁止 UPDATE vote 的约束、触发器、RLS 策略或等价机制。
+  - 未发现 vote 只能为 approve / reject 的约束。
+- `points_ledger`：未满足。
+  - 当前 `supabase/schema.sql` 和 `supabase/migrations/` 中未发现 `points_ledger` 表定义。
+  - 未发现 delta 结构。
+  - 未发现禁止 UPDATE / DELETE、只允许 INSERT 的约束、触发器、RLS 策略或等价机制。
+- `re_review_items`：未满足。
+  - 当前 `supabase/schema.sql` 和 `supabase/migrations/` 中未发现 `re_review_items` 表定义。
+  - 未发现 status CHECK 限制为 pending / voting / approved / rejected / failed。
+  - 当前仓库内数据库设计尚未落地该表，因此也尚未具备防止非法状态写入的数据库层约束。
+
+总体判断：DECISIONS.md 中的数据库约束规则（v1）目前仍是设计决策，尚未在仓库内当前数据库结构中实现。若进入实现阶段，需要新增对应 migration、约束、写入权限与不可变机制后再复审。
+
 ## 陪审团投票幂等性规则第一版完成
 
 已补充陪审团投票幂等性规则到 `docs/ai/DECISIONS.md` Final：
