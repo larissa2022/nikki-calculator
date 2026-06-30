@@ -19,6 +19,11 @@ npm run build
 
 项目文档已整理到 [docs/README.md](docs/README.md)。
 
+AI / Codex 开始任何任务前，必须先阅读：
+
+- [AI 协作规则](docs/ai/RULES.md)
+- [分支与环境治理规则](docs/governance/BRANCH_ENVIRONMENT_POLICY.md)
+
 常用入口：
 
 - [需求文档](docs/requirements/需求文档.md)
@@ -27,6 +32,7 @@ npm run build
 - [数据库开发安全方案](docs/database/数据库开发安全方案.md)
 - [数据库变更记录](docs/database/数据库变更记录.md)
 - [数据库环境信息](docs/database/环境信息.md)
+- [分支与环境治理规则](docs/governance/BRANCH_ENVIRONMENT_POLICY.md)
 
 ## 数据库安全提醒
 
