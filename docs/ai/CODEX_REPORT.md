@@ -304,6 +304,16 @@ Rule Pruning Phase completed。
 
 本轮只改文档，未改业务代码、数据库、`src/`、`supabase/`。
 
+## Codex 执行协议与规则污染防护机制同步完成
+
+- Rule Pollution Guard 已写入 `docs/ai/RULES.md`。
+- Codex 自动 commit/push 协议已生效。
+- 单任务原则已写入 `docs/ai/RULES.md`。
+- `docs/ai/DECISIONS.md` 已标记本轮新增规则为“Rule Pollution Guard + Codex Execution Protocol 第一版”，仅记录变更来源，不新增业务规则。
+- `docs/ai/CURRENT_TASK.md` 已更新为开始进入“陪审团系统数据库最小结构设计（需进入 DECISIONS.md，不进入 RULES.md）”。
+
+本轮仅文档修改，无业务代码变更。
+
 ## 陪审团投票幂等性规则第一版完成
 
 已补充陪审团投票幂等性规则到 `docs/ai/DECISIONS.md` Final：

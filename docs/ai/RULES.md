@@ -39,6 +39,37 @@ Candidate Rule → Verified Pattern → Rule
 
 禁止跳级：Candidate Rule 不得直接升级为 Rule。
 
+## Rule Pollution Guard（规则防污染机制）
+
+- `RULES.md` 只能包含跨项目稳定原则。
+- 禁止将以下内容写入 `RULES.md`：
+  - 具体数据库结构（如 user_id + audit_id）。
+  - 具体业务流程实现。
+  - 单项目功能规则（积分、陪审团、投票逻辑）。
+- 所有实现细节必须进入 `DECISIONS.md` 或项目实现层。
+- ChatGPT / Codex 不得将实现方案升级为 Rule，除非用户明确确认且跨项目适用。
+
+## Codex Execution Protocol（执行协议）
+
+- Codex 必须默认执行 commit + push。
+- 每次任务结束必须执行：
+
+```bash
+git status
+git add ...
+git commit -m "..."
+git push origin feature/category-code-wardrobe-import
+```
+
+- ChatGPT 不再提供“手动 push”流程。
+- Codex 是唯一执行提交主体。
+
+## 单任务原则（强约束）
+
+- 一次 Codex 指令只能包含一个任务。
+- 禁止多个任务合并在同一指令中。
+- 每个任务必须可以独立 commit & rollback。
+
 ## Candidate Cleanup Policy
 
 - Candidate Rule 保留最多 10 条。
@@ -87,12 +118,6 @@ Candidate Rule → Verified Pattern → Rule
 - 任何新增字段、枚举值、状态值、表字段、文档字段，必须先明确标注“需要审核”，并经用户确认后才能进入任务单。
 - 不得为了完善方案自行扩展项目中未确认存在的字段。
 - 字段相关规则必须以 `DECISIONS.md`、现有数据库结构、现有代码、用户明确确认内容为准。
-
-### 陪审团制度
-
-- 投票幂等性规则：同一用户同一审核项（user_id + audit_id）只能存在一条有效投票记录。
-- 防重复提交处理机制：重复请求不得产生多条有效票；相同内容重复提交应忽略，不同内容重复提交按“不允许改票”规则拒绝或返回错误。
-- 后端写入优先原则：后端写入为唯一真相，前端状态不可信。
 
 ## Personal Rules
 

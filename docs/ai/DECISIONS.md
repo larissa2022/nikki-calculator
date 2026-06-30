@@ -4,6 +4,11 @@
 
 ## Final Only
 
+### 协作规则变更来源
+
+- 本轮新增规则标记为：Rule Pollution Guard + Codex Execution Protocol 第一版。
+- 本条仅记录协作规则变更来源，不新增业务规则。
+
 ### 管理员审核卡片文案
 
 - UI 不使用：版本、变体、字段组合、冲突版本、一致提交。
