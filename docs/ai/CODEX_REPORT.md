@@ -114,3 +114,35 @@
 - 下一步候选：收口技术实现文档、整理积分 / 贡献者 / 重审池最小开发计划、产品确认未决问题。
 
 本轮仅更新文档，未修改业务代码、Supabase 文件、数据库文件、需求文档或技术实现文档。
+
+## AIOS v1.1 初始化结果
+
+已初始化轻量版 AIOS v1.1 文档骨架，仅更新 `docs/ai/` 范围内文件。
+
+新增文件：
+
+- `docs/ai/LESSONS.md`
+- `docs/ai/RULES.md`
+- `docs/ai/REJECTED_IDEAS.md`
+- `docs/ai/WEEKLY_REVIEW.md`
+- `docs/ai/PROMPTS/planning.md`
+- `docs/ai/PROMPTS/review.md`
+- `docs/ai/PROMPTS/challenge.md`
+- `docs/ai/PROMPTS/weekly_review.md`
+
+同步更新：
+
+- `docs/ai/DECISIONS.md`：追加采用轻量版 AIOS v1.1、Rule 必须经用户本人审核、增加 Rejected Ideas 等决策。
+- `docs/ai/CURRENT_TASK.md`：更新当前任务。
+
+关键机制：
+
+- 用户本人是最终决策者，也是正式 Rule 的唯一批准者。
+- ChatGPT 只能提出 Lesson / Pattern / Rule Candidate，不能自行批准正式 Rule。
+- Codex 负责按任务单和已批准规则执行。
+- Gemini 用于 challenge 和发现风险，不批准规则。
+- `RULES.md` 分为 Project Rules、Personal Rules、Rule Candidates。
+- `LESSONS.md` 预留 Pattern Candidate 字段，暂不新增独立 `PATTERNS.md`。
+- `REJECTED_IDEAS.md` 用于记录未采纳方案、拒绝原因和未来重新考虑条件。
+
+本轮未修改业务代码、Supabase 文件、数据库文件、需求文档、开发文档、技术实现文档或数据库文档。

@@ -30,3 +30,13 @@
 - 下一步优先做 Preview / production 人工回归。
 - 暂不直接开发积分、陪审团、重审、排行榜等大模块。
 - 需求文档后续需要根据已实现功能做一次收口更新。
+
+## 5. AIOS v1.1 轻量协作机制
+
+- 采用轻量版 AIOS v1.1，用于沉淀 Lessons、Rules、Rejected Ideas、Weekly Review 和可复用 Prompt。
+- 不一次性搭复杂系统，优先保持文档可读、可审查、可维护。
+- Rule 必须经用户本人审核后才能进入正式规则。
+- ChatGPT 只能提出 Lesson / Pattern / Rule Candidate，不能自行批准正式 Rule。
+- Codex 按当前任务单和已批准规则执行。
+- Gemini 用于 challenge、发现反例和风险，不负责批准规则。
+- 增加 `REJECTED_IDEAS.md`，记录未采纳方案、拒绝原因和未来重新考虑条件。
