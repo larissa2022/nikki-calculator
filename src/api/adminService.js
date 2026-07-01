@@ -35,6 +35,56 @@ const fetchExistingClothesForPending = async (pendingClothes) => {
     return rows
 }
 
+const createFriendlyCompleteExistingError = (error) => {
+    const rawMessage = String(error?.message || '')
+    const technicalReason = (() => {
+        if (rawMessage.includes('星级已有非空值')) return '星级冲突'
+        if (rawMessage.includes('短编号已有非空值')) return '短编号冲突'
+        if (rawMessage.includes('属性分值已有非空值')) return '属性分值冲突'
+        if (rawMessage.includes('套装关联已有非空值')) return '套装关联冲突'
+        if (rawMessage.includes('临时套装名已有非空值')) return '临时套装名冲突'
+        if (rawMessage.includes('标签已有非空值')) return '标签冲突'
+        if (rawMessage.includes('不属于本次正式库补全范围')) return '待审核记录不匹配'
+        if (rawMessage.includes('通过数量异常')) return '待审核状态已变化'
+        if (rawMessage.includes('没有补全正式库权限')) return '权限不足'
+        if (rawMessage.includes('正式库服装不存在')) return '正式库记录不匹配'
+        return ''
+    })()
+
+    const message = (() => {
+        if (technicalReason === '星级冲突') {
+            return '这件衣服在正式库中已有不同的星级，不能直接覆盖。请走重审 / 陪审团流程。'
+        }
+        if (technicalReason === '短编号冲突') {
+            return '这件衣服在正式库中已有不同的短编号，不能直接覆盖。请走重审 / 陪审团流程。'
+        }
+        if (technicalReason === '属性分值冲突') {
+            return '这件衣服在正式库中已有不同的属性分值，不能直接覆盖。请走重审 / 陪审团流程。'
+        }
+        if (technicalReason === '套装关联冲突' || technicalReason === '临时套装名冲突') {
+            return '这件衣服在正式库中已有不同的套装信息，不能直接覆盖。请走重审 / 陪审团流程。'
+        }
+        if (technicalReason === '标签冲突') {
+            return '这件衣服在正式库中已有不同的标签，不能直接覆盖。请走重审 / 陪审团流程。'
+        }
+        if (technicalReason === '待审核记录不匹配' || technicalReason === '正式库记录不匹配') {
+            return '该提交与正式库记录不匹配，不能直接补全。请进入重审 / 人工处理。'
+        }
+        if (technicalReason === '待审核状态已变化') {
+            return '这条待审核记录的状态已经变化，请刷新审核页后再处理。'
+        }
+        if (technicalReason === '权限不足') {
+            return '当前账号没有补全正式库的权限。'
+        }
+        return '补全正式库失败，请刷新后重试；如果仍失败，请进入重审 / 人工处理。'
+    })()
+
+    const friendlyError = new Error(technicalReason ? `${message}（技术原因：${technicalReason}）` : message)
+    friendlyError.cause = error
+    friendlyError.technicalReason = technicalReason
+    return friendlyError
+}
+
 export const adminService = {
     // 1. 获取当前登录站长的身份
     async getCurrentUserRole() {
@@ -195,7 +245,7 @@ export const adminService = {
             p_pending_ids: pendingIds || []
         });
 
-        if (error) throw new Error('补全正式库失败: ' + error.message);
+        if (error) throw createFriendlyCompleteExistingError(error);
         return true;
     }
 };

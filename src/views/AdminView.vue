@@ -37,7 +37,7 @@ const auditFilterOptions = computed(() => {
   return [
     { key: 'all', label: '全部', count: list.length },
     { key: 'ready', label: '可入库', count: countBy(group => group.candidateStatus === 'ready') },
-    { key: 'conflict', label: '有不同意见', count: countBy(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict') },
+    { key: 'conflict', label: '有不同意见', count: countBy(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict' || group.candidateStatus === 'known_mismatch') },
     { key: 'known', label: '正式库已有', count: countBy(group => group.candidateStatus === 'known') },
     { key: 'insufficient', label: '人数不足', count: countBy(group => group.candidateStatus === 'insufficient') },
     { key: 'legacy', label: '匿名历史数据', count: countBy(group => group.candidateStatus === 'legacy') }
@@ -46,12 +46,20 @@ const auditFilterOptions = computed(() => {
 const filteredPendingList = computed(() => {
   if (activeAuditFilter.value === 'all') return sortedPendingList.value
   if (activeAuditFilter.value === 'conflict') {
-    return sortedPendingList.value.filter(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict')
+    return sortedPendingList.value.filter(group => group.candidateStatus === 'conflict' || group.candidateStatus === 'weak_conflict' || group.candidateStatus === 'known_mismatch')
   }
   return sortedPendingList.value.filter(group => group.candidateStatus === activeAuditFilter.value)
 })
 // 每次只展示一屏候选，审核掉一个，下一个自动补位
 const displayPendingList = computed(() => filteredPendingList.value.slice(0, 9))
+const auditSubmitText = computed(() => {
+  if (auditSelectionInfo.value?.requiresManualReview) return '需重审 / 人工处理'
+  if (auditSelectionInfo.value?.canCompleteExisting) return '补全正式库已有记录'
+  return newClothes.pendingIds.length ? '✅ 仲裁完毕：一键入库并结案' : '🚀 发布全新图鉴'
+})
+const auditSubmitLoadingText = computed(() => (
+  auditSelectionInfo.value?.canCompleteExisting ? '正在补全正式库...' : '正在合并入库...'
+))
 
 // 🌟 2. 新增：套装申请列表的去重与热度统计
 const uniquePendingSuits = computed(() => {
@@ -128,12 +136,14 @@ const selectSuit = (suit) => {
 
 // 提交入库
 const submitNewClothes = async () => {
+  if (isSubmitting.value) return
+
   try {
     const successName = await executeSubmit()
     alert(`🎉 【${successName}】已汇聚多方数据并成功入库！`)
     suitSearchText.value = ''
   } catch (err) {
-    alert('提交失败：' + err.message)
+    alert(err.message || '提交失败，请刷新后重试。')
   }
 }
 </script>
@@ -216,19 +226,29 @@ const submitNewClothes = async () => {
           v-model:suitSearchText="suitSearchText"
           :availableSuits="suitList"
           :isSubmitting="isSubmitting"
-          :submitText="newClothes.pendingIds.length ? '✅ 仲裁完毕：一键入库并结案' : '🚀 发布全新图鉴'"
-          submitLoadingText="正在合并入库..."
+          :submitText="auditSubmitText"
+          :submitLoadingText="auditSubmitLoadingText"
           suitNotFoundText="➕ 秒建套装"
           @submit="submitNewClothes"
           @create-suit="quickCreateSuit"
         >
           <template #admin-tips>
-            <div v-if="auditSelectionInfo" class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 leading-relaxed">
+            <div
+              v-if="auditSelectionInfo"
+              class="rounded-xl border px-3 py-2 text-xs font-bold leading-relaxed"
+              :class="auditSelectionInfo.requiresManualReview ? 'border-rose-100 bg-rose-50 text-rose-700' : 'border-amber-100 bg-amber-50 text-amber-700'"
+            >
+              <template v-if="auditSelectionInfo.requiresManualReview">
+                {{ auditSelectionInfo.manualReviewMessage }}
+              </template>
+              <template v-else-if="auditSelectionInfo.canCompleteExisting">
+                本次将补全正式库已有记录《{{ auditSelectionInfo.existingClothes?.name }}》，只补空字段，不会覆盖正式库已有非空字段。
+              </template>
               <template v-if="auditSelectionInfo.conflictCount">
                 本次采用最多人认可的资料：{{ auditSelectionInfo.selectedSubmitterCount }} 人 / {{ auditSelectionInfo.selectedCount }} 条。
                 另有不同意见的提交，暂不入库。
               </template>
-              <template v-else>
+              <template v-else-if="!auditSelectionInfo.requiresManualReview && !auditSelectionInfo.canCompleteExisting">
                 已有 {{ auditSelectionInfo.selectedSubmitterCount }} 人提交相同资料，可入库。
               </template>
               <div v-if="auditSelectionInfo.variants?.length > 1" class="mt-2 space-y-1.5">

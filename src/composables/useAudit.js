@@ -5,7 +5,7 @@ import { suitService } from '../api/suitService'
 import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
 import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
-import { SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
+import { GRADE_OPTIONS, SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
 
 export function useAudit() {
     // 1. 核心状态
@@ -67,6 +67,16 @@ export function useAudit() {
         items.map(item => item.submitted_by).filter(Boolean)
     ).size
 
+    const isSameClothesIdentity = (pendingItem, existingItem) => {
+        if (!pendingItem || !existingItem) return false
+        const pendingGameId = normalizeText(pendingItem.game_id)
+        const existingGameId = normalizeText(existingItem.game_id)
+        const gameIdMatches = !existingGameId || existingGameId === pendingGameId
+        return normalizeText(pendingItem.name) === normalizeText(existingItem.name)
+            && normalizeText(pendingItem.category) === normalizeText(existingItem.category)
+            && gameIdMatches
+    }
+
     const createKnownClothesMap = () => {
         const map = new Map()
         existingClothesList.value.forEach(item => {
@@ -97,14 +107,20 @@ export function useAudit() {
             }))
             .sort((a, b) => b.submitterCount - a.submitterCount || b.rowCount - a.rowCount)
 
-        const gameId = normalizeText(group.items[0]?.game_id)
-        const category = normalizeText(group.items[0]?.category)
-        const knownClothes = knownClothesMap.get(`${category}::${gameId}`) || []
         const topVariant = variantList[0] || null
+        const topSample = topVariant?.sample || group.items[0] || null
+        const gameId = normalizeText(topSample?.game_id)
+        const category = normalizeText(topSample?.category)
+        const knownCandidates = knownClothesMap.get(`${category}::${gameId}`) || []
+        const knownClothes = knownCandidates.filter(item => isSameClothesIdentity(topSample, item))
         const distinctSubmitterCount = countSubmitters(group.items)
         const anonymousCount = group.items.filter(item => !item.submitted_by).length
         const hasConflict = variantList.length > 1
         const hasKnownClothes = knownClothes.length > 0
+        const hasKnownMismatch = knownCandidates.length > 0 && !hasKnownClothes
+        const canCompleteExisting = hasKnownClothes
+            && Boolean(topVariant?.items?.length)
+            && topVariant.items.every(item => isSameClothesIdentity(item, knownClothes[0]))
         const topSubmitterCount = topVariant?.submitterCount || 0
         const legacyOnly = distinctSubmitterCount === 0 && group.items.length > 0
 
@@ -113,9 +129,14 @@ export function useAudit() {
         let statusClass = 'bg-slate-100 text-slate-500'
         let riskRank = 4
 
-        if (hasKnownClothes) {
+        if (hasKnownMismatch) {
+            candidateStatus = 'known_mismatch'
+            statusLabel = '需人工处理'
+            statusClass = 'bg-rose-100 text-rose-600'
+            riskRank = 2
+        } else if (hasKnownClothes) {
             candidateStatus = 'known'
-            statusLabel = '正式库已有'
+            statusLabel = '补全已有'
             statusClass = 'bg-blue-100 text-blue-600'
             riskRank = 3
         } else if (legacyOnly) {
@@ -150,7 +171,10 @@ export function useAudit() {
             topVariant,
             topSubmitterCount,
             knownClothes,
+            knownCandidates,
             hasKnownClothes,
+            hasKnownMismatch,
+            canCompleteExisting,
             hasConflict,
             candidateStatus,
             statusLabel,
@@ -222,6 +246,11 @@ export function useAudit() {
         const items = group.topVariant?.items?.length ? group.topVariant.items : group.items
         const userMap = Object.fromEntries(allUsersList.value.map(u => [u.id, u.contribCount]))
         const bestItem = items.reduce((prev, curr) => (userMap[curr.submitted_by] || 0) > (userMap[prev.submitted_by] || 0) ? curr : prev)
+        const existingClothes = group.canCompleteExisting ? group.knownClothes?.[0] : null
+        const requiresManualReview = Boolean(group.hasKnownMismatch || (group.hasKnownClothes && !group.canCompleteExisting))
+        const manualReviewMessage = requiresManualReview
+            ? '该提交与正式库记录不匹配，不能直接补全，请进入重审 / 人工处理。'
+            : ''
         auditSelectionInfo.value = {
             selectedCount: items.length,
             totalCount: group.items.length,
@@ -229,6 +258,10 @@ export function useAudit() {
             totalSubmitterCount: group.distinctSubmitterCount || countSubmitters(group.items),
             conflictCount: Math.max((group.variantCount || 1) - 1, 0),
             statusLabel: group.statusLabel || '',
+            existingClothes,
+            canCompleteExisting: Boolean(existingClothes),
+            requiresManualReview,
+            manualReviewMessage,
             variants: (group.variants || []).map((variant, index) => ({
                 key: `${group.key}_${index}`,
                 selected: variant === group.topVariant,
@@ -251,6 +284,8 @@ export function useAudit() {
         newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)))
         newClothes.suit_id = bestItem.suit_id || ''
         newClothes.suit_status = bestItem.suit_id ? 'existing' : ''
+        newClothes.existingClothesId = existingClothes?.id || ''
+        newClothes.requiresManualReview = requiresManualReview
 
         newClothes.tags = normalizeClothingTags(items.map(i => i.tags))
 
@@ -292,6 +327,10 @@ export function useAudit() {
 
     // 6. 最终执行入库
     const executeSubmit = async () => {
+        if (isSubmitting.value) {
+            throw new Error('上一条审核还在处理中，请稍等片刻。')
+        }
+
         const missingFields = []
         const gameId = String(newClothes.game_id || '').trim()
 
@@ -303,9 +342,15 @@ export function useAudit() {
         if (gameId && !/^\d+$/.test(gameId)) missingFields.push('数字短编号')
         if (!newClothes.stars) missingFields.push('星级')
         if (!newClothes.suit_id && newClothes.suit_status !== 'none') missingFields.push('套装状态')
+        const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
+        const invalidAttributeGrades = []
         ATTRIBUTE_PAIRS.forEach((pair, index) => {
-            if (!newClothes[pair.key] || !newClothes[pair.gradeKey]) {
+            const attrValue = String(newClothes[pair.key] || '').trim()
+            const gradeValue = String(newClothes[pair.gradeKey] || '').trim()
+            if (!attrValue || !gradeValue) {
                 missingFields.push(`第 ${index + 1} 组属性`)
+            } else if (!GRADE_OPTIONS.includes(gradeValue) || !Object.prototype.hasOwnProperty.call(matrix, gradeValue)) {
+                invalidAttributeGrades.push(pair.options.find(option => option.value === attrValue)?.label || `第 ${index + 1} 组属性`)
             }
         })
 
@@ -313,9 +358,16 @@ export function useAudit() {
             throw new Error(`请先补全核心字段：${missingFields.join('、')}。特殊标签为选填。`)
         }
 
+        if (invalidAttributeGrades.length) {
+            throw new Error(`请先补全所有属性等级，例如“简约：完美/优秀/完美+”。需检查：${invalidAttributeGrades.join('、')}。`)
+        }
+
+        if (auditSelectionInfo.value?.requiresManualReview) {
+            throw new Error(auditSelectionInfo.value.manualReviewMessage || '该提交与正式库记录不匹配，不能直接补全，请进入重审 / 人工处理。')
+        }
+
         isSubmitting.value = true
         try {
-            const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
             const calculatedScores = {}
             // 🌟 修复：将数组单独提取为一个变量，彻底避开 JS 引擎的换行解析陷阱
             const pairs = [['pair1', 'grade1'], ['pair2', 'grade2'], ['pair3', 'grade3'], ['pair4', 'grade4'], ['pair5', 'grade5']]
@@ -331,10 +383,15 @@ export function useAudit() {
             }
 
             const pendingIds = newClothes.pendingIds || []
-            const existingClothes = await adminService.findClothesByNameCategory(clothesName, newClothes.category)
+            const existingClothes = auditSelectionInfo.value?.existingClothes
+                || await adminService.findClothesByNameCategory(clothesName, newClothes.category)
             if (existingClothes) {
                 if (!pendingIds.length) {
                     throw new Error(`正式库已存在「${existingClothes.name}」（${existingClothes.category}，短编号 ${existingClothes.game_id || '无'}），不能重复发布。`)
+                }
+
+                if (!isSameClothesIdentity({ name: clothesName, category: newClothes.category, game_id: gameId }, existingClothes)) {
+                    throw new Error('该提交与正式库记录不匹配，不能直接补全，请进入重审 / 人工处理。')
                 }
 
                 await adminService.completeExistingClothes(
@@ -347,6 +404,8 @@ export function useAudit() {
 
             const successName = newClothes.name
             Object.assign(newClothes, { ...createClothesEntryFormState(), pendingIds: [] })
+            newClothes.existingClothesId = ''
+            newClothes.requiresManualReview = false
             auditSelectionInfo.value = null
             await fetchAllData()
             return successName
