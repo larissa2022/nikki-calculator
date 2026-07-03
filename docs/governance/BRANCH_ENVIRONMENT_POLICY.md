@@ -34,6 +34,17 @@ This document restores the intended branch and environment governance before any
 7. Before merging to `main`, confirm rollback steps for the frontend deployment, database migration, and affected data.
 8. Merge to `main` only after production environment bindings and rollback notes are confirmed.
 
+## GitHub CLI Checks
+
+- GitHub CLI (`gh`) is the preferred local tool for confirming PR state, mergeability, changed files, and workflow status.
+- Typical read-only checks include `gh pr view`, `gh pr diff`, `gh pr list`, `gh run list`, and `gh run view`.
+- `gh` does not change the branch and environment mapping: `main` still maps only to production, and `develop` still maps only to development / preview.
+- Before any `develop -> main` promotion, the read-only diff audit is still required.
+- `gh` output must be judged together with `git diff` and PR changed files. Do not merge based on one tool alone.
+- If `gh` is unavailable, fall back to the GitHub web UI or the ChatGPT GitHub connector for confirmation.
+- `gh pr merge` is a write action and requires explicit user approval, especially for production-related PRs.
+- Do not record `gh auth` tokens, device codes, authorization URLs, or keyring details in repository files, logs, or commits.
+
 ## Prohibited Flow
 
 - Do not merge `feature/*`, `fix/*`, or `docs/*` directly into `main`.

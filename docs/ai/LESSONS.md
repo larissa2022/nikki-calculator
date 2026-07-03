@@ -18,6 +18,23 @@
 
 ## 当前 Lessons
 
+### Lesson: GitHub CLI 纳入治理工作流
+
+- 日期：2026-07-03
+- 来源任务：安装并验证 GitHub CLI，更新 PR / workflow 状态确认工作流
+- 现象：PR 状态、`mergeable`、changed files 和 workflow 状态经常需要在合并前重复确认。只依赖页面人工查看或连接器回传，容易增加操作成本，也容易漏掉本地命令可复核的证据。
+- 原因：本地 `gh` 能提高 PR 状态、`mergeable`、changed files 和 workflow 查询效率，但 `gh auth` / token 泄露、把 `gh pr merge` 当成默认动作、以及网络不可用都会带来治理风险。
+- 处理方式：
+  - PR 和 workflow 只读确认优先使用 `gh`，包括 `gh pr view`、`gh pr diff`、`gh pr list`、`gh run list`、`gh run view`。
+  - `gh` 不可用时，回退到 GitHub 页面或 ChatGPT GitHub 连接器。
+  - `gh pr merge` 必须在用户明确确认后才能执行，不得因为工具可用就默认合并。
+  - `gh auth` token、验证码、授权链接和 keyring 信息不得写入仓库、文档、日志或 commit。
+  - production 相关 merge 前必须再次确认用户授权、环境映射和 rollback。
+- 后续影响：后续 PR 治理可以把 `gh` 作为优先只读检查工具，但合并权限、production 边界和 GitHub 事实源原则保持不变。
+- Pattern Candidate：PR 发布前采用“gh 优先查询 -> git diff / changed files 交叉确认 -> 用户授权后才执行写操作”的工作流。
+- Rule Candidate：暂无。
+- 状态：可复用
+
 ### Lesson: AI + Codex + 双环境项目治理工作流复盘
 
 - 日期：2026-07-03
