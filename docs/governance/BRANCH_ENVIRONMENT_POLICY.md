@@ -4,6 +4,8 @@
 
 This document restores the intended branch and environment governance before any further business feature work.
 
+This file defines branch and environment mapping. Detailed operating procedures live in [`../ai/WORKFLOWS.md`](../ai/WORKFLOWS.md). If workflow instructions conflict with this file or [`../ai/RULES.md`](../ai/RULES.md), the branch/environment mapping and production gates in this file and `RULES.md` take precedence.
+
 ## Branch Mapping
 
 | Branch | Environment | Purpose |
@@ -44,6 +46,7 @@ This document restores the intended branch and environment governance before any
 - If `gh` is unavailable, fall back to the GitHub web UI or the ChatGPT GitHub connector for confirmation.
 - `gh pr merge` is a write action and requires explicit user approval, especially for production-related PRs.
 - Do not record `gh auth` tokens, device codes, authorization URLs, or keyring details in repository files, logs, or commits.
+- See [`../ai/WORKFLOWS.md`](../ai/WORKFLOWS.md) for the full PR and workflow check procedure.
 
 ## Prohibited Flow
 
