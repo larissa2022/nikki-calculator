@@ -121,13 +121,18 @@ git push origin feature/category-code-wardrobe-import
 项目级规则，用于约束本仓库开发、测试、数据库和文档协作。
 
 - 分支与环境治理以 [`docs/governance/BRANCH_ENVIRONMENT_POLICY.md`](../governance/BRANCH_ENVIRONMENT_POLICY.md) 为准。
+- 任务开始前必须读取 `docs/ai/RULES.md`、`docs/ai/CURRENT_TASK.md`、`docs/governance/BRANCH_ENVIRONMENT_POLICY.md`。
 - `main` 只对应 production。
 - `develop` 只对应 development / preview。
 - 不允许直接从 `feature/*`、`fix/*`、`docs/*` 合入 `main`，除非是明确批准的紧急 hotfix。
+- `develop -> main` 前必须做只读差异审计，并按文档 / 业务 / 数据库 / 配置分类。
 - 数据库相关任务必须先确认 Supabase project ref。
+- 数据库 migration 必须先在 development 验证。
+- 已执行过的 migration 如需修正，必须新增 patch migration。
 - Vercel production 只能跟 `main` 对应。
 - Vercel preview / dev 只能跟 `develop` 或短期 feature 分支对应。
 - 不直接操作 production。
+- production 操作前必须重新确认 Vercel / Supabase 环境绑定。
 - production 写库脚本不放入可提交路径。
 - 涉及数据库前必须确认 dev / prod 状态。
 - 数据库任务必须先看数据库安全文档和变更记录。
