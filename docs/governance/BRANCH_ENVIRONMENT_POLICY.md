@@ -23,6 +23,17 @@ This document restores the intended branch and environment governance before any
 4. Promote only verified `develop` content to `main` through a PR.
 5. Keep `main` mapped only to production.
 
+## Standard Release Flow
+
+1. Start feature, fix, and docs work from `develop`.
+2. Merge completed work back into `develop`.
+3. Validate `develop` in the development / preview environment.
+4. Before any `develop -> main` release, run a read-only diff audit and classify changes as documentation, business code, database / Supabase, or configuration / build.
+5. Split high-risk changes into separate PRs instead of mixing them with low-risk documentation.
+6. Apply database migrations to development first; if an already-applied migration needs correction, create a new patch migration.
+7. Before merging to `main`, confirm rollback steps for the frontend deployment, database migration, and affected data.
+8. Merge to `main` only after production environment bindings and rollback notes are confirmed.
+
 ## Prohibited Flow
 
 - Do not merge `feature/*`, `fix/*`, or `docs/*` directly into `main`.

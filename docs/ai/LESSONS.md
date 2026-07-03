@@ -18,6 +18,31 @@
 
 ## 当前 Lessons
 
+### Lesson: AI + Codex + 双环境项目治理工作流复盘
+
+- 日期：2026-07-03
+- 来源任务：恢复分支与环境治理、拆分 develop -> main 发布、验证 Supabase development migration、Preview 管理员审核流程修复
+- 现象：项目同时涉及 GitHub 分支、Vercel 部署、Supabase 双环境、数据库 migration、前端审核流程和 AI 协作规则。如果直接合并 develop 到 main，容易把未审计的业务代码、数据库变更或环境风险带入 production。
+- 原因：`main = production`、`develop = development / preview` 的事实源曾被分支历史、PR 状态、Vercel / Supabase 绑定和文档状态打乱；同时 Codex 可能在没有明确边界时把文档、业务、数据库和配置变更混在一次提交中。
+- 处理方式：
+  - 先确立事实源：以 GitHub、Vercel、Supabase project ref 和 `docs/ai` / `docs/governance` 文档为准。
+  - 角色分工：
+    - 用户：最终决策者，确认生产操作、环境绑定、PR 合并和业务验收结果。
+    - ChatGPT：整理任务、拆分风险、形成 Codex 指令和 PR 文案，不直接执行生产操作。
+    - Codex：按任务边界执行文件修改、验证、commit / push，并回传 `git status`、命令结果、风险和 rollback。
+  - AI / Codex 开始任务前先读 `docs/ai/RULES.md`、`docs/ai/CURRENT_TASK.md` 和 `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`。
+  - 固定环境映射：`main = production`，`develop = development / preview`。
+  - 只读盘点优先：任何治理、发布或数据库任务先做 `git status`、分支 / PR / 差异盘点，再决定是否修改。
+  - develop -> main 前必须做差异分类：文档、业务代码、数据库 / Supabase、配置 / 构建。
+  - 文档 / 业务 / 数据库 / 配置按风险拆 PR；高风险内容不得跟低风险文档治理混合发布。
+  - migration 必须先在 development 验证，再考虑 production。
+  - 已执行过的 migration 不原地改来期待远端重跑；如果需要修正，新增 patch migration。
+  - 每一步必须回传：`git status`、关键命令结果、风险判断、rollback 方案和未确认事项。
+- 后续影响：后续任何 develop -> main 发布都应先按此流程走，只在目标环境验证，发布前重新确认 Vercel / Supabase 绑定，并准备前端、migration 和数据一致性 rollback。
+- Pattern Candidate：双环境项目发布前采用“事实源确认 -> 只读盘点 -> 分层审计 -> 环境内验证 -> 分风险 PR -> rollback 准备”的固定工作流。
+- Rule Candidate：已同步到 `RULES.md` 的硬规则包括任务前阅读治理文档、develop -> main 只读审计、migration 先 dev 验证、已执行 migration 用 patch migration 修正、production 操作前确认环境绑定。
+- 状态：可复用
+
 ### Lesson: 大模块开发前先拆阶段包
 
 - 日期：2026-06-30
