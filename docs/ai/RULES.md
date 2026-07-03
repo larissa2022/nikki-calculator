@@ -126,6 +126,11 @@ git push origin feature/category-code-wardrobe-import
 - `develop` 只对应 development / preview。
 - 不允许直接从 `feature/*`、`fix/*`、`docs/*` 合入 `main`，除非是明确批准的紧急 hotfix。
 - `develop -> main` 前必须做只读差异审计，并按文档 / 业务 / 数据库 / 配置分类。
+- PR 状态、`mergeable`、changed files 和 workflow 查询优先使用 GitHub CLI（`gh`）确认。
+- `gh` 可用于只读检查，例如 `gh pr view`、`gh pr diff`、`gh pr list`、`gh run list`、`gh run view`。
+- `gh` 不可用时，回退到 GitHub 页面或 ChatGPT GitHub 连接器确认。
+- `gh pr merge` 属于写操作，必须在用户明确确认后才能执行。
+- `gh auth` token、验证码、授权链接不得写入仓库、文档、日志或 commit。
 - 数据库相关任务必须先确认 Supabase project ref。
 - 数据库 migration 必须先在 development 验证。
 - 已执行过的 migration 如需修正，必须新增 patch migration。
@@ -133,6 +138,7 @@ git push origin feature/category-code-wardrobe-import
 - Vercel preview / dev 只能跟 `develop` 或短期 feature 分支对应。
 - 不直接操作 production。
 - production 操作前必须重新确认 Vercel / Supabase 环境绑定。
+- production 相关 merge 前必须再次获得用户确认。
 - production 写库脚本不放入可提交路径。
 - 涉及数据库前必须确认 dev / prod 状态。
 - 数据库任务必须先看数据库安全文档和变更记录。

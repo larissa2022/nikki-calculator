@@ -5,14 +5,26 @@
 AI / Codex 开始任何任务前，必须先阅读：
 
 - [AI 协作规则](ai/RULES.md)
+- [当前任务](ai/CURRENT_TASK.md)
 - [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)
+- [数据库环境信息](database/环境信息.md)
 
 ## 治理
 
 | 文档 | 作用 |
 | --- | --- |
 | [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md) | 规定 main / develop / feature 分支与 Vercel、Supabase 环境的对应关系 |
-| [AI 协作复盘](ai/LESSONS.md) | 记录 AI / Codex / GitHub / Vercel / Supabase 协作中的可复用经验 |
+| [AI 协作规则](ai/RULES.md) | 记录任务边界、PR 审计、GitHub CLI 和生产操作确认规则 |
+| [当前任务](ai/CURRENT_TASK.md) | 记录当前任务状态和是否允许进入开发 |
+| [AI 协作复盘](ai/LESSONS.md) | 记录 AI / Codex / GitHub CLI / GitHub / Vercel / Supabase 协作中的可复用经验 |
+
+## GitHub CLI 工作流
+
+- PR 状态、`mergeable`、changed files 和 workflow 状态优先使用 GitHub CLI（`gh`）查询。
+- 常用只读命令包括 `gh pr view`、`gh pr diff`、`gh pr list`、`gh run list`、`gh run view`。
+- `gh` 不可用时，回退到 GitHub 页面或 ChatGPT GitHub 连接器。
+- `gh pr merge` 属于写操作，production 相关 merge 仍必须先获得用户明确确认。
+- 不得将 `gh auth` token、验证码、授权链接或 keyring 信息写入仓库、文档、日志或 commit。
 
 ## 需求与规划
 
@@ -38,12 +50,13 @@ AI / Codex 开始任何任务前，必须先阅读：
 
 ## 阅读顺序
 
-1. AI / Codex 先看 [AI 协作规则](ai/RULES.md) 和 [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)。
-2. 再看 [AI 协作复盘](ai/LESSONS.md)，确认可复用工作流和历史教训。
-3. 再看 [产品设计书](requirements/产品设计书.md)，确认产品定位和用户优先级。
-4. 再看 [需求文档](requirements/需求文档.md)，确认业务口径。
-5. 再看 [开发文档](planning/开发文档.md)，确认阶段与阻塞点。
-6. 进入实现前看 [技术实现文档](planning/技术实现文档.md)。
-7. 涉及数据库前，必须先看 [数据库开发安全方案](database/数据库开发安全方案.md)。
-8. 切换环境前，确认 [数据库环境信息](database/环境信息.md)。
-9. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
+1. AI / Codex 先看 [AI 协作规则](ai/RULES.md)、[当前任务](ai/CURRENT_TASK.md) 和 [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)。
+2. 再看 [数据库环境信息](database/环境信息.md)，确认 main / develop 与 Supabase production / development 的关系。
+3. 再看 [AI 协作复盘](ai/LESSONS.md)，确认可复用工作流和历史教训。
+4. 再看 [产品设计书](requirements/产品设计书.md)，确认产品定位和用户优先级。
+5. 再看 [需求文档](requirements/需求文档.md)，确认业务口径。
+6. 再看 [开发文档](planning/开发文档.md)，确认阶段与阻塞点。
+7. 进入实现前看 [技术实现文档](planning/技术实现文档.md)。
+8. 涉及数据库前，必须先看 [数据库开发安全方案](database/数据库开发安全方案.md)。
+9. 切换环境前，再次确认 [数据库环境信息](database/环境信息.md)。
+10. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
