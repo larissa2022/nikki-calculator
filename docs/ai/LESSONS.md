@@ -18,6 +18,18 @@
 
 ## 当前 Lessons
 
+### Lesson: docs-only 任务需要任务级预审批
+
+- 日期：2026-07-04
+- 来源任务：修正 ChatGPT 与 Codex 的 docs-only 审批流，减少不必要中断
+- 现象：docs-only 任务中，`git fetch`、`gh pr view`、`git add`、`git commit`、`git push`、`gh pr create` 多次触发审批中断。
+- 原因：审批被放在 Codex 执行中，而不是 ChatGPT 指令生成前。
+- 处理方式：ChatGPT 在发送 Codex 指令前完成任务级预审批；Codex 在授权范围内连续执行；只有越权、失败或高风险升级才停止。
+- 后续影响：docs-only 任务应在 ChatGPT 指令中一次性写清敏感命令、用途、授权边界和失败处理，减少反复确认。
+- Pattern Candidate：docs-only 任务采用“ChatGPT 任务级预审批 + Codex 授权范围内连续执行”的协作模式。
+- Rule Candidate：暂无。
+- 状态：可复用
+
 ### Lesson: 规则层与工作流层分离
 
 - 日期：2026-07-03
