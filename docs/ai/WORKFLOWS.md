@@ -25,6 +25,54 @@
    - 是否涉及数据库 / Supabase / Vercel
 4. 如出现规则冲突、字段缺失、生产风险或会改变用户行为的内容，暂停并向用户确认。
 
+## ChatGPT 预审批与 Codex 连续执行流程
+
+本流程用于减少 docs-only 任务中不必要的执行中断。敏感命令的风险说明和授权边界，应优先在 ChatGPT 生成 Codex 指令前完成；Codex 收到用户已确认的任务级授权后，应在授权范围内连续执行。
+
+核心规则：
+
+1. ChatGPT 负责在发送 Codex 指令前完成任务级预审批：
+   - 明确任务目标。
+   - 明确允许修改范围。
+   - 明确禁止范围。
+   - 明确敏感命令清单。
+   - 明确是否涉及 `main` / production / database / Supabase / Vercel。
+   - 明确失败处理。
+2. 用户在 ChatGPT 中确认后，Codex 应在授权范围内连续执行：
+   - 不要在每个已授权命令前重复要求确认。
+   - 不要把 docs-only 的 `git add` / `git commit` / `git push` 拆成多轮用户审批。
+   - 不要因命令属于敏感命令就自动停止，前提是该命令已在 ChatGPT 指令中预审批。
+3. Codex 必须停止的情况：
+   - 审批层拒绝命令。
+   - 命令执行失败。
+   - 实际修改文件超出允许范围。
+   - 当前分支或目标分支与指令不一致。
+   - 出现 `main` / production / database / Supabase / Vercel 相关操作。
+   - 需要修改 `RULES.md` 但用户未明确授权。
+   - 需要 merge PR。
+   - 需要删除分支。
+   - 发现 rollback 不明确。
+4. docs-only 标准授权模式：
+   在 ChatGPT 指令已明确授权的情况下，Codex 可连续执行：
+   - fetch / checkout / pull
+   - 新建 docs 分支
+   - 修改允许的 docs 文件
+   - `git diff` 检查
+   - `git add` 指定 docs 文件
+   - `git commit`
+   - `git push` 到该 docs 分支
+   - `gh pr create` 到 `develop`
+5. merge 仍需单独确认：
+   - `gh pr merge` 永远不包含在普通 docs-only 自动授权中。
+   - merge 前必须由用户再次明确确认。
+   - `develop -> main` 必须单独审计和确认。
+6. 审批层拒绝后的处理：
+   - 立即停止。
+   - 回传被拒绝的命令、错误信息、当前 `git status`。
+   - 不重复执行。
+   - 不改用其他命令绕过。
+   - 不把失败命令拆成变体重试。
+
 ## 2. PR 只读检查流程
 
 适用于 PR 合并前、发布前、风险审计前的只读确认。
@@ -142,7 +190,7 @@
 
 ## 7. 审批层高风险命令 Preflight
 
-以下命令容易触发审批层拦截。执行前必须说明目的、是否只读、是否会修改远端或 production、是否需要用户确认。若被审批层拒绝，应立即停止，不反复重试，不换方式绕过。
+以下命令容易触发审批层拦截。这些分类用于 ChatGPT 生成 Codex 指令前的任务级预审批，不是让 Codex 在执行中反复询问。执行前应在 ChatGPT 指令中说明目的、是否只读、是否会修改远端或 production、是否需要用户确认。若已预先确认且仍在授权范围内，Codex 可继续执行；若被审批层拒绝，应立即停止，不反复重试，不换方式绕过。
 
 ### 7.1 网络 / 远端读取类
 
@@ -160,7 +208,7 @@ Preflight：
 - 目的：刷新远端引用、读取 PR / diff / workflow 状态。
 - 只读：通常是只读；但 `git pull origin <branch>` 会更新本地工作树和本地分支。
 - 远端 / production 修改：不修改远端，不直接修改 production。
-- 用户确认：涉及网络访问或本地分支更新时，应说明用途并按审批要求确认。
+- 预审批：涉及网络访问或本地分支更新时，应在 ChatGPT 指令中说明用途和失败处理；若用户已确认任务范围，Codex 可在授权范围内继续执行。
 - 被拒绝处理：立即停止，回传错误；不得反复重试或改用其他工具绕过。
 
 ### 7.2 本地写入 / 暂存 / 提交类
@@ -178,7 +226,7 @@ Preflight：
 - 只读：不是只读。
 - 远端 / production 修改：不修改远端，不直接修改 production。
 - 本地影响：`git add` 虽然不修改文件内容，但会修改 Git 暂存区；`git commit` 会创建本地历史；`git restore` / `git checkout --` 会丢弃本地修改，属于潜在破坏性操作。
-- 用户确认：执行前必须说明目的、影响范围、是否只限 docs-only、rollback 方式；对 docs-only 任务，`git add`、`git commit`、`git push` 应拆成明确步骤并分别回传结果。
+- 预审批：执行前必须在 ChatGPT 指令中说明目的、影响范围、是否只限 docs-only、rollback 方式；对已授权 docs-only 任务，`git add`、`git commit`、`git push` 应拆成明确步骤并分别回传结果，但不需要逐步重新请求用户确认。
 - 命令边界：不要把 `git add`、`git commit`、`git push` 混在同一条复合命令里。
 - 被拒绝处理：立即停止，回传错误；不得反复执行或换命令绕过。
 
@@ -197,7 +245,7 @@ Preflight：
 - 目的：推送分支、创建 / 合并 / 关闭 / 审查 PR。
 - 只读：不是只读。
 - 远端 / production 修改：`git push origin <branch>` 属于 Git 远端写操作；`gh pr create` / `gh pr merge` 属于 GitHub 远端写操作；`gh pr merge` 合并到 `main` 时会影响 production 发布链路。
-- 用户确认：远端写操作必须用户明确确认目标 repo、base/head、操作类型和是否涉及 production；`gh pr merge` 必须用户明确确认。
+- 预审批：远端写操作必须在 ChatGPT 指令中明确目标 repo、base/head、操作类型和是否涉及 production；若用户已确认 docs-only 任务范围，`git push` 和 `gh pr create` 可连续执行。`gh pr merge` 必须单独明确确认。
 - 被拒绝处理：立即停止，回传错误；不得用 GitHub 页面、连接器或其他命令绕过。
 
 ### 7.4 Git 历史改写 / 删除类
@@ -216,7 +264,7 @@ Preflight：
 - 目的：改写历史、清理文件、强制推送或删除分支。
 - 只读：不是只读。
 - 远端 / production 修改：本地命令可能删除未提交内容；强制推送会改写远端历史，涉及 `main` 时会影响 production 链路。
-- 用户确认：必须逐项说明影响范围和 rollback；没有明确批准不得执行。
+- 预审批：必须在 ChatGPT 指令中逐项说明影响范围和 rollback；没有明确批准不得执行。
 - 被拒绝处理：立即停止，回传错误；不得尝试等价破坏性命令。
 
 ### 7.5 数据库 / Supabase 类
@@ -235,7 +283,7 @@ Preflight：
 - 目的：切换 Supabase project、推送 schema / migration、重置数据库、部署函数或直接访问数据库。
 - 只读：通常不是只读；`psql` 取决于执行语句，但仍视为高风险。
 - 远端 / production 修改：可能修改 development 或 production 数据库 / functions；production 风险极高。
-- 用户确认：必须先确认 project ref、环境、备份、development 验证和 rollback；production 操作必须单独明确确认。
+- 预审批：必须先在 ChatGPT 指令中确认 project ref、环境、备份、development 验证和 rollback；production 操作必须单独明确确认。
 - 被拒绝处理：立即停止，回传错误；不得连接 production 或换用其他数据库入口绕过。
 
 ### 7.6 Vercel / production 类
@@ -253,7 +301,7 @@ Preflight：
 - 目的：部署、生产发布、回滚或修改 Vercel 环境变量。
 - 只读：不是只读。
 - 远端 / production 修改：可能修改 Vercel deployment、production 流量或环境变量。
-- 用户确认：必须明确目标 project、branch、environment、rollback 方案和是否 production；production 操作必须单独明确确认。
+- 预审批：必须在 ChatGPT 指令中明确目标 project、branch、environment、rollback 方案和是否 production；production 操作必须单独明确确认。
 - 被拒绝处理：立即停止，回传错误；不得手动触发 Vercel 或改用其他入口绕过。
 
 ## 8. 回传模板

@@ -17,6 +17,7 @@ AI / Codex 开始任何任务前，必须先阅读：
 | [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md) | 规定 main / develop / feature 分支与 Vercel、Supabase 环境的对应关系 |
 | [AI 协作规则](ai/RULES.md) | 宪法层：记录强规则、角色边界、门禁和安全边界 |
 | [AI / Codex 操作手册](ai/WORKFLOWS.md) | 操作手册层：记录 PR 检查、docs-only、发布、GitHub CLI 和数据库工作流 |
+| [对话迁移与交接](ai/CONVERSATION_HANDOFF.md) | 新 ChatGPT 对话启动、上下文迁移和 ChatGPT -> Codex 指令交接模板 |
 | [当前任务](ai/CURRENT_TASK.md) | 记录当前任务状态和是否允许进入开发 |
 | [AI 协作复盘](ai/LESSONS.md) | 复盘经验层：记录 AI / Codex / GitHub CLI / GitHub / Vercel / Supabase 协作中的可复用经验 |
 
@@ -24,6 +25,7 @@ AI / Codex 开始任何任务前，必须先阅读：
 
 - 具体操作流程见 [AI / Codex 操作手册](ai/WORKFLOWS.md)。
 - PR 状态、`mergeable`、changed files、workflow 查询和 `gh` 使用规范都在 `WORKFLOWS.md` 中维护。
+- docs-only 任务采用 ChatGPT 任务级预审批 + Codex 授权范围内连续执行模式，具体规则见 [AI / Codex 操作手册](ai/WORKFLOWS.md) 和 [对话迁移与交接](ai/CONVERSATION_HANDOFF.md)。
 - `RULES.md` 保留强规则和门禁；如果 `WORKFLOWS.md` 与 `RULES.md` 冲突，以 `RULES.md` 为准。
 
 ## 需求与规划
@@ -54,7 +56,8 @@ AI / Codex 开始任何任务前，必须先阅读：
 2. 再看 [当前任务](ai/CURRENT_TASK.md)。
 3. 再看 [分支与环境治理规则](governance/BRANCH_ENVIRONMENT_POLICY.md)。
 4. 再看 [AI / Codex 操作手册](ai/WORKFLOWS.md)。
-5. 再看 [AI 协作复盘](ai/LESSONS.md)，确认可复用工作流和历史教训。
-6. 再进入业务 / 技术 / 数据库文档；涉及数据库前，必须先看 [数据库环境信息](database/环境信息.md) 和 [数据库开发安全方案](database/数据库开发安全方案.md)。
-7. 切换环境前，再次确认 [数据库环境信息](database/环境信息.md)。
-8. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
+5. 开启新 ChatGPT 对话或迁移上下文时，看 [对话迁移与交接](ai/CONVERSATION_HANDOFF.md)。
+6. 再看 [AI 协作复盘](ai/LESSONS.md)，确认可复用工作流和历史教训。
+7. 再进入业务 / 技术 / 数据库文档；涉及数据库前，必须先看 [数据库环境信息](database/环境信息.md) 和 [数据库开发安全方案](database/数据库开发安全方案.md)。
+8. 切换环境前，再次确认 [数据库环境信息](database/环境信息.md)。
+9. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
