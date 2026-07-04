@@ -10,6 +10,8 @@ AI / Codex 开始任何任务前，必须先阅读：
 - [AI / Codex 操作手册](ai/WORKFLOWS.md)
 - [数据库环境信息](database/环境信息.md)
 
+文档职责边界和文件归属见：[文档文件治理盘点](FILE_GOVERNANCE.md)。
+
 ## 治理
 
 | 文档 | 作用 |
@@ -20,6 +22,7 @@ AI / Codex 开始任何任务前，必须先阅读：
 | [对话迁移与交接](ai/CONVERSATION_HANDOFF.md) | 新 ChatGPT 对话启动、上下文迁移和 ChatGPT -> Codex 指令交接模板 |
 | [当前任务](ai/CURRENT_TASK.md) | 记录当前任务状态和是否允许进入开发 |
 | [AI 协作复盘](ai/LESSONS.md) | 复盘经验层：记录 AI / Codex / GitHub CLI / GitHub / Vercel / Supabase 协作中的可复用经验 |
+| [文档文件治理盘点](FILE_GOVERNANCE.md) | 记录 docs 文件职责边界、入口关系、重复/过期位置和未确认事项 |
 
 ## 工作流入口
 
@@ -27,6 +30,8 @@ AI / Codex 开始任何任务前，必须先阅读：
 - PR 状态、`mergeable`、changed files、workflow 查询和 `gh` 使用规范都在 `WORKFLOWS.md` 中维护。
 - docs-only 任务采用 ChatGPT 任务级预审批 + Codex 授权范围内连续执行模式，具体规则见 [AI / Codex 操作手册](ai/WORKFLOWS.md) 和 [对话迁移与交接](ai/CONVERSATION_HANDOFF.md)。
 - `RULES.md` 保留强规则和门禁；如果 `WORKFLOWS.md` 与 `RULES.md` 冲突，以 `RULES.md` 为准。
+- 当前任务状态以 [当前任务](ai/CURRENT_TASK.md) 为准；历史执行流水不要作为当前任务事实源。
+- 文件归属不清或入口重复时，先查看 [文档文件治理盘点](FILE_GOVERNANCE.md)。
 
 ## 需求与规划
 
@@ -58,6 +63,7 @@ AI / Codex 开始任何任务前，必须先阅读：
 4. 再看 [AI / Codex 操作手册](ai/WORKFLOWS.md)。
 5. 开启新 ChatGPT 对话或迁移上下文时，看 [对话迁移与交接](ai/CONVERSATION_HANDOFF.md)。
 6. 再看 [AI 协作复盘](ai/LESSONS.md)，确认可复用工作流和历史教训。
-7. 再进入业务 / 技术 / 数据库文档；涉及数据库前，必须先看 [数据库环境信息](database/环境信息.md) 和 [数据库开发安全方案](database/数据库开发安全方案.md)。
-8. 切换环境前，再次确认 [数据库环境信息](database/环境信息.md)。
-9. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。
+7. 如需要判断文档职责或入口归属，看 [文档文件治理盘点](FILE_GOVERNANCE.md)。
+8. 再进入业务 / 技术 / 数据库文档；涉及数据库前，必须先看 [数据库环境信息](database/环境信息.md) 和 [数据库开发安全方案](database/数据库开发安全方案.md)。
+9. 切换环境前，再次确认 [数据库环境信息](database/环境信息.md)。
+10. 每次数据库变更后，更新 [数据库变更记录](database/数据库变更记录.md)。

@@ -18,6 +18,18 @@
 
 ## 当前 Lessons
 
+### Lesson: docs 入口需要文件职责地图
+
+- 日期：2026-07-04
+- 来源任务：docs-only 文件治理盘点
+- 现象：`docs/README.md` 已有总入口，但 `docs/ai`、`docs/governance`、`docs/database` 中存在规则、流程、当前任务、报告和数据库环境说明交叉引用，新任务容易把历史报告或当前任务文件当作长期事实源。
+- 原因：文档体系扩展后，入口索引只说明“有哪些文件”，但没有集中说明“每个文件不该承载什么”。
+- 处理方式：新增 `docs/FILE_GOVERNANCE.md` 作为文件职责地图，并在 `docs/README.md`、`WORKFLOWS.md`、`CONVERSATION_HANDOFF.md` 中补充入口。
+- 后续影响：后续 docs-only 收口优先更新入口和职责地图；如发现需要修改 `RULES.md`，应作为未确认事项暂停，不在普通文件治理任务中顺手修改。
+- Pattern Candidate：docs 规模扩大后，采用“总入口 + 文件职责地图 + 当前任务状态”的组合，避免规则层、操作层和历史报告混用。
+- Rule Candidate：暂无。
+- 状态：观察中
+
 ### Lesson: docs-only 任务需要任务级预审批
 
 - 日期：2026-07-04
