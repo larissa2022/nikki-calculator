@@ -20,6 +20,7 @@
 | `docs/ai/CONVERSATION_HANDOFF.md` | 新对话迁移、ChatGPT -> Codex 指令模板 | 正式 Rule、长期事实源、业务实现方案 |
 | `docs/ai/LESSONS.md` | 复盘经验、Pattern Candidate、Rule Candidate 线索 | 已批准规则、最终产品决策 |
 | `docs/ai/DECISIONS.md` | 已确认的产品与技术决策 | 未确认事项、临时推测、执行流水 |
+| `docs/ai/CODEX_REPORT.md` | 历史执行报告 / 归档参考 | 当前任务事实源、正式 Rule、未确认事项的执行依据 |
 | `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` | 分支与环境映射、发布门禁 | 具体 git / gh 操作步骤 |
 | `docs/database/环境信息.md` | Supabase 环境非敏感信息、project ref 与本地连接建议 | 密钥、token、真实用户隐私数据 |
 | `docs/database/数据库开发安全方案.md` | 数据库开发安全流程、备份、回滚和上线检查 | 当前任务状态、业务功能开发计划 |
@@ -32,7 +33,7 @@
 - `docs/ai/CURRENT_TASK.md` 内容已过期，仍停留在“等待用户确认分支 / PR 治理操作”，需要更新为本次 docs-only 文件治理状态。
 - `docs/ai/CODEX_REPORT.md` 包含大量历史执行结果，适合作为报告归档，不适合作为当前任务事实源。
 - `docs/ai/DECISIONS.md` 已承载较多 Final 决策，应继续保持 Final Only，不把待确认事项或临时推测写入其中。
-- `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并。
+- `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并；数据库安全方案开头的旧风险状态已在后续 docs-only 收口中更新。
 - `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` 与 `docs/ai/WORKFLOWS.md` 存在交叉引用但职责清晰：前者定义分支 / 环境映射，后者定义执行流程。
 
 ## 4. 收口建议
@@ -45,6 +46,6 @@
 
 ## 5. 未确认事项
 
-- `docs/database/数据库开发安全方案.md` 开头仍保留“生产库和开发库尚未隔离”等较早风险表述，而 `docs/database/环境信息.md` 已登记 development 项目；本次因允许修改范围未包含该文件，暂不修改，建议后续单独确认是否收口。
-- `docs/ai/CODEX_REPORT.md` 体量较大且历史信息混杂，是否拆分为归档目录或按日期归档，需用户后续单独确认。
-- 是否为 `docs/ai` 新增更细的文档地图文件，例如 `docs/ai/DOCUMENT_MAP.md`，本次暂不新增，避免重复入口。
+- `docs/database/数据库开发安全方案.md` 开头偏旧的环境风险表述已在本轮 docs-only 收口中更新；后续如环境事实变化，应同步 `docs/database/环境信息.md`。
+- `docs/ai/CODEX_REPORT.md` 已明确为历史执行报告 / 归档参考；是否进一步拆分为归档目录或按日期归档，需用户后续单独确认。
+- 暂不新增 `docs/ai/DOCUMENT_MAP.md`：当前 `docs/FILE_GOVERNANCE.md` 可以承载文件职责地图，新增更细入口可能造成重复。若后续 `docs/ai` 文件继续扩张，再单独评估。
