@@ -10,7 +10,7 @@ import AdminView from './views/AdminView.vue'
 
 // 🌟 1. 核心修复：在这里把 userProfile 提取出来
 const { currentUser, userProfile, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
-const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
+const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadingDebugMessage, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
 const isAuthModalOpen = ref(false)
@@ -75,6 +75,7 @@ const handleProfileUpdated = (updatedProfile) => {
       :myWardrobeIds="myWardrobeIds"
       :stagesData="stagesData"
       :isLoading="isLoading"
+      :loadingDebugMessage="loadingDebugMessage"
       @open-login="isAuthModalOpen = true"
       @go-admin="currentMode = 'admin'"
       @update:ownedIds="myWardrobeIds = $event"
