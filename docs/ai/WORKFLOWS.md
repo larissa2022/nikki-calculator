@@ -6,6 +6,8 @@
 
 `RULES.md` 是宪法层，`WORKFLOWS.md` 是操作手册层，`LESSONS.md` 是复盘经验层，`BRANCH_ENVIRONMENT_POLICY.md` 是分支 / 环境治理层，`CURRENT_TASK.md` 是当前任务状态层。
 
+文档职责边界、入口关系和治理盘点见 [`../FILE_GOVERNANCE.md`](../FILE_GOVERNANCE.md)。该文件用于文件归属说明，不新增正式 Rule。
+
 ## 1. 任务开始流程
 
 1. 读取必要文档：
@@ -134,6 +136,13 @@
    - 风险说明
    - Rollback
 9. merge 前仍需按 PR 只读检查流程确认。
+
+docs-only 文件治理任务还应确认：
+
+- `docs/README.md` 是否提供入口。
+- `docs/ai/CURRENT_TASK.md` 是否仍反映当前任务。
+- `docs/ai/RULES.md` 是否被误用于记录操作步骤；如需修改 `RULES.md`，必须暂停并取得用户单独授权。
+- 是否需要更新 [`../FILE_GOVERNANCE.md`](../FILE_GOVERNANCE.md) 记录文件职责边界和未确认事项。
 
 ## 4. develop -> main 发布流程
 

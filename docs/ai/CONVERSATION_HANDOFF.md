@@ -255,4 +255,5 @@ Codex 每次任务结束必须回传：
   - `docs/ai/CONVERSATION_HANDOFF.md`
   - `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`
   - `docs/database/环境信息.md`
+  - `docs/FILE_GOVERNANCE.md`
 - 当前任务需要说明是否 docs-only、是否涉及 production、是否需要 Codex 直接执行。
