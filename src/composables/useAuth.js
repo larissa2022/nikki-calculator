@@ -6,7 +6,6 @@ import { isAdminRole } from '../utils/roles'
 // 这样全站无论调用多少次 useAuth()，读写的都是这一份真实的数据（单例模式）
 const currentUser = ref(null)
 const userProfile = ref(null)
-let authSubscription = null
 
 // 🌟 让 isAdmin 逻辑同时兼容“普通管理”和“超级管理”
 const isAdmin = computed(() => {
@@ -41,25 +40,21 @@ export function useAuth() {
 
   // 🌟 初始化鉴权系统与监听
   const initAuth = async () => {
-    // 1. 全局监听只注册一次，避免 initAuth 重复调用时叠加回调
-    if (!authSubscription) {
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          resetState(true)
-        } else {
-          currentUser.value = session?.user || null
-          if (currentUser.value) await fetchProfile()
-          else resetState(false)
-        }
-      })
-      authSubscription = data?.subscription || true
-    }
-
-    // 2. 每次初始化仍刷新当前 Session，确保页面唤醒或重挂载后状态准确
+    // 1. 初次加载时获取 Session
     const { data: { session } } = await supabase.auth.getSession()
     currentUser.value = session?.user || null
     if (currentUser.value) await fetchProfile()
-    else resetState(false)
+
+    // 2. 全局监听登入/登出事件
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        resetState(true)
+      } else {
+        currentUser.value = session?.user || null
+        if (currentUser.value) await fetchProfile()
+        else resetState(false)
+      }
+    })
   }
 
   // 🌟 移除了 userQuota，并暴露必要的全局状态和方法

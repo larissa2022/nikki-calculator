@@ -2,34 +2,6 @@ import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
 
 const SUPABASE_PAGE_SIZE = 1000
-const SUPABASE_REQUEST_TIMEOUT_MS = 15000
-const INDEXED_DB_TIMEOUT_MS = 3000
-
-const withTimeout = (promise, timeoutMs, label) => {
-  let settled = false
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      reject(new Error(`${label}超时`))
-    }, timeoutMs)
-
-    Promise.resolve(promise).then(
-      value => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        resolve(value)
-      },
-      err => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        reject(err)
-      }
-    )
-  })
-}
 
 const fetchAllRows = async (table, selectColumns, applyQuery = query => query) => {
   const rows = []
@@ -44,11 +16,7 @@ const fetchAllRows = async (table, selectColumns, applyQuery = query => query) =
 
     query = applyQuery(query)
 
-    const { data, error } = await withTimeout(
-      query,
-      SUPABASE_REQUEST_TIMEOUT_MS,
-      `${table} 第 ${from + 1}-${to + 1} 条加载`
-    )
+    const { data, error } = await query
     if (error) throw error
 
     const page = data || []
@@ -73,61 +41,26 @@ const shouldBlockUnsafeShrink = (currentIds, nextIds) => {
 }
 
 // ====== 🌟 本地硬盘 (IndexedDB) 驱动逻辑 ======
-let dbPromise = null
-
-const getDb = () => {
-  if (!dbPromise) {
-    dbPromise = new Promise((resolve, reject) => {
-      if (typeof indexedDB === 'undefined') {
-        reject(new Error('IndexedDB不可用'))
-        return
-      }
-
-      const request = indexedDB.open('NikkiCacheDB', 1)
-      request.onupgradeneeded = e => e.target.result.createObjectStore('cache')
-      request.onsuccess = e => resolve(e.target.result)
-      request.onerror = () => reject(request.error || new Error('IDB初始化失败'))
-      request.onblocked = () => reject(new Error('IDB初始化被阻塞'))
-    })
-  }
-
-  return dbPromise
-}
+const dbPromise = new Promise((resolve, reject) => {
+  const request = indexedDB.open('NikkiCacheDB', 1)
+  request.onupgradeneeded = e => e.target.result.createObjectStore('cache')
+  request.onsuccess = e => resolve(e.target.result)
+  request.onerror = () => reject('IDB初始化失败')
+})
 
 const saveToLocal = async (key, data) => {
-  try {
-    const db = await withTimeout(getDb(), INDEXED_DB_TIMEOUT_MS, '打开本地缓存')
-    const pureData = JSON.parse(JSON.stringify(data)) // 脱离 Vue Proxy 魔法
-    await withTimeout(new Promise((resolve, reject) => {
-      const tx = db.transaction('cache', 'readwrite')
-      tx.oncomplete = () => resolve()
-      tx.onerror = () => reject(tx.error || new Error('写入本地缓存失败'))
-      tx.onabort = () => reject(tx.error || new Error('写入本地缓存中断'))
-      tx.objectStore('cache').put(pureData, key)
-    }), INDEXED_DB_TIMEOUT_MS, '写入本地缓存')
-  } catch (err) {
-    console.warn('本地缓存写入失败，已跳过:', err)
-  }
+  const db = await dbPromise
+  const pureData = JSON.parse(JSON.stringify(data)) // 脱离 Vue Proxy 魔法
+  db.transaction('cache', 'readwrite').objectStore('cache').put(pureData, key)
 }
 
 const getFromLocal = async (key) => {
-  try {
-    const db = await withTimeout(getDb(), INDEXED_DB_TIMEOUT_MS, '打开本地缓存')
-    return await withTimeout(new Promise((resolve, reject) => {
-      const req = db.transaction('cache').objectStore('cache').get(key)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error || new Error('读取本地缓存失败'))
-    }), INDEXED_DB_TIMEOUT_MS, '读取本地缓存')
-  } catch (err) {
-    console.warn('本地缓存读取失败，改为请求云端:', err)
-    return null
-  }
-}
-
-const getLoadDataErrorMessage = (err) => {
-  const message = err?.message || String(err)
-  if (message.includes('超时')) return '图鉴加载超时，请检查网络后重新加载。'
-  return '图鉴加载失败，请检查网络后重新加载。'
+  const db = await dbPromise
+  return new Promise(resolve => {
+    const req = db.transaction('cache').objectStore('cache').get(key)
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => resolve(null)
+  })
 }
 
 // ====== 👗 衣柜核心逻辑导出 ======
@@ -136,7 +69,6 @@ export function useWardrobe() {
   const myWardrobeIds = ref([])
   const stagesData = ref([])
   const isLoading = ref(false)
-  const loadingError = ref(null)
   const isSaving = ref(false) // 🌟 1. 新增：防抖与防误触的全局锁
 
   // 🚀 高性能计算：使用 Set 实现 O(1) 极速查找
@@ -145,16 +77,11 @@ export function useWardrobe() {
   // 1. 初始化加载图鉴 (含智能缓存比对)
   const loadData = async ({ force = false } = {}) => {
     isLoading.value = true
-    loadingError.value = null
     try {
-      const { count: cloudCount, error: countError } = await withTimeout(
-        supabase
-          .from('clothes')
-          .select('id', { count: 'exact' })
-          .limit(1),
-        SUPABASE_REQUEST_TIMEOUT_MS,
-        '图鉴数量查询'
-      )
+      const { count: cloudCount, error: countError } = await supabase
+        .from('clothes')
+        .select('id', { count: 'exact' })
+        .limit(1)
 
       if (countError) throw countError
 
@@ -181,7 +108,6 @@ export function useWardrobe() {
       }
     } catch (err) {
       console.error("加载图鉴失败:", err)
-      loadingError.value = getLoadDataErrorMessage(err)
     } finally {
       isLoading.value = false
     }
@@ -268,7 +194,6 @@ export function useWardrobe() {
     myWardrobeIds,
     stagesData,
     isLoading,
-    loadingError,
     isSaving, // 🌟 把锁暴露给外部组件
     myWardrobeSet,
     loadData,
