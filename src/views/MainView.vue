@@ -15,7 +15,8 @@ const props = defineProps({
   fullWardrobeData: Array, 
   myWardrobeIds: Array, 
   stagesData: Array, 
-  isLoading: Boolean
+  isLoading: Boolean,
+  loadingError: String
 })
 
 const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
@@ -23,7 +24,6 @@ const currentTab = ref('calculator')
 
 const switchTab = (tab) => {
   currentTab.value = tab
-  if (tab === 'suits') emit('refresh-catalog')
 }
 </script>
 
@@ -47,7 +47,14 @@ const switchTab = (tab) => {
       </nav>
     </header>
 
-    <div v-if="isLoading" class="loading-state"><h2>⏳ 奇迹载入中...</h2></div>
+    <div v-if="isLoading || loadingError" class="loading-state" :class="{ error: loadingError }">
+      <template v-if="loadingError">
+        <h2>图鉴加载失败</h2>
+        <p>{{ loadingError }}</p>
+        <button class="retry-load-btn" @click="emit('refresh-catalog')">重新加载</button>
+      </template>
+      <h2 v-else>⏳ 奇迹载入中...</h2>
+    </div>
     
     <main v-else>
       <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
@@ -76,5 +83,9 @@ h1 { color: #f472b6; font-size: 24px; margin-bottom: 20px; font-weight: 900; let
 .admin-tab-btn { background: #f3e8ff !important; border-color: #d8b4fe !important; color: #9333ea !important; }
 .admin-tab-btn.active { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%) !important; color: white !important; }
 .loading-state { text-align: center; padding: 50px 0; color: #f472b6; }
+.loading-state.error { color: #be123c; }
+.loading-state p { margin: 8px auto 18px; max-width: 360px; color: #64748b; line-height: 1.7; }
+.retry-load-btn { border: 0; border-radius: 12px; padding: 10px 20px; background: #db2777; color: white; font-weight: 900; cursor: pointer; box-shadow: 0 4px 15px rgba(219, 39, 119, 0.2); }
+.retry-load-btn:hover { background: #be185d; transform: translateY(-1px); }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 </style>

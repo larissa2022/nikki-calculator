@@ -2,7 +2,6 @@
 import { ref, onMounted, watch } from 'vue'
 import { useAuth } from './composables/useAuth'
 import { useWardrobe } from './composables/useWardrobe'
-import { supabase } from './api/supabase'
 
 import AuthModal from './components/AuthModal.vue'
 import MainView from './views/MainView.vue'
@@ -10,7 +9,7 @@ import AdminView from './views/AdminView.vue'
 
 // 🌟 1. 核心修复：在这里把 userProfile 提取出来
 const { currentUser, userProfile, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
-const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
+const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadingError, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
 const isAuthModalOpen = ref(false)
@@ -20,15 +19,11 @@ watch(currentUser, (newUser) => {
   else myWardrobeIds.value = []
 })
 
-onMounted(async () => {
-  await loadData()
-  await initAuth()
-  
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT') {
-      currentUser.value = null 
-    } 
+onMounted(() => {
+  initAuth().catch(err => {
+    console.error('初始化登录状态失败:', err)
   })
+  loadData()
 })
 
 const handleSaveCloud = async (payload = {}) => {
@@ -75,6 +70,7 @@ const handleProfileUpdated = (updatedProfile) => {
       :myWardrobeIds="myWardrobeIds"
       :stagesData="stagesData"
       :isLoading="isLoading"
+      :loadingError="loadingError"
       @open-login="isAuthModalOpen = true"
       @go-admin="currentMode = 'admin'"
       @update:ownedIds="myWardrobeIds = $event"
