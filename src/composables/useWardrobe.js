@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
 
 const SUPABASE_PAGE_SIZE = 1000
+const INDEXED_DB_TIMEOUT_MS = 3000
 
 const fetchAllRows = async (table, selectColumns, applyQuery = query => query) => {
   const rows = []
@@ -41,26 +42,113 @@ const shouldBlockUnsafeShrink = (currentIds, nextIds) => {
 }
 
 // ====== 🌟 本地硬盘 (IndexedDB) 驱动逻辑 ======
-const dbPromise = new Promise((resolve, reject) => {
-  const request = indexedDB.open('NikkiCacheDB', 1)
-  request.onupgradeneeded = e => e.target.result.createObjectStore('cache')
-  request.onsuccess = e => resolve(e.target.result)
-  request.onerror = () => reject('IDB初始化失败')
+const withCacheTimeout = (promise, label) => new Promise(resolve => {
+  let settled = false
+  const finish = value => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    resolve(value)
+  }
+
+  const timer = setTimeout(() => {
+    console.warn(`${label}超时，已降级跳过本地缓存`)
+    finish(null)
+  }, INDEXED_DB_TIMEOUT_MS)
+
+  Promise.resolve(promise).then(
+    finish,
+    err => {
+      console.warn(`${label}失败，已降级跳过本地缓存`, err)
+      finish(null)
+    }
+  )
 })
 
-const saveToLocal = async (key, data) => {
+const dbPromise = withCacheTimeout(new Promise(resolve => {
+  if (typeof indexedDB === 'undefined') {
+    console.warn('IndexedDB不可用，已降级跳过本地缓存')
+    resolve(null)
+    return
+  }
+
+  try {
+    const request = indexedDB.open('NikkiCacheDB', 1)
+    request.onupgradeneeded = e => {
+      const db = e.target.result
+      if (!db.objectStoreNames.contains('cache')) db.createObjectStore('cache')
+    }
+    request.onsuccess = e => resolve(e.target.result)
+    request.onerror = () => {
+      console.warn('IDB初始化失败，已降级跳过本地缓存', request.error)
+      resolve(null)
+    }
+    request.onblocked = () => {
+      console.warn('IDB初始化被阻塞，已降级跳过本地缓存')
+      resolve(null)
+    }
+  } catch (err) {
+    console.warn('IDB初始化异常，已降级跳过本地缓存', err)
+    resolve(null)
+  }
+}), 'IDB初始化')
+
+const runCacheTransaction = async (mode, action, label) => {
   const db = await dbPromise
-  const pureData = JSON.parse(JSON.stringify(data)) // 脱离 Vue Proxy 魔法
-  db.transaction('cache', 'readwrite').objectStore('cache').put(pureData, key)
+  if (!db) return null
+
+  return withCacheTimeout(new Promise(resolve => {
+    try {
+      const tx = db.transaction('cache', mode)
+      const store = tx.objectStore('cache')
+
+      tx.onabort = () => {
+        console.warn(`${label}中断，已降级跳过本地缓存`, tx.error)
+        resolve(null)
+      }
+      tx.onerror = () => {
+        console.warn(`${label}失败，已降级跳过本地缓存`, tx.error)
+        resolve(null)
+      }
+
+      action(store, resolve)
+    } catch (err) {
+      console.warn(`${label}异常，已降级跳过本地缓存`, err)
+      resolve(null)
+    }
+  }), label)
+}
+
+const saveToLocal = async (key, data) => {
+  try {
+    const pureData = JSON.parse(JSON.stringify(data)) // 脱离 Vue Proxy 魔法
+    await runCacheTransaction('readwrite', (store, resolve) => {
+      const req = store.put(pureData, key)
+      req.onsuccess = () => resolve(true)
+      req.onerror = () => {
+        console.warn(`写入本地缓存 ${key} 失败，已跳过`, req.error)
+        resolve(null)
+      }
+    }, `写入本地缓存 ${key}`)
+  } catch (err) {
+    console.warn(`写入本地缓存 ${key} 异常，已跳过`, err)
+  }
 }
 
 const getFromLocal = async (key) => {
-  const db = await dbPromise
-  return new Promise(resolve => {
-    const req = db.transaction('cache').objectStore('cache').get(key)
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => resolve(null)
-  })
+  try {
+    return await runCacheTransaction('readonly', (store, resolve) => {
+      const req = store.get(key)
+      req.onsuccess = () => resolve(req.result || null)
+      req.onerror = () => {
+        console.warn(`读取本地缓存 ${key} 失败，已改走云端`, req.error)
+        resolve(null)
+      }
+    }, `读取本地缓存 ${key}`)
+  } catch (err) {
+    console.warn(`读取本地缓存 ${key} 异常，已改走云端`, err)
+    return null
+  }
 }
 
 // ====== 👗 衣柜核心逻辑导出 ======
