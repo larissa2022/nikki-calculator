@@ -3,6 +3,7 @@ import { supabase } from '../api/supabase'
 
 const SUPABASE_PAGE_SIZE = 1000
 const INDEXED_DB_TIMEOUT_MS = 3000
+const CLOTHES_COUNT_TIMEOUT_MS = 5000
 
 const isDebugMode = () => {
   if (typeof window === 'undefined') return false
@@ -39,6 +40,36 @@ const fetchAllRows = async (table, selectColumns, applyQuery = query => query, o
   }
 
   return rows
+}
+
+const fetchClothesCountWithFallback = async () => {
+  let settled = false
+
+  return new Promise(resolve => {
+    const finish = result => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(result)
+    }
+
+    const timer = setTimeout(() => {
+      finish({ count: null, error: null, timedOut: true })
+    }, CLOTHES_COUNT_TIMEOUT_MS)
+
+    supabase
+      .from('clothes')
+      .select('id', { count: 'exact' })
+      .limit(1)
+      .then(
+        result => finish({
+          count: result?.count ?? null,
+          error: result?.error || null,
+          timedOut: false
+        }),
+        error => finish({ count: null, error, timedOut: false })
+      )
+  })
 }
 
 const normalizeOwnedIds = (ownedClothes) => {
@@ -185,19 +216,26 @@ export function useWardrobe() {
     setLoadingDebug('开始加载图鉴')
     try {
       setLoadingDebug('查询 clothes count')
-      const { count: cloudCount, error: countError } = await supabase
-        .from('clothes')
-        .select('id', { count: 'exact' })
-        .limit(1)
+      const { count: cloudCount, error: countError, timedOut: countTimedOut } = await fetchClothesCountWithFallback()
 
-      if (countError) throw countError
+      if (countTimedOut) {
+        setLoadingDebug('clothes count 超时，跳过缓存校验')
+      } else if (countError) {
+        console.warn('clothes count 查询失败，已跳过缓存校验', countError)
+        setLoadingDebug('clothes count 失败，跳过缓存校验')
+      }
 
       setLoadingDebug('读取本地 clothes 缓存')
       const localClothes = await getFromLocal('fullClothesData_v2') 
       setLoadingDebug('读取本地 stages 缓存')
       const localStages = await getFromLocal('stagesData')
+      const canUseLocalCache = cloudCount !== null && cloudCount !== undefined
+        && !force
+        && localClothes
+        && localClothes.length === cloudCount
+        && localStages
 
-      if (!force && localClothes && localClothes.length === cloudCount && localStages) {
+      if (canUseLocalCache) {
         setLoadingDebug('使用本地缓存')
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
