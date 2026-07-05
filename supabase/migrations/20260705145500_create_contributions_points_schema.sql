@@ -19,6 +19,7 @@ create table if not exists public.clothing_contributions (
   contribution_type text not null,
   contribution_rank smallint not null,
   awarded_points integer not null,
+  source_snapshot jsonb,
   created_at timestamptz not null default now(),
 
   constraint clothing_contributions_business_key_required
@@ -97,6 +98,7 @@ to authenticated
 using ((select auth.uid()) = user_id);
 
 create or replace view public.clothing_contribution_public_view
+with (security_invoker = true)
 as
 select
   cc.category,
