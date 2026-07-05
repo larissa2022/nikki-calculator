@@ -4,7 +4,17 @@ import { supabase } from '../api/supabase'
 const SUPABASE_PAGE_SIZE = 1000
 const INDEXED_DB_TIMEOUT_MS = 3000
 
-const fetchAllRows = async (table, selectColumns, applyQuery = query => query) => {
+const isDebugMode = () => {
+  if (typeof window === 'undefined') return false
+  try {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('debug') === '1' || params.get('debug') === 'true'
+  } catch (err) {
+    return false
+  }
+}
+
+const fetchAllRows = async (table, selectColumns, applyQuery = query => query, onPageStart = null) => {
   const rows = []
   let from = 0
 
@@ -17,6 +27,7 @@ const fetchAllRows = async (table, selectColumns, applyQuery = query => query) =
 
     query = applyQuery(query)
 
+    if (onPageStart) onPageStart(from)
     const { data, error } = await query
     if (error) throw error
 
@@ -157,7 +168,13 @@ export function useWardrobe() {
   const myWardrobeIds = ref([])
   const stagesData = ref([])
   const isLoading = ref(false)
+  const loadingDebugMessage = ref('')
   const isSaving = ref(false) // 🌟 1. 新增：防抖与防误触的全局锁
+  const debugEnabled = isDebugMode()
+
+  const setLoadingDebug = (message) => {
+    if (debugEnabled) loadingDebugMessage.value = message || ''
+  }
 
   // 🚀 高性能计算：使用 Set 实现 O(1) 极速查找
   const myWardrobeSet = computed(() => new Set(myWardrobeIds.value))
@@ -165,7 +182,9 @@ export function useWardrobe() {
   // 1. 初始化加载图鉴 (含智能缓存比对)
   const loadData = async ({ force = false } = {}) => {
     isLoading.value = true
+    setLoadingDebug('开始加载图鉴')
     try {
+      setLoadingDebug('查询 clothes count')
       const { count: cloudCount, error: countError } = await supabase
         .from('clothes')
         .select('id', { count: 'exact' })
@@ -173,17 +192,25 @@ export function useWardrobe() {
 
       if (countError) throw countError
 
+      setLoadingDebug('读取本地 clothes 缓存')
       const localClothes = await getFromLocal('fullClothesData_v2') 
+      setLoadingDebug('读取本地 stages 缓存')
       const localStages = await getFromLocal('stagesData')
 
       if (!force && localClothes && localClothes.length === cloudCount && localStages) {
+        setLoadingDebug('使用本地缓存')
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
       } else {
-        const [clothesRows, stageRows] = await Promise.all([
-          fetchAllRows('clothes', '*, suits(name)', query => query.order('id')),
-          fetchAllRows('stages', '*', query => query.order('id'))
-        ])
+        setLoadingDebug('下载 clothes 数据')
+        const clothesPromise = fetchAllRows('clothes', '*, suits(name)', query => query.order('id'), offset => {
+          setLoadingDebug(`正在下载 clothes：offset ${offset}`)
+        })
+        setLoadingDebug('下载 stages 数据')
+        const stagesPromise = fetchAllRows('stages', '*', query => query.order('id'), offset => {
+          setLoadingDebug(`正在下载 stages：offset ${offset}`)
+        })
+        const [clothesRows, stageRows] = await Promise.all([clothesPromise, stagesPromise])
         
         fullWardrobeData.value = clothesRows.map(item => ({
           ...item,
@@ -191,11 +218,15 @@ export function useWardrobe() {
         }))
         stagesData.value = stageRows
 
+        setLoadingDebug('写入 clothes 本地缓存')
         await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
+        setLoadingDebug('写入 stages 本地缓存')
         await saveToLocal('stagesData', stagesData.value)
       }
+      setLoadingDebug('加载完成')
     } catch (err) {
       console.error("加载图鉴失败:", err)
+      setLoadingDebug(`加载失败：${err?.message || String(err)}`)
     } finally {
       isLoading.value = false
     }
@@ -282,6 +313,7 @@ export function useWardrobe() {
     myWardrobeIds,
     stagesData,
     isLoading,
+    loadingDebugMessage,
     isSaving, // 🌟 把锁暴露给外部组件
     myWardrobeSet,
     loadData,
