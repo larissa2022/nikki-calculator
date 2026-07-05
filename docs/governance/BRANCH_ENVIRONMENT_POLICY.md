@@ -4,6 +4,8 @@
 
 This document restores the intended branch and environment governance before any further business feature work.
 
+This file defines branch and environment mapping. Detailed operating procedures live in [`../ai/WORKFLOWS.md`](../ai/WORKFLOWS.md). If workflow instructions conflict with this file or [`../ai/RULES.md`](../ai/RULES.md), the branch/environment mapping and production gates in this file and `RULES.md` take precedence.
+
 ## Branch Mapping
 
 | Branch | Environment | Purpose |
@@ -33,6 +35,18 @@ This document restores the intended branch and environment governance before any
 6. Apply database migrations to development first; if an already-applied migration needs correction, create a new patch migration.
 7. Before merging to `main`, confirm rollback steps for the frontend deployment, database migration, and affected data.
 8. Merge to `main` only after production environment bindings and rollback notes are confirmed.
+
+## GitHub CLI Checks
+
+- GitHub CLI (`gh`) is the preferred local tool for confirming PR state, mergeability, changed files, and workflow status.
+- Typical read-only checks include `gh pr view`, `gh pr diff`, `gh pr list`, `gh run list`, and `gh run view`.
+- `gh` does not change the branch and environment mapping: `main` still maps only to production, and `develop` still maps only to development / preview.
+- Before any `develop -> main` promotion, the read-only diff audit is still required.
+- `gh` output must be judged together with `git diff` and PR changed files. Do not merge based on one tool alone.
+- If `gh` is unavailable, fall back to the GitHub web UI or the ChatGPT GitHub connector for confirmation.
+- `gh pr merge` is a write action and requires explicit user approval, especially for production-related PRs.
+- Do not record `gh auth` tokens, device codes, authorization URLs, or keyring details in repository files, logs, or commits.
+- See [`../ai/WORKFLOWS.md`](../ai/WORKFLOWS.md) for the full PR and workflow check procedure.
 
 ## Prohibited Flow
 

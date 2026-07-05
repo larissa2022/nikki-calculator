@@ -18,6 +18,59 @@
 
 ## 当前 Lessons
 
+### Lesson: docs 入口需要文件职责地图
+
+- 日期：2026-07-04
+- 来源任务：docs-only 文件治理盘点
+- 现象：`docs/README.md` 已有总入口，但 `docs/ai`、`docs/governance`、`docs/database` 中存在规则、流程、当前任务、报告和数据库环境说明交叉引用，新任务容易把历史报告或当前任务文件当作长期事实源。
+- 原因：文档体系扩展后，入口索引只说明“有哪些文件”，但没有集中说明“每个文件不该承载什么”。
+- 处理方式：新增 `docs/FILE_GOVERNANCE.md` 作为文件职责地图，并在 `docs/README.md`、`WORKFLOWS.md`、`CONVERSATION_HANDOFF.md` 中补充入口。
+- 后续影响：后续 docs-only 收口优先更新入口和职责地图；如发现需要修改 `RULES.md`，应作为未确认事项暂停，不在普通文件治理任务中顺手修改。
+- Pattern Candidate：docs 规模扩大后，采用“总入口 + 文件职责地图 + 当前任务状态”的组合，避免规则层、操作层和历史报告混用。
+- Rule Candidate：暂无。
+- 状态：观察中
+
+### Lesson: docs-only 任务需要任务级预审批
+
+- 日期：2026-07-04
+- 来源任务：修正 ChatGPT 与 Codex 的 docs-only 审批流，减少不必要中断
+- 现象：docs-only 任务中，`git fetch`、`gh pr view`、`git add`、`git commit`、`git push`、`gh pr create` 多次触发审批中断。
+- 原因：审批被放在 Codex 执行中，而不是 ChatGPT 指令生成前。
+- 处理方式：ChatGPT 在发送 Codex 指令前完成任务级预审批；Codex 在授权范围内连续执行；只有越权、失败或高风险升级才停止。
+- 后续影响：docs-only 任务应在 ChatGPT 指令中一次性写清敏感命令、用途、授权边界和失败处理，减少反复确认。
+- Pattern Candidate：docs-only 任务采用“ChatGPT 任务级预审批 + Codex 授权范围内连续执行”的协作模式。
+- Rule Candidate：暂无。
+- 状态：可复用
+
+### Lesson: 规则层与工作流层分离
+
+- 日期：2026-07-03
+- 来源任务：整理 `docs/ai` 与 `docs/governance` 规则和工作流，降低 `RULES.md` 膨胀风险
+- 现象：`RULES.md` 同时承载强规则、具体命令、PR 检查步骤和回传模板，容易随着工具变化持续膨胀。
+- 原因：工作流迭代频繁，直接写入 `RULES.md` 会污染强规则层，让真正不可轻易变动的门禁和边界变得不清晰。
+- 处理方式：`RULES.md` 作为宪法层，保留强规则、角色边界、门禁和安全边界；`WORKFLOWS.md` 作为操作手册层，承载可迭代流程、命令清单、检查步骤和回传模板。
+- 后续影响：后续新增操作步骤优先写入 `WORKFLOWS.md`；只有经过验证并由用户确认的稳定原则才进入 `RULES.md`。
+- Pattern Candidate：采用“Rule 宪法层 + Workflow 操作手册层 + Lesson 复盘经验层”的文档分层，减少规则污染。
+- Rule Candidate：暂无。
+- 状态：可复用
+
+### Lesson: GitHub CLI 纳入治理工作流
+
+- 日期：2026-07-03
+- 来源任务：安装并验证 GitHub CLI，更新 PR / workflow 状态确认工作流
+- 现象：PR 状态、`mergeable`、changed files 和 workflow 状态经常需要在合并前重复确认。只依赖页面人工查看或连接器回传，容易增加操作成本，也容易漏掉本地命令可复核的证据。
+- 原因：本地 `gh` 能提高 PR 状态、`mergeable`、changed files 和 workflow 查询效率，但 `gh auth` / token 泄露、把 `gh pr merge` 当成默认动作、以及网络不可用都会带来治理风险。
+- 处理方式：
+  - PR 和 workflow 只读确认优先使用 `gh`，包括 `gh pr view`、`gh pr diff`、`gh pr list`、`gh run list`、`gh run view`。
+  - `gh` 不可用时，回退到 GitHub 页面或 ChatGPT GitHub 连接器。
+  - `gh pr merge` 必须在用户明确确认后才能执行，不得因为工具可用就默认合并。
+  - `gh auth` token、验证码、授权链接和 keyring 信息不得写入仓库、文档、日志或 commit。
+  - production 相关 merge 前必须再次确认用户授权、环境映射和 rollback。
+- 后续影响：后续 PR 治理可以把 `gh` 作为优先只读检查工具，但合并权限、production 边界和 GitHub 事实源原则保持不变。
+- Pattern Candidate：PR 发布前采用“gh 优先查询 -> git diff / changed files 交叉确认 -> 用户授权后才执行写操作”的工作流。
+- Rule Candidate：暂无。
+- 状态：可复用
+
 ### Lesson: AI + Codex + 双环境项目治理工作流复盘
 
 - 日期：2026-07-03
