@@ -34,6 +34,7 @@
 - `docs/FILE_GOVERNANCE.md` 作为文档职责参考，只在文件职责冲突、文档收口或入口归属判断时读取，不作为普通任务前置必读。
 - `docs/ai/CONVERSATION_HANDOFF.md` 仅在新 ChatGPT 对话迁移或交接时读取。
 - `docs/ai/LESSONS.md` 仅在复盘、Pattern Candidate 或 Rule Candidate 整理时读取。
+- `docs/ai/WEEKLY_REVIEW.md` 和 `docs/ai/PROMPTS/**` 已作为低使用模板移除；后续复盘模板和 prompt 线索统一收口到 `docs/ai/LESSONS.md`。
 - `docs/ai/CODEX_REPORT.md` 包含大量历史执行结果，适合作为报告归档，不适合作为当前任务事实源。
 - `docs/ai/DECISIONS.md` 已承载较多 Final 决策，应继续保持 Final Only，不把待确认事项或临时推测写入其中。
 - `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并；仅在 database / Supabase 任务中前置读取。
@@ -44,7 +45,7 @@
 - 新任务开始时优先从 `docs/README.md` 进入，默认读取 `docs/ai/RULES.md`、`docs/ai/CURRENT_TASK.md`、`docs/ai/WORKFLOWS.md`，再按任务类型补读 governance、database、handoff、lessons 或文件治理文档。
 - 当前任务状态只写入 `docs/ai/CURRENT_TASK.md`，不要写入 `CODEX_REPORT.md` 或 `RULES.md`。
 - 操作步骤、命令清单、回传模板继续写入 `docs/ai/WORKFLOWS.md`。
-- 复盘经验继续写入 `docs/ai/LESSONS.md`，除非用户明确确认，不升级为正式 Rule。
+- 复盘经验、轻量复盘模板和 prompt 线索继续写入 `docs/ai/LESSONS.md`，除非用户明确确认，不升级为正式 Rule。
 - 已确认的产品与技术口径写入 `docs/ai/DECISIONS.md`；待确认事项保持在任务单、报告或规划文档中。
 - 本次只调整文档职责与读取策略，不新增正式 Rule。
 
@@ -53,3 +54,4 @@
 - `docs/database/数据库开发安全方案.md` 后续如环境事实变化，应同步 `docs/database/环境信息.md`。
 - `docs/ai/CODEX_REPORT.md` 已明确为历史执行报告 / 归档参考；是否进一步拆分为归档目录或按日期归档，需用户后续单独确认。
 - 暂不新增 `docs/ai/DOCUMENT_MAP.md`：当前 `docs/FILE_GOVERNANCE.md` 可以承载文件职责参考，新增更细入口可能造成重复。若后续 `docs/ai` 文件继续扩张，再单独评估。
+- 暂不删除 `docs/ai/REJECTED_IDEAS.md`：该文件仍与 `RULES.md` 中的 Rejected Ideas 机制有关，删除前需要单独评估是否修改规则层。

@@ -18,6 +18,18 @@
 
 ## 当前 Lessons
 
+### Lesson: 空模板不长期保留
+
+- 日期：2026-07-05
+- 来源任务：docs-only 文档瘦身 Phase 1
+- 现象：`docs/ai/WEEKLY_REVIEW.md` 和 `docs/ai/PROMPTS/**` 主要是初始化模板资产，引用审查显示只被历史报告或模板自身引用，未被当前入口和工作流强依赖。
+- 原因：空模板和低使用 prompt 文件会扩大 `docs/ai` 目录维护面，让普通 docs-only 任务误以为需要额外读取。
+- 处理方式：移除低使用模板文件；后续复盘模板和 prompt 线索统一收口到 `docs/ai/LESSONS.md`。
+- 后续影响：如后续需要重新引入模板，应先确认实际使用频率和入口位置，避免新增长期空文件。
+- Pattern Candidate：docs 模板只有被当前 workflow 稳定使用时才长期保留，否则并入复盘经验或任务指令。
+- Rule Candidate：暂无。
+- 状态：观察中
+
 ### Lesson: docs 入口需要文件职责地图
 
 - 日期：2026-07-04

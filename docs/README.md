@@ -17,7 +17,7 @@ AI / Codex 开始任务前，按“默认必读 + 条件读取”进入，不再
 - 涉及产品 / 技术口径：读 [AI 决策记录](ai/DECISIONS.md)。
 - 新 ChatGPT 对话迁移：读 [对话迁移与交接](ai/CONVERSATION_HANDOFF.md)。
 - 文档职责冲突：读 [文档文件治理盘点](FILE_GOVERNANCE.md)。
-- 复盘 / 规则候选整理：读 [AI 协作复盘](ai/LESSONS.md)。
+- 复盘 / 规则候选整理：读 [AI 协作复盘](ai/LESSONS.md)，不再维护单独的周复盘 / prompt 模板文件。
 
 ## 治理
 
@@ -28,7 +28,7 @@ AI / Codex 开始任务前，按“默认必读 + 条件读取”进入，不再
 | [AI / Codex 操作手册](ai/WORKFLOWS.md) | 操作手册层：记录 PR 检查、docs-only、发布、GitHub CLI 和数据库工作流 |
 | [对话迁移与交接](ai/CONVERSATION_HANDOFF.md) | 新 ChatGPT 对话启动、上下文迁移和 ChatGPT -> Codex 指令交接模板 |
 | [当前任务](ai/CURRENT_TASK.md) | 记录当前任务状态和是否允许进入开发 |
-| [AI 协作复盘](ai/LESSONS.md) | 复盘经验层：记录 AI / Codex / GitHub CLI / GitHub / Vercel / Supabase 协作中的可复用经验 |
+| [AI 协作复盘](ai/LESSONS.md) | 复盘经验层：记录 AI / Codex / GitHub CLI / GitHub / Vercel / Supabase 协作中的可复用经验和轻量复盘线索 |
 | [文档文件治理盘点](FILE_GOVERNANCE.md) | 记录 docs 文件职责边界、入口关系、重复/过期位置和未确认事项 |
 
 ## 工作流入口
