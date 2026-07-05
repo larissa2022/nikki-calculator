@@ -15,7 +15,8 @@ const props = defineProps({
   fullWardrobeData: Array, 
   myWardrobeIds: Array, 
   stagesData: Array, 
-  isLoading: Boolean
+  isLoading: Boolean,
+  loadingDebugMessage: String
 })
 
 const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
@@ -47,7 +48,10 @@ const switchTab = (tab) => {
       </nav>
     </header>
 
-    <div v-if="isLoading" class="loading-state"><h2>⏳ 奇迹载入中...</h2></div>
+    <div v-if="isLoading" class="loading-state">
+      <h2>⏳ 奇迹载入中...</h2>
+      <p v-if="loadingDebugMessage" class="debug-loading-message">诊断：{{ loadingDebugMessage }}</p>
+    </div>
     
     <main v-else>
       <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
@@ -76,5 +80,6 @@ h1 { color: #f472b6; font-size: 24px; margin-bottom: 20px; font-weight: 900; let
 .admin-tab-btn { background: #f3e8ff !important; border-color: #d8b4fe !important; color: #9333ea !important; }
 .admin-tab-btn.active { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%) !important; color: white !important; }
 .loading-state { text-align: center; padding: 50px 0; color: #f472b6; }
+.debug-loading-message { margin: 12px auto 0; max-width: 420px; color: #64748b; font-size: 13px; line-height: 1.7; word-break: break-word; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 </style>
