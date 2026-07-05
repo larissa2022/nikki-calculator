@@ -1,5 +1,7 @@
 # 项目状态盘点
 
+> 归档说明：本文档是 Codex 历史执行报告 / 归档参考，不作为当前任务事实源。当前任务状态以 [`CURRENT_TASK.md`](CURRENT_TASK.md) 为准；文档职责边界以 [`../FILE_GOVERNANCE.md`](../FILE_GOVERNANCE.md) 为准。本文中的历史记录不得自动升级为正式 Rule。
+
 ## 1. 当前已完成
 
 - 已建立文档入口：`README.md` 指向 `docs/README.md`，文档已按需求、规划、数据库、安全记录分类。
