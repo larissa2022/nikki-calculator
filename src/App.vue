@@ -20,9 +20,9 @@ watch(currentUser, (newUser) => {
   else myWardrobeIds.value = []
 })
 
-onMounted(async () => {
-  await loadData()
-  await initAuth()
+onMounted(() => {
+  initAuth().catch(err => console.error('初始化登录状态失败:', err))
+  loadData()
   
   supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') {
