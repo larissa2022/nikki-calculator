@@ -1,46 +1,31 @@
 # 当前任务
 
-当前任务：需求治理与执行入口文档整理。
+当前任务：需求治理与执行入口整理已完成，进入收口状态。
 
-## 本次任务边界
+## 已完成
 
-- 类型：docs-only。
-- 目标分支：`develop`。
-- 工作分支：`docs/requirements-governance`。
-- 只允许修改：
-  - `docs/README.md`
-  - `docs/FILE_GOVERNANCE.md`
-  - `docs/ai/WORKFLOWS.md`
-  - `docs/ai/CURRENT_TASK.md`
-  - `docs/planning/开发文档.md`
-  - `docs/planning/技术实现文档.md`
-- 不推进陪审团、重审、积分、贡献者、排行榜或其他业务开发。
-- 不修改业务代码、数据库、Supabase、Vercel、env、migration、schema、production、`docs/ai/RULES.md` 或 `docs/ai/DECISIONS.md`。
-- 不执行 Supabase / psql / SQL。
-- 不操作 `main` / production。
-- 不 merge PR。
-
-## 本次目标
-
-- 暂停业务开发后，先整理需求层、决策层、执行计划层、技术实现层和当前任务层的文档职责。
-- 明确业务开发前的阅读顺序、需求治理入口和进入 Codex 修改阶段的门槛。
-- 在 `WORKFLOWS.md` 中补充“需求到执行计划工作流”，但不升级为 `RULES.md` 强规则。
-- 形成 docs-only PR 到 `develop`。
-
-## 文档分层判断
-
-- 需求层：`docs/requirements/产品设计书.md`、`docs/requirements/需求文档.md`。
-- 决策层：`docs/ai/DECISIONS.md`，仅保存 Final 产品 / 技术决策。
-- 执行计划层：`docs/planning/开发文档.md`。
-- 技术实现层：`docs/planning/技术实现文档.md`。
-- 当前任务层：`docs/ai/CURRENT_TASK.md`。
-- 操作手册层：`docs/ai/WORKFLOWS.md`。
+- PR #37：记录 PR #17 数据库审计结论。
+- PR #38：整理需求治理与执行入口。
+- PR #39：新增需求源门禁规则。
+- PR #40：同步治理文档到 main。
 
 ## 当前状态
 
-- 本轮只做文档治理和入口整理。
-- 业务开发暂停。
-- 未执行 database / Supabase / SQL / Vercel 操作。
-- 未触碰 production。
-- 未修改 `docs/ai/RULES.md`。
-- 未修改 `docs/ai/DECISIONS.md`。
+- 当前没有业务开发在进行。
+- 陪审团 / 重审 / 积分业务开发仍暂停。
+- 本轮收口只更新当前任务状态。
+- 未执行 Supabase / SQL / Vercel / production 额外操作。
+- 未修改业务代码、数据库、migration、env 或构建配置。
+
+## 下一阶段候选
+
+1. 需求文档正文结构审计。
+2. Supabase advisor 安全风险拆分。
+3. 陪审团 / 重审 / 积分需求到执行计划梳理。
+4. 业务开发入口审计。
+
+## 进入业务开发前门槛
+
+- 必须按 `docs/ai/RULES.md` 的“需求源门禁”确认事实源与决策层级。
+- 必须按 `docs/ai/WORKFLOWS.md` 的“需求到执行计划工作流”列出目标、依据、范围、风险分类、未确认事项、验证方式和 rollback。
+- 涉及未确认产品口径、字段、状态值、权限边界或数据安全时，必须暂停并取得用户确认。
