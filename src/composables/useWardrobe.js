@@ -2,6 +2,8 @@ import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
 
 const SUPABASE_PAGE_SIZE = 1000
+const SUPABASE_PAGE_TIMEOUT_MS = 8000
+const SUPABASE_PAGE_RETRY_LIMIT = 2
 const INDEXED_DB_TIMEOUT_MS = 3000
 const CLOTHES_COUNT_TIMEOUT_MS = 5000
 
@@ -15,21 +17,67 @@ const isDebugMode = () => {
   }
 }
 
-const fetchAllRows = async (table, selectColumns, applyQuery = query => query, onPageStart = null) => {
+const withPageTimeout = (promise, label) => new Promise((resolve, reject) => {
+  let settled = false
+  const finish = (handler, value) => {
+    if (settled) return
+    settled = true
+    clearTimeout(timer)
+    handler(value)
+  }
+
+  const timer = setTimeout(() => {
+    finish(reject, new Error(`${label}超时`))
+  }, SUPABASE_PAGE_TIMEOUT_MS)
+
+  Promise.resolve(promise).then(
+    value => finish(resolve, value),
+    err => finish(reject, err)
+  )
+})
+
+const fetchPageWithRetry = async (queryFactory, { table, from, onRetry }) => {
+  let retryCount = 0
+
+  while (true) {
+    try {
+      return await withPageTimeout(queryFactory(), `${table} offset ${from}`)
+    } catch (err) {
+      if (retryCount >= SUPABASE_PAGE_RETRY_LIMIT) {
+        if (onRetry) onRetry(retryCount, SUPABASE_PAGE_RETRY_LIMIT, err, true)
+        throw new Error(`${table} offset ${from} 下载失败：${err?.message || String(err)}`)
+      }
+
+      retryCount += 1
+      if (onRetry) onRetry(retryCount, SUPABASE_PAGE_RETRY_LIMIT, err)
+    }
+  }
+}
+
+const fetchAllRows = async (table, selectColumns, applyQuery = query => query, callbacks = {}) => {
   const rows = []
   let from = 0
 
   while (true) {
     const to = from + SUPABASE_PAGE_SIZE - 1
-    let query = supabase
-      .from(table)
-      .select(selectColumns)
-      .range(from, to)
+    const queryFactory = () => {
+      let query = supabase
+        .from(table)
+        .select(selectColumns)
+        .range(from, to)
 
-    query = applyQuery(query)
+      return applyQuery(query)
+    }
 
-    if (onPageStart) onPageStart(from)
-    const { data, error } = await query
+    if (callbacks.onPageStart) callbacks.onPageStart(from)
+    const { data, error } = await fetchPageWithRetry(queryFactory, {
+      table,
+      from,
+      onRetry: (retryCount, retryLimit, err, failed = false) => {
+        if (failed && callbacks.onPageFailure) callbacks.onPageFailure(from, err)
+        else if (callbacks.onPageRetry) callbacks.onPageRetry(from, retryCount, retryLimit, err)
+      }
+    })
     if (error) throw error
 
     const page = data || []
@@ -212,12 +260,28 @@ export function useWardrobe() {
 
   const refreshCatalogFromCloud = async ({ background = false } = {}) => {
     if (!background) setLoadingDebug('下载 clothes 数据')
-    const clothesPromise = fetchAllRows('clothes', '*, suits(name)', query => query.order('id'), offset => {
-      setLoadingDebug(`正在下载 clothes：offset ${offset}`)
+    const clothesPromise = fetchAllRows('clothes', '*, suits(name)', query => query.order('id'), {
+      onPageStart: offset => {
+        setLoadingDebug(`正在下载 clothes：offset ${offset}`)
+      },
+      onPageRetry: (offset, retryCount, retryLimit) => {
+        setLoadingDebug(`clothes offset ${offset} 超时，重试 ${retryCount}/${retryLimit}`)
+      },
+      onPageFailure: offset => {
+        setLoadingDebug(`clothes offset ${offset} 下载失败`)
+      }
     })
     if (!background) setLoadingDebug('下载 stages 数据')
-    const stagesPromise = fetchAllRows('stages', '*', query => query.order('id'), offset => {
-      setLoadingDebug(`正在下载 stages：offset ${offset}`)
+    const stagesPromise = fetchAllRows('stages', '*', query => query.order('id'), {
+      onPageStart: offset => {
+        setLoadingDebug(`正在下载 stages：offset ${offset}`)
+      },
+      onPageRetry: (offset, retryCount, retryLimit) => {
+        setLoadingDebug(`stages offset ${offset} 超时，重试 ${retryCount}/${retryLimit}`)
+      },
+      onPageFailure: offset => {
+        setLoadingDebug(`stages offset ${offset} 下载失败`)
+      }
     })
     const [clothesRows, stageRows] = await Promise.all([clothesPromise, stagesPromise])
     
