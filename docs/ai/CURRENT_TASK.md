@@ -1,40 +1,46 @@
 # 当前任务
 
-当前任务：记录 PR #17 数据库审计结论。
+当前任务：需求治理与执行入口文档整理。
 
 ## 本次任务边界
 
 - 类型：docs-only。
 - 目标分支：`develop`。
-- 工作分支：`docs/pr17-database-audit`。
+- 工作分支：`docs/requirements-governance`。
 - 只允许修改：
+  - `docs/README.md`
+  - `docs/FILE_GOVERNANCE.md`
+  - `docs/ai/WORKFLOWS.md`
   - `docs/ai/CURRENT_TASK.md`
-  - `docs/database/SUPABASE_REVIEW.md`
-  - `docs/database/数据库变更记录.md`
-- 不修改业务代码、数据库、Supabase、Vercel、env、migration、schema 或 `docs/ai/RULES.md`。
+  - `docs/planning/开发文档.md`
+  - `docs/planning/技术实现文档.md`
+- 不推进陪审团、重审、积分、贡献者、排行榜或其他业务开发。
+- 不修改业务代码、数据库、Supabase、Vercel、env、migration、schema、production、`docs/ai/RULES.md` 或 `docs/ai/DECISIONS.md`。
 - 不执行 Supabase / psql / SQL。
 - 不操作 `main` / production。
 - 不 merge PR。
 
-## PR #17 审计结论
+## 本次目标
 
-- PR #17 当前是 database migration 草案，内容为新增贡献与积分 schema。
-- PR #17 当前 base 为 `main`，不应按当前状态继续 merge。
-- PR #17 应标记为 blocked / paused。
-- 下一步应先处理 Supabase 安全 / RLS / `SECURITY DEFINER` advisor 风险，再继续 database feature。
-- 后续如继续贡献 / 积分 schema，应关闭当前 PR 后从 `develop` 重开，或 retarget 到 `develop` 后保持 blocked，并拆分为多个 database PR。
+- 暂停业务开发后，先整理需求层、决策层、执行计划层、技术实现层和当前任务层的文档职责。
+- 明确业务开发前的阅读顺序、需求治理入口和进入 Codex 修改阶段的门槛。
+- 在 `WORKFLOWS.md` 中补充“需求到执行计划工作流”，但不升级为 `RULES.md` 强规则。
+- 形成 docs-only PR 到 `develop`。
 
-## 后续必须补齐
+## 文档分层判断
 
-- migration apply 前必须先做 development 重复数据预检、SQL / RLS 验证和 rollback 方案。
-- `clothes(category, game_id)` partial unique index 需要先查重复键。
-- `security_invoker` view + revoke 底层表权限可能导致公开 contributor view / RPC 不可读，需要单独验证。
-- `source_pending_id` 缺失会影响追溯、回滚和争议处理，应在后续 schema 设计中补齐或明确放弃。
-- schema 创建、RPC 接入、展示 view、历史 backfill 应拆成多个 database PR。
+- 需求层：`docs/requirements/产品设计书.md`、`docs/requirements/需求文档.md`。
+- 决策层：`docs/ai/DECISIONS.md`，仅保存 Final 产品 / 技术决策。
+- 执行计划层：`docs/planning/开发文档.md`。
+- 技术实现层：`docs/planning/技术实现文档.md`。
+- 当前任务层：`docs/ai/CURRENT_TASK.md`。
+- 操作手册层：`docs/ai/WORKFLOWS.md`。
 
 ## 当前状态
 
-- 本轮只记录审计结论。
+- 本轮只做文档治理和入口整理。
+- 业务开发暂停。
 - 未执行 database / Supabase / SQL / Vercel 操作。
 - 未触碰 production。
 - 未修改 `docs/ai/RULES.md`。
+- 未修改 `docs/ai/DECISIONS.md`。

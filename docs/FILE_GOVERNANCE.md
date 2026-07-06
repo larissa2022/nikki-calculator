@@ -21,6 +21,11 @@
 | `docs/ai/LESSONS.md` | 复盘经验、Pattern Candidate、Rule Candidate 线索 | 已批准规则、最终产品决策 |
 | `docs/ai/DECISIONS.md` | 已确认的产品与技术决策 | 未确认事项、临时推测、执行流水 |
 | `docs/ai/CODEX_REPORT.md` | 历史执行报告 / 归档参考 | 当前任务事实源、正式 Rule、未确认事项的执行依据 |
+| `docs/requirements/产品设计书.md` | 需求层：产品定位、目标用户、核心场景、功能边界和优先级 | 具体执行计划、数据库结构方案、当前任务状态 |
+| `docs/requirements/需求文档.md` | 需求层：需求背景、业务规则、产品口径、风险和待确认事项 | Codex 直接执行步骤、Final 决策、未经确认的技术实现 |
+| `docs/planning/开发文档.md` | 执行计划层：承接已确认需求，记录开发阶段、暂停点、验收标准和拆分顺序 | Final 决策、未经确认需求、具体 SQL / RPC 实现细节 |
+| `docs/planning/技术实现文档.md` | 技术实现层：基于已确认执行计划记录表结构、RPC、RLS、前端模块和测试方案 | 需求源头、Final 决策、未经确认需求的直接实现 |
+| `docs/planning/缺陷文档.md` | 缺陷事实层：记录已复现或高度可信的缺陷、影响、状态和修复方向 | 新需求设计、Final 决策、当前任务事实源 |
 | `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` | 分支与环境映射、发布门禁 | 具体 git / gh 操作步骤 |
 | `docs/database/环境信息.md` | Supabase 环境非敏感信息、project ref 与本地连接建议 | 密钥、token、真实用户隐私数据 |
 | `docs/database/数据库开发安全方案.md` | 数据库开发安全流程、备份、回滚和上线检查 | 当前任务状态、业务功能开发计划 |
@@ -37,6 +42,9 @@
 - `docs/ai/WEEKLY_REVIEW.md` 和 `docs/ai/PROMPTS/**` 已作为低使用模板移除；后续复盘模板和 prompt 线索统一收口到 `docs/ai/LESSONS.md`。
 - `docs/ai/CODEX_REPORT.md` 包含大量历史执行结果，适合作为报告归档，不适合作为当前任务事实源。
 - `docs/ai/DECISIONS.md` 已承载较多 Final 决策，应继续保持 Final Only，不把待确认事项或临时推测写入其中。
+- `docs/requirements/**` 属于需求层，负责说明为什么要做、要解决什么问题、哪些事项待确认；需求文档本身不等于 Codex 执行计划。
+- `docs/planning/开发文档.md` 属于执行计划层，负责把已确认需求拆成阶段、暂停点和验收标准；未确认需求不能直接从这里进入开发。
+- `docs/planning/技术实现文档.md` 属于技术实现层，负责在执行计划确认后描述表结构、RPC、RLS、前端模块和测试方案；不得绕过需求确认直接承接口头需求。
 - `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并；仅在 database / Supabase 任务中前置读取。
 - `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` 与 `docs/ai/WORKFLOWS.md` 存在交叉引用但职责清晰：前者定义分支 / 环境映射，后者定义执行流程。
 
@@ -46,7 +54,8 @@
 - 当前任务状态只写入 `docs/ai/CURRENT_TASK.md`，不要写入 `CODEX_REPORT.md` 或 `RULES.md`。
 - 操作步骤、命令清单、回传模板继续写入 `docs/ai/WORKFLOWS.md`。
 - 复盘经验、轻量复盘模板和 prompt 线索继续写入 `docs/ai/LESSONS.md`，除非用户明确确认，不升级为正式 Rule。
-- 已确认的产品与技术口径写入 `docs/ai/DECISIONS.md`；待确认事项保持在任务单、报告或规划文档中。
+- 已确认的产品与技术口径写入 `docs/ai/DECISIONS.md`；待确认事项保持在任务单、报告、需求文档或规划文档中。
+- 未确认事项不能写入 `docs/ai/DECISIONS.md`，也不能直接进入 Codex 修改阶段；必须先完成用户确认和执行计划拆分。
 - 本次只调整文档职责与读取策略，不新增正式 Rule。
 
 ## 5. 未确认事项
