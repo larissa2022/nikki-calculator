@@ -18,6 +18,47 @@
 
 ## 当前 Lessons
 
+### Lesson: Production Safari 图鉴全量加载卡住复盘
+
+- 日期：2026-07-06
+- 来源任务：production Safari 图鉴加载故障 hotfix 复盘
+- 现象：
+  - 问题用户可以登录，顶部已显示账号 / 个人中心 / 登出，但主内容停在“奇迹载入中”。
+  - `?debug=1` 初始显示卡在“查询 clothes count”。
+  - PR #30 修复 count 超时降级后，卡点推进到“正在下载 clothes：offset 15000/18000”。
+  - 用户补录缺失部件后刷新，触发图鉴数据变化；本地缓存数量与云端 count 不一致，旧逻辑进入全量 clothes 重新下载。
+- 原因：
+  - count 查询不能阻塞首屏；失败或超时时应跳过缓存校验并继续加载。
+  - 本地 `fullClothesData_v2` 数量与云端 clothes count 不一致时，旧逻辑会强制全量刷新图鉴。
+  - production clothes 数据量为 1.8 万+，dev 小数据无法证明 production 大表加载链路安全。
+  - 移动端 Safari 对全量大表下载、JSON 解析、IndexedDB 写入和长链路 pending 更敏感。
+- 处理方式：
+  - PR #30：对 clothes count 增加窄范围超时降级，count 失败或超时时跳过缓存校验。
+  - PR #31：有本地 `fullClothesData_v2` + `stagesData` 缓存时，先使用本地缓存进入页面，再后台刷新图鉴。
+  - PR #32：对 clothes/stages 分页下载增加单页 timeout + retry；单页最终失败时进入 `catch/finally`，避免永久 loading。
+  - PR #33：从 main cherry-pick PR #31 和 PR #32 的业务修复，避免 develop 上的 docs 变更混入 production hotfix。
+- 后续影响：
+  - 不要让全量图鉴刷新阻塞首屏；有缓存时优先使用缓存。
+  - 大表分页请求必须有 timeout / retry，失败后应释放 loading，而不是让 Promise 永久 pending。
+  - dev 小数据不能证明 production 大数据链路安全；涉及大表、移动端 Safari、IndexedDB 时需要 production-like 数据量或诊断开关。
+  - 用户设备问题优先加 debug 定位，不要盲猜 Auth、数据库或环境绑定。
+  - production hotfix 应从 main cherry-pick 业务修复，避免 develop 混入 docs 或其他低风险变更。
+- Pattern Candidate：大表首屏加载采用“缓存优先进入页面 + 后台刷新 + 分页 timeout/retry + debug 可见卡点”的组合，而不是阻塞式全量刷新。
+- Rule Candidate：暂无。
+- 状态：可复用
+
+### Lesson: 空模板不长期保留
+
+- 日期：2026-07-05
+- 来源任务：docs-only 文档瘦身 Phase 1
+- 现象：`docs/ai/WEEKLY_REVIEW.md` 和 `docs/ai/PROMPTS/**` 主要是初始化模板资产，引用审查显示只被历史报告或模板自身引用，未被当前入口和工作流强依赖。
+- 原因：空模板和低使用 prompt 文件会扩大 `docs/ai` 目录维护面，让普通 docs-only 任务误以为需要额外读取。
+- 处理方式：移除低使用模板文件；后续复盘模板和 prompt 线索统一收口到 `docs/ai/LESSONS.md`。
+- 后续影响：如后续需要重新引入模板，应先确认实际使用频率和入口位置，避免新增长期空文件。
+- Pattern Candidate：docs 模板只有被当前 workflow 稳定使用时才长期保留，否则并入复盘经验或任务指令。
+- Rule Candidate：暂无。
+- 状态：观察中
+
 ### Lesson: docs 入口需要文件职责地图
 
 - 日期：2026-07-04

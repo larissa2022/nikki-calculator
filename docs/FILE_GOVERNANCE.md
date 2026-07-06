@@ -8,7 +8,7 @@
 - AI / Codex 治理入口：[`docs/ai/RULES.md`](ai/RULES.md)、[`docs/ai/WORKFLOWS.md`](ai/WORKFLOWS.md)、[`docs/ai/CURRENT_TASK.md`](ai/CURRENT_TASK.md)
 - 分支与环境入口：[`docs/governance/BRANCH_ENVIRONMENT_POLICY.md`](governance/BRANCH_ENVIRONMENT_POLICY.md)
 - 数据库环境入口：[`docs/database/环境信息.md`](database/环境信息.md)
-- 文件职责地图：本文档
+- 文件职责参考：本文档；普通任务不作为前置必读
 
 ## 2. 核心文档职责
 
@@ -29,23 +29,29 @@
 
 ## 3. 本次盘点结论
 
-- `docs/README.md` 已具备总入口职责，但此前缺少“文件职责地图”入口，容易让新任务在 `RULES.md`、`WORKFLOWS.md`、`CODEX_REPORT.md`、`CURRENT_TASK.md` 之间混用事实源。
-- `docs/ai/CURRENT_TASK.md` 内容已过期，仍停留在“等待用户确认分支 / PR 治理操作”，需要更新为本次 docs-only 文件治理状态。
+- 不新增 `docs/ai/DOCUMENT_MAP.md`：当前文件已能承担文件职责参考，新增入口会增加重复和读取负担。
+- `docs/README.md` 作为总入口，应采用“默认必读 + 条件读取”，避免普通 docs-only / 只读任务默认读取所有治理文档。
+- `docs/FILE_GOVERNANCE.md` 作为文档职责参考，只在文件职责冲突、文档收口或入口归属判断时读取，不作为普通任务前置必读。
+- `docs/ai/CONVERSATION_HANDOFF.md` 仅在新 ChatGPT 对话迁移或交接时读取。
+- `docs/ai/LESSONS.md` 仅在复盘、Pattern Candidate 或 Rule Candidate 整理时读取。
+- `docs/ai/WEEKLY_REVIEW.md` 和 `docs/ai/PROMPTS/**` 已作为低使用模板移除；后续复盘模板和 prompt 线索统一收口到 `docs/ai/LESSONS.md`。
 - `docs/ai/CODEX_REPORT.md` 包含大量历史执行结果，适合作为报告归档，不适合作为当前任务事实源。
 - `docs/ai/DECISIONS.md` 已承载较多 Final 决策，应继续保持 Final Only，不把待确认事项或临时推测写入其中。
-- `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并；数据库安全方案开头的旧风险状态已在后续 docs-only 收口中更新。
+- `docs/database/环境信息.md` 与 `docs/database/数据库开发安全方案.md` 都涉及环境安全；前者记录当前非敏感环境事实，后者记录数据库安全流程。两者职责可区分，不需要合并；仅在 database / Supabase 任务中前置读取。
 - `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` 与 `docs/ai/WORKFLOWS.md` 存在交叉引用但职责清晰：前者定义分支 / 环境映射，后者定义执行流程。
 
 ## 4. 收口建议
 
-- 新任务开始时优先从 `docs/README.md` 进入，再按任务类型读取 AI、governance、database 文档。
+- 新任务开始时优先从 `docs/README.md` 进入，默认读取 `docs/ai/RULES.md`、`docs/ai/CURRENT_TASK.md`、`docs/ai/WORKFLOWS.md`，再按任务类型补读 governance、database、handoff、lessons 或文件治理文档。
 - 当前任务状态只写入 `docs/ai/CURRENT_TASK.md`，不要写入 `CODEX_REPORT.md` 或 `RULES.md`。
 - 操作步骤、命令清单、回传模板继续写入 `docs/ai/WORKFLOWS.md`。
-- 复盘经验继续写入 `docs/ai/LESSONS.md`，除非用户明确确认，不升级为正式 Rule。
+- 复盘经验、轻量复盘模板和 prompt 线索继续写入 `docs/ai/LESSONS.md`，除非用户明确确认，不升级为正式 Rule。
 - 已确认的产品与技术口径写入 `docs/ai/DECISIONS.md`；待确认事项保持在任务单、报告或规划文档中。
+- 本次只调整文档职责与读取策略，不新增正式 Rule。
 
 ## 5. 未确认事项
 
-- `docs/database/数据库开发安全方案.md` 开头偏旧的环境风险表述已在本轮 docs-only 收口中更新；后续如环境事实变化，应同步 `docs/database/环境信息.md`。
+- `docs/database/数据库开发安全方案.md` 后续如环境事实变化，应同步 `docs/database/环境信息.md`。
 - `docs/ai/CODEX_REPORT.md` 已明确为历史执行报告 / 归档参考；是否进一步拆分为归档目录或按日期归档，需用户后续单独确认。
-- 暂不新增 `docs/ai/DOCUMENT_MAP.md`：当前 `docs/FILE_GOVERNANCE.md` 可以承载文件职责地图，新增更细入口可能造成重复。若后续 `docs/ai` 文件继续扩张，再单独评估。
+- 暂不新增 `docs/ai/DOCUMENT_MAP.md`：当前 `docs/FILE_GOVERNANCE.md` 可以承载文件职责参考，新增更细入口可能造成重复。若后续 `docs/ai` 文件继续扩张，再单独评估。
+- 暂不删除 `docs/ai/REJECTED_IDEAS.md`：该文件仍与 `RULES.md` 中的 Rejected Ideas 机制有关，删除前需要单独评估是否修改规则层。
