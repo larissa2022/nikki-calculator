@@ -2,6 +2,27 @@
 
 This repo keeps database review context in source control so code and schema can be checked together.
 
+## PR #17 database audit note
+
+Audit time: 2026-07-06 23:01 UTC+8.
+
+PR #17, `db-contributions-points-schema`, is a database migration draft for contribution and points schema work. It should not be merged in its current state because the PR base is `main`, while database migrations must be validated through `develop` and the development Supabase project first.
+
+Current recommendation:
+
+- Mark PR #17 as blocked / paused.
+- Pause the database feature until Supabase security advisor findings around RLS, grants, and `SECURITY DEFINER` functions are reviewed and addressed.
+- If the contribution / points schema continues, retarget to `develop` only as a blocked draft, or close PR #17 and reopen from `develop`.
+- Split the work into multiple database PRs instead of one combined migration: duplicate-key precheck and index, base tables, RLS / grants, public views / RPC, write-path RPC integration, and historical backfill.
+
+Required checks before any migration apply:
+
+- Run a development duplicate-key precheck for `clothes(category, game_id)` before adding the partial unique index.
+- Verify RLS and table grants for `clothing_contributions` and `points_ledger` with anon, authenticated user, admin, and super admin paths.
+- Verify whether `security_invoker` views remain readable when underlying table grants are revoked; the proposed contributor public view / RPC may be unreadable for anon / authenticated users without explicit underlying access.
+- Decide whether `source_pending_id` is required in `clothing_contributions`; omitting it weakens traceability, rollback, and dispute handling.
+- Prepare rollback notes before development execution.
+
 ## One-time local setup
 
 1. Install the Supabase CLI.
