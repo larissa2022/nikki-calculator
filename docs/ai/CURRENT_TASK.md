@@ -1,23 +1,46 @@
 # 当前任务
 
-当前任务：production Safari 图鉴加载故障复盘收口。
+当前任务：需求治理与执行入口文档整理。
+
+## 本次任务边界
+
+- 类型：docs-only。
+- 目标分支：`develop`。
+- 工作分支：`docs/requirements-governance`。
+- 只允许修改：
+  - `docs/README.md`
+  - `docs/FILE_GOVERNANCE.md`
+  - `docs/ai/WORKFLOWS.md`
+  - `docs/ai/CURRENT_TASK.md`
+  - `docs/planning/开发文档.md`
+  - `docs/planning/技术实现文档.md`
+- 不推进陪审团、重审、积分、贡献者、排行榜或其他业务开发。
+- 不修改业务代码、数据库、Supabase、Vercel、env、migration、schema、production、`docs/ai/RULES.md` 或 `docs/ai/DECISIONS.md`。
+- 不执行 Supabase / psql / SQL。
+- 不操作 `main` / production。
+- 不 merge PR。
+
+## 本次目标
+
+- 暂停业务开发后，先整理需求层、决策层、执行计划层、技术实现层和当前任务层的文档职责。
+- 明确业务开发前的阅读顺序、需求治理入口和进入 Codex 修改阶段的门槛。
+- 在 `WORKFLOWS.md` 中补充“需求到执行计划工作流”，但不升级为 `RULES.md` 强规则。
+- 形成 docs-only PR 到 `develop`。
+
+## 文档分层判断
+
+- 需求层：`docs/requirements/产品设计书.md`、`docs/requirements/需求文档.md`。
+- 决策层：`docs/ai/DECISIONS.md`，仅保存 Final 产品 / 技术决策。
+- 执行计划层：`docs/planning/开发文档.md`。
+- 技术实现层：`docs/planning/技术实现文档.md`。
+- 当前任务层：`docs/ai/CURRENT_TASK.md`。
+- 操作手册层：`docs/ai/WORKFLOWS.md`。
 
 ## 当前状态
 
-- production 已恢复。
-- main 已包含 PR #33。
-- 用户已验证生产正常：问题用户重新加载后可进入页面，正常地址也可使用。
-- 本轮只记录复盘，不修改业务代码、数据库、Supabase、Vercel、env、migration 或 schema。
-
-## 故障结论
-
-- PR #30 解决 “查询 clothes count” 卡住问题。
-- PR #31 解决有本地图鉴缓存时被云端 count 不一致拖入阻塞式全量刷新问题。
-- PR #32 解决无本地缓存时分页下载某页请求永久 pending 导致 loading 不释放问题。
-- PR #33 将 PR #31 和 PR #32 的业务修复以 main hotfix 方式发布，避免 develop 上的 docs 变更混入 production 发布。
-
-## 后续边界
-
-- 暂不继续 PR #34。
-- 如后续继续优化移动端图鉴加载，应另开任务评估 page size、分页策略、数据拆分或增量同步。
-- 上述优化不属于当前 production 故障 hotfix。
+- 本轮只做文档治理和入口整理。
+- 业务开发暂停。
+- 未执行 database / Supabase / SQL / Vercel 操作。
+- 未触碰 production。
+- 未修改 `docs/ai/RULES.md`。
+- 未修改 `docs/ai/DECISIONS.md`。
