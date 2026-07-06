@@ -210,6 +210,29 @@ export function useWardrobe() {
   // 🚀 高性能计算：使用 Set 实现 O(1) 极速查找
   const myWardrobeSet = computed(() => new Set(myWardrobeIds.value))
 
+  const refreshCatalogFromCloud = async ({ background = false } = {}) => {
+    if (!background) setLoadingDebug('下载 clothes 数据')
+    const clothesPromise = fetchAllRows('clothes', '*, suits(name)', query => query.order('id'), offset => {
+      setLoadingDebug(`正在下载 clothes：offset ${offset}`)
+    })
+    if (!background) setLoadingDebug('下载 stages 数据')
+    const stagesPromise = fetchAllRows('stages', '*', query => query.order('id'), offset => {
+      setLoadingDebug(`正在下载 stages：offset ${offset}`)
+    })
+    const [clothesRows, stageRows] = await Promise.all([clothesPromise, stagesPromise])
+    
+    fullWardrobeData.value = clothesRows.map(item => ({
+      ...item,
+      suit_name: item.suits?.name || null
+    }))
+    stagesData.value = stageRows
+
+    setLoadingDebug('写入 clothes 本地缓存')
+    await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
+    setLoadingDebug('写入 stages 本地缓存')
+    await saveToLocal('stagesData', stagesData.value)
+  }
+
   // 1. 初始化加载图鉴 (含智能缓存比对)
   const loadData = async ({ force = false } = {}) => {
     isLoading.value = true
@@ -229,37 +252,30 @@ export function useWardrobe() {
       const localClothes = await getFromLocal('fullClothesData_v2') 
       setLoadingDebug('读取本地 stages 缓存')
       const localStages = await getFromLocal('stagesData')
-      const canUseLocalCache = cloudCount !== null && cloudCount !== undefined
-        && !force
-        && localClothes
-        && localClothes.length === cloudCount
-        && localStages
+      const hasLocalCache = localClothes && localStages
+      const shouldRefreshCache = cloudCount === null
+        || cloudCount === undefined
+        || localClothes?.length !== cloudCount
 
-      if (canUseLocalCache) {
+      if (!force && hasLocalCache) {
         setLoadingDebug('使用本地缓存')
         fullWardrobeData.value = localClothes
         stagesData.value = localStages
-      } else {
-        setLoadingDebug('下载 clothes 数据')
-        const clothesPromise = fetchAllRows('clothes', '*, suits(name)', query => query.order('id'), offset => {
-          setLoadingDebug(`正在下载 clothes：offset ${offset}`)
-        })
-        setLoadingDebug('下载 stages 数据')
-        const stagesPromise = fetchAllRows('stages', '*', query => query.order('id'), offset => {
-          setLoadingDebug(`正在下载 stages：offset ${offset}`)
-        })
-        const [clothesRows, stageRows] = await Promise.all([clothesPromise, stagesPromise])
-        
-        fullWardrobeData.value = clothesRows.map(item => ({
-          ...item,
-          suit_name: item.suits?.name || null
-        }))
-        stagesData.value = stageRows
 
-        setLoadingDebug('写入 clothes 本地缓存')
-        await saveToLocal('fullClothesData_v2', fullWardrobeData.value) 
-        setLoadingDebug('写入 stages 本地缓存')
-        await saveToLocal('stagesData', stagesData.value)
+        if (shouldRefreshCache) {
+          setLoadingDebug('使用本地缓存，后台刷新图鉴')
+          void refreshCatalogFromCloud({ background: true })
+            .then(() => setLoadingDebug('后台刷新图鉴完成'))
+            .catch(err => {
+              console.warn('后台刷新图鉴失败:', err)
+              setLoadingDebug(`后台刷新图鉴失败：${err?.message || String(err)}`)
+            })
+        }
+
+        isLoading.value = false
+        return
+      } else {
+        await refreshCatalogFromCloud({ background: false })
       }
       setLoadingDebug('加载完成')
     } catch (err) {
