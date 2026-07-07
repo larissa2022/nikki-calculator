@@ -4,7 +4,7 @@ import { useWardrobe } from '../composables/useWardrobe'
 import MissingItemsQueue from './MissingItemsQueue.vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
 import { suitService } from '../api/suitService'
-import { FULL_CATEGORIES } from '../utils/gameConstants'
+import { getBroadCategory } from '../composables/useScoreEngine'
 
 const props = defineProps({
   wardrobe: { type: Array, required: true },
@@ -19,7 +19,7 @@ const importMode = ref('name')
 const importText = ref('')
 const codeImportCategory = ref('连衣裙')
 const codeImportText = ref('')
-const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount: 0, newClothes: [], missingCodes: [] })
+const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount: 0, newClothes: [], missingCodes: [], conflictCodes: [] })
 
 // 🌟 核心：消消乐视窗逻辑，永远只展示前 3 个
 const lastNotFoundNames = ref([])
@@ -30,6 +30,7 @@ const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
 const PROCESS_BATCH_SIZE = 500
 const CLOUD_REQUEST_TIMEOUT_MS = 15000
 const IMPORT_TASK_TIMEOUT_MS = 20000
+const CODE_IMPORT_CATEGORIES = ['发型', '连衣裙', '外套', '上装', '下装', '袜子', '鞋子', '饰品', '妆容', '萤光之灵']
 
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -72,12 +73,17 @@ const saveImportDraft = () => {
   }
 }
 
+const normalizeCodeImportCategory = (category) => {
+  const broadCategory = getBroadCategory(category)
+  return CODE_IMPORT_CATEGORIES.includes(broadCategory) ? broadCategory : '连衣裙'
+}
+
 const restoreImportDraft = () => {
   const draft = readImportDraft()
   if (!draft) return
   importMode.value = draft.importMode === 'code' ? 'code' : 'name'
   importText.value = draft.importText || ''
-  codeImportCategory.value = draft.codeImportCategory || '连衣裙'
+  codeImportCategory.value = normalizeCodeImportCategory(draft.codeImportCategory || '连衣裙')
   codeImportText.value = draft.codeImportText || ''
   lastNotFoundNames.value = Array.isArray(draft.lastNotFoundNames) ? draft.lastNotFoundNames : []
   if (draft.importStats) {
@@ -87,7 +93,8 @@ const restoreImportDraft = () => {
       dupCount: Number(draft.importStats.dupCount) || 0,
       failCount: Number(draft.importStats.failCount) || lastNotFoundNames.value.length,
       newClothes: Array.isArray(draft.importStats.newClothes) ? draft.importStats.newClothes : [],
-      missingCodes: Array.isArray(draft.importStats.missingCodes) ? draft.importStats.missingCodes : []
+      missingCodes: Array.isArray(draft.importStats.missingCodes) ? draft.importStats.missingCodes : [],
+      conflictCodes: Array.isArray(draft.importStats.conflictCodes) ? draft.importStats.conflictCodes : []
     })
   }
 }
@@ -111,7 +118,7 @@ watch(
 )
 
 watch(lastNotFoundNames, (names) => {
-  importStats.failCount = names.length + importStats.missingCodes.length
+  importStats.failCount = names.length + importStats.missingCodes.length + importStats.conflictCodes.length
 })
 
 const parseImportTokens = (value) => value
@@ -133,7 +140,7 @@ const missingCodeContributionNames = computed({
     importStats.missingCodes = importStats.missingCodes.filter(item => (
       keep.has(`${item.category} #${item.game_id}`)
     ))
-    importStats.failCount = lastNotFoundNames.value.length + importStats.missingCodes.length
+    importStats.failCount = lastNotFoundNames.value.length + importStats.missingCodes.length + importStats.conflictCodes.length
   }
 })
 
@@ -251,6 +258,7 @@ const handleNameImport = async () => {
     importStats.newCount = newCount; 
     importStats.dupCount = dupCount;
     importStats.missingCodes = []
+    importStats.conflictCodes = []
     importStats.failCount = lastNotFoundNames.value.length
     importStats.newClothes = newlyAdded; 
     importStats.show = true; 
@@ -266,20 +274,17 @@ const handleCodeImport = async () => {
 
   await runImportTask(async () => {
     let newCount = 0, dupCount = 0
-    const notFound = [], newlyAdded = []
-    const category = codeImportCategory.value
+    const notFound = [], conflicts = [], newlyAdded = []
+    const selectedBroadCategory = codeImportCategory.value
     const ownedSet = new Set(props.ownedIds)
-    const exactMap = new Map()
     const normalizedMap = new Map()
     const duplicateNormalizedKeys = new Set()
 
     props.wardrobe.forEach(item => {
-      if (item.category !== category || item.game_id == null) return
+      if (getBroadCategory(item.category) !== selectedBroadCategory || item.game_id == null) return
       const rawGameId = String(item.game_id).trim()
-      const exactKey = `${category}::${rawGameId}`
-      const normalizedKey = `${category}::${normalizeGameId(rawGameId)}`
+      const normalizedKey = `${selectedBroadCategory}::${normalizeGameId(rawGameId)}`
 
-      exactMap.set(exactKey, item)
       if (normalizedMap.has(normalizedKey) && normalizedMap.get(normalizedKey).id !== item.id) {
         duplicateNormalizedKeys.add(normalizedKey)
       } else {
@@ -289,11 +294,13 @@ const handleCodeImport = async () => {
 
     for (let index = 0; index < inputCodes.length; index++) {
       const code = inputCodes[index]
-      const exactKey = `${category}::${code}`
-      const normalizedKey = `${category}::${normalizeGameId(code)}`
-      const found = exactMap.get(exactKey) || (!duplicateNormalizedKeys.has(normalizedKey) ? normalizedMap.get(normalizedKey) : null)
+      const normalizedCode = normalizeGameId(code)
+      const normalizedKey = `${selectedBroadCategory}::${normalizedCode}`
+      const found = duplicateNormalizedKeys.has(normalizedKey) ? null : normalizedMap.get(normalizedKey)
 
-      if (found) {
+      if (duplicateNormalizedKeys.has(normalizedKey)) {
+        conflicts.push({ category: selectedBroadCategory, game_id: code })
+      } else if (found) {
         if (ownedSet.has(found.id)) {
           dupCount++
         } else {
@@ -302,10 +309,15 @@ const handleCodeImport = async () => {
           newlyAdded.push(found)
         }
       } else {
-        notFound.push({ category, game_id: code })
+        notFound.push({ category: selectedBroadCategory, game_id: code })
       }
 
       if ((index + 1) % PROCESS_BATCH_SIZE === 0) await yieldToBrowser()
+    }
+
+    if (conflicts.length > 0) {
+      const conflictText = conflicts.map(item => `${item.category} #${item.game_id}`).join('、')
+      alert(`⚠️ 编号冲突：${conflictText}\n同一一级分类下存在多个归一化短编号相同的图鉴条目，本次已跳过这些编号。`)
     }
 
     const updatedOwnedIds = Array.from(ownedSet)
@@ -318,7 +330,8 @@ const handleCodeImport = async () => {
     importStats.newCount = newCount
     importStats.dupCount = dupCount
     importStats.missingCodes = [...new Map(notFound.map(item => [`${item.category}_${item.game_id}`, item])).values()]
-    importStats.failCount = importStats.missingCodes.length
+    importStats.conflictCodes = [...new Map(conflicts.map(item => [`${item.category}_${item.game_id}`, item])).values()]
+    importStats.failCount = importStats.missingCodes.length + importStats.conflictCodes.length
     importStats.newClothes = newlyAdded
     importStats.show = true
     codeImportText.value = ''
@@ -352,7 +365,7 @@ const handleImport = () => {
           <label class="code-import-label">
             <span>分类部位</span>
             <select v-model="codeImportCategory" class="select select-bordered w-full font-black">
-              <option v-for="cat in FULL_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
+              <option v-for="cat in CODE_IMPORT_CATEGORIES" :key="cat" :value="cat">{{ cat }}</option>
             </select>
           </label>
           <label class="code-import-label">
@@ -415,6 +428,22 @@ const handleImport = () => {
               </div>
               <p class="missing-code-note">
                 这些编号未在正式图鉴中找到；如确认游戏内存在，可在下方补齐名称与属性后提交。
+              </p>
+            </div>
+
+            <div v-if="importStats.conflictCodes.length > 0" class="space-y-3">
+              <div class="flex items-center gap-2 px-1">
+                <span class="text-amber-500">⚠️</span>
+                <h4 class="font-black text-sm text-slate-700 m-0">编号冲突，已跳过</h4>
+              </div>
+              <div class="missing-code-grid">
+                <div v-for="item in importStats.conflictCodes" :key="`${item.category}_${item.game_id}`" class="missing-code-card">
+                  <span>{{ item.category }}</span>
+                  <strong>#{{ item.game_id }}</strong>
+                </div>
+              </div>
+              <p class="missing-code-note">
+                同一一级分类下存在多个归一化短编号相同的图鉴条目；为避免录错，本次没有写入这些编号。
               </p>
             </div>
 
