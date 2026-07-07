@@ -92,6 +92,21 @@ Candidate Rule -> Verified Pattern -> Rule
 - 数据库任务必须先看数据库安全文档和变更记录。
 - 文档收口任务不得顺手修改业务代码。
 
+### 执行主体边界
+
+- 纯文档读写任务，包括 docs-only 文件修改、docs-only 分支创建、docs-only commit 和 docs-only PR 创建，优先由 ChatGPT 通过 GitHub 连接器直接执行，不默认进入 Codex 流程。
+- 涉及项目代码、业务逻辑、构建配置、数据库、Supabase、Vercel、env、migration、脚本执行或本地测试的任务，必须进入 Codex 或对应工具流程；ChatGPT 负责任务拆解、风险判断、指令生成和只读复核。
+- 当 ChatGPT 无法通过连接器完成已授权的纯文档任务，或平台安全层拦截远端写操作时，Codex 可作为机械执行 fallback；Codex 只执行 ChatGPT 给出的固定 patch、验证步骤、commit、push 和 PR 创建，不重新解释需求或扩大范围。
+- docs-only 任务一旦发现实际范围包含 `src/**`、`supabase/**`、migration、env、Vercel 配置、构建配置、运行脚本或业务行为变化，必须立即停止，并重新分类为 business / database / config / release 任务。
+- ChatGPT 执行 docs-only PR 时仍不得自动 merge；merge PR、`main`、production、database、Supabase、Vercel 写操作仍需用户单独明确确认。
+
+### 指令冲突门禁
+
+- 当用户即时指令与仓库文档、已批准 Rule、分支环境治理、数据库安全边界或当前任务边界冲突时，不得直接执行。
+- 冲突出现时，ChatGPT / Codex 必须先列出：用户指令、冲突文档依据、冲突点、可选处理方案、风险和 rollback。
+- 用户可以修改目标或明确授权更新规则，但不能用一句即时指令绕过已批准的安全门禁。
+- 若冲突涉及 `main`、production、database、Supabase、Vercel、env、migration、权限边界或数据安全，必须暂停，直到用户重新确认新的任务边界。
+
 ### 需求源门禁
 
 - 涉及业务规则、产品口径、用户行为、数据库结构、权限边界或既有功能语义变化的任务，在进入实现前，必须先确认事实源与决策层级。
