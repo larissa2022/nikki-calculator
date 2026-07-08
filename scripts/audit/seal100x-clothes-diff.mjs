@@ -1,19 +1,23 @@
 #!/usr/bin/env node
 /**
- * Dry-run audit for seal100x live wardrobe data against Supabase development
- * public.clothes.
+ * Dry-run audit for seal100x live wardrobe data against Supabase public.clothes.
  *
  * Usage:
  *   SUPABASE_DEV_URL=https://tfwejruvdahonacyldrg.supabase.co \
  *   SUPABASE_DEV_ANON_KEY=<anon key> \
- *   node scripts/audit/seal100x-clothes-diff.mjs --limit-samples 20
+ *   node scripts/audit/seal100x-clothes-diff.mjs --target development --limit-samples 20
+ *
+ * Production SELECT-only audit requires both flags:
+ *   SUPABASE_PROD_URL=https://fopyjewbsvusftpqbtml.supabase.co \
+ *   SUPABASE_PROD_ANON_KEY=<anon key> \
+ *   node scripts/audit/seal100x-clothes-diff.mjs --target production --confirm-production-readonly
  *
  * Optional:
  *   --json tmp/seal100x-clothes-diff.json
  *   --strict-count
  *
  * This script is read-only: it fetches upstream JavaScript, expands the live
- * wardrobe array, and reads development Supabase with SELECT requests only.
+ * wardrobe array, and reads Supabase with SELECT requests only.
  */
 
 import { createHash } from 'node:crypto'
@@ -27,6 +31,7 @@ const EXPECTED_EXPANDED_COUNT = 36811
 const DEV_PROJECT_REF = 'tfwejruvdahonacyldrg'
 const PROD_PROJECT_REF = 'fopyjewbsvusftpqbtml'
 const PAGE_SIZE = 1000
+const TARGETS = new Set(['development', 'production'])
 
 const TARGET_COLUMNS = [
   'id',
@@ -97,6 +102,8 @@ const GRADE_TO_LABEL = {
 
 const parseArgs = (argv) => {
   const args = {
+    target: 'development',
+    confirmProductionReadonly: false,
     jsonPath: null,
     limitSamples: 20,
     strictCount: false,
@@ -107,6 +114,11 @@ const parseArgs = (argv) => {
     if (arg === '--json') {
       args.jsonPath = argv[i + 1]
       i += 1
+    } else if (arg === '--target') {
+      args.target = argv[i + 1]
+      i += 1
+    } else if (arg === '--confirm-production-readonly') {
+      args.confirmProductionReadonly = true
     } else if (arg === '--limit-samples') {
       args.limitSamples = Number(argv[i + 1] || 20)
       i += 1
@@ -120,6 +132,10 @@ const parseArgs = (argv) => {
     }
   }
 
+  if (!TARGETS.has(args.target)) {
+    throw new Error('--target must be development or production')
+  }
+
   if (!Number.isInteger(args.limitSamples) || args.limitSamples < 0) {
     throw new Error('--limit-samples must be a non-negative integer')
   }
@@ -129,11 +145,16 @@ const parseArgs = (argv) => {
 
 const printUsage = () => {
   console.log(`Usage:
-  node scripts/audit/seal100x-clothes-diff.mjs [--limit-samples 20] [--json tmp/seal100x-clothes-diff.json] [--strict-count]
+  node scripts/audit/seal100x-clothes-diff.mjs [--target development] [--limit-samples 20] [--json tmp/seal100x-clothes-diff.json] [--strict-count]
+  node scripts/audit/seal100x-clothes-diff.mjs --target production --confirm-production-readonly [--limit-samples 20]
 
 Required environment:
   SUPABASE_DEV_URL=https://${DEV_PROJECT_REF}.supabase.co
   SUPABASE_DEV_ANON_KEY=<development anon key>
+
+Production environment:
+  SUPABASE_PROD_URL=https://${PROD_PROJECT_REF}.supabase.co
+  SUPABASE_PROD_ANON_KEY=<production anon key>
 
 Fallback environment accepted only when the URL contains the development ref:
   VITE_SUPABASE_URL
@@ -160,8 +181,35 @@ const loadEnvFileIfNeeded = () => {
   }
 }
 
-const getSupabaseEnv = () => {
+const getSupabaseEnv = (args) => {
   loadEnvFileIfNeeded()
+
+  if (args.target === 'production') {
+    if (!args.confirmProductionReadonly) {
+      throw new Error('Production audit requires --confirm-production-readonly')
+    }
+
+    const url = process.env.SUPABASE_PROD_URL || ''
+    const anonKey = process.env.SUPABASE_PROD_ANON_KEY || ''
+
+    if (!url || !anonKey) {
+      throw new Error('Missing production Supabase env: SUPABASE_PROD_URL and SUPABASE_PROD_ANON_KEY')
+    }
+
+    if (!url.includes(PROD_PROJECT_REF)) {
+      throw new Error(`Production Supabase URL must contain project ref ${PROD_PROJECT_REF}`)
+    }
+
+    assertAnonKeyOnly(anonKey)
+
+    return {
+      url,
+      anonKey,
+      target: 'production',
+      projectRef: PROD_PROJECT_REF,
+      productionReadOnlyConfirmed: true,
+    }
+  }
 
   const url = process.env.SUPABASE_DEV_URL || process.env.VITE_SUPABASE_URL || ''
   const anonKey = process.env.SUPABASE_DEV_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
@@ -171,14 +219,40 @@ const getSupabaseEnv = () => {
   }
 
   if (url.includes(PROD_PROJECT_REF)) {
-    throw new Error(`Refusing to run against production project ref ${PROD_PROJECT_REF}`)
+    throw new Error(`Refusing to run development audit against production project ref ${PROD_PROJECT_REF}`)
   }
 
   if (!url.includes(DEV_PROJECT_REF)) {
-    throw new Error(`Supabase URL must contain development project ref ${DEV_PROJECT_REF}`)
+    throw new Error(`Development Supabase URL must contain project ref ${DEV_PROJECT_REF}`)
   }
 
-  return { url, anonKey, projectRef: DEV_PROJECT_REF }
+  assertAnonKeyOnly(anonKey)
+
+  return {
+    url,
+    anonKey,
+    target: 'development',
+    projectRef: DEV_PROJECT_REF,
+    productionReadOnlyConfirmed: false,
+  }
+}
+
+const assertAnonKeyOnly = (key) => {
+  if (String(key).includes('service_role')) {
+    throw new Error('Refusing to run with a service role key')
+  }
+
+  const parts = String(key).split('.')
+  if (parts.length < 2) return
+
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+    if (payload?.role === 'service_role') {
+      throw new Error('Refusing to run with a service role key')
+    }
+  } catch (error) {
+    if (error.message.includes('service role')) throw error
+  }
 }
 
 const assertSafeJsonPath = (jsonPath) => {
@@ -552,7 +626,9 @@ const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples })
     generatedAt: new Date().toISOString(),
     mode: 'dry-run read-only',
     environment: {
+      target: env.target,
       projectRef: env.projectRef,
+      productionReadOnlyConfirmed: env.productionReadOnlyConfirmed,
       productionRefBlocked: PROD_PROJECT_REF,
     },
     upstream: {
@@ -584,13 +660,15 @@ const printSummary = (report, limitSamples) => {
   console.log('seal100x clothes diff dry-run audit')
   console.log('====================================')
   console.log(`Mode: ${report.mode}`)
-  console.log(`Development project ref: ${report.environment.projectRef}`)
+  console.log(`Target: ${report.environment.target}`)
+  console.log(`Project ref: ${report.environment.projectRef}`)
+  console.log(`Production readonly confirmed: ${report.environment.productionReadOnlyConfirmed}`)
   console.log(`Upstream URL: ${report.upstream.url}`)
   console.log(`Upstream wardrobe_lastupd: ${report.upstream.wardrobeLastUpdated || '(unknown)'}`)
   console.log(`Upstream raw count: ${report.upstream.rawCount}`)
   console.log(`Upstream expanded count: ${report.upstream.expandedCount}`)
   console.log(`Upstream sha256: ${report.upstream.sha256}`)
-  console.log(`Development clothes rows: ${report.db.rowCount}`)
+  console.log(`${report.environment.target} clothes rows: ${report.db.rowCount}`)
   console.log(`clothes columns: ${report.db.actualColumns.join(', ')}`)
   console.log(`blank game_id rows: ${report.db.blankGameIdCount}`)
   console.log('')
@@ -621,7 +699,8 @@ const printSummary = (report, limitSamples) => {
   printConflictSummary('Normalized key conflicts', report.normalizedKey.conflicts)
 
   console.log('Schema note:')
-  console.log('- source/version/suit/setSource/isNew are source context only; this script does not add DB fields.')
+  console.log('- Upstream source/version/setSource/isNew are source context only, not DB field requirements.')
+  console.log('- Upstream suit is source context only; DB suit boundary remains suit_id / temp_suit_name.')
 }
 
 const printDiffSummary = (title, diff) => {
@@ -692,7 +771,7 @@ const writeJsonReport = (jsonPath, report) => {
 
 const main = async () => {
   const args = parseArgs(process.argv.slice(2))
-  const env = getSupabaseEnv()
+  const env = getSupabaseEnv(args)
   const supabase = createClientReadOnly(env)
   const warnings = []
 
