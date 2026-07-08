@@ -309,6 +309,7 @@ const normalizeUpstreamRow = (row) => {
   for (let i = 0; i < SCORE_KEYS.length; i += 1) {
     grades[SCORE_KEYS[i]] = normalizeText(row[4 + i])
   }
+  const tagsList = normalizeTagList(row[14])
 
   return {
     name: normalizeText(row[0]),
@@ -317,7 +318,9 @@ const normalizeUpstreamRow = (row) => {
     stars: normalizeText(row[3]),
     scores: gradesToScores(normalizeText(row[1]), grades),
     grades,
-    tags: normalizeTags(row[14]),
+    tags: formatTags(tagsList),
+    tagsList,
+    rawTags: row[14],
     source: normalizeText(row[15]),
     suit: normalizeText(row[16]),
     version: normalizeText(row[17]),
@@ -343,13 +346,52 @@ const gradesToScores = (category, grades) => {
 const normalizeText = (value) => String(value ?? '').trim()
 
 const normalizeTags = (value) => {
+  return formatTags(normalizeTagList(value))
+}
+
+const normalizeTagList = (value) => {
   const values = Array.isArray(value) ? value : [value]
   return [...new Set(
     values
-      .flatMap((item) => String(item ?? '').split(/[,，、;；/]+/))
+      .flatMap(expandTagValue)
       .map((tag) => tag.trim())
       .filter(Boolean)
-  )].join(', ')
+  )].sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+}
+
+const expandTagValue = (value) => {
+  if (value === null || value === undefined) return []
+  if (Array.isArray(value)) return value.flatMap(expandTagValue)
+  const text = normalizeText(value)
+  if (!text || text === '[]') return []
+
+  if (text.startsWith('[') && text.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) return parsed.flatMap(expandTagValue)
+    } catch {
+      // Fall through to delimiter parsing for malformed legacy strings.
+    }
+  }
+
+  return text
+    .split(/[,，、;；/]+/)
+    .map((tag) => tag.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean)
+}
+
+const formatTags = (tags) => {
+  return tags.join(', ')
+}
+
+const formatRawTags = (value) => {
+  if (Array.isArray(value)) return stableStringify(value)
+  if (value && typeof value === 'object') return stableStringify(value)
+  return normalizeText(value)
+}
+
+const tagsEqual = (left, right) => {
+  return stableStringify(left.tagsList || normalizeTagList(left.tags)) === stableStringify(right.tagsList || normalizeTagList(right.tags))
 }
 
 const getBroadCategory = (category) => {
@@ -437,19 +479,24 @@ const fetchClothesRows = async (supabase, columns) => {
   return rows.map(normalizeDbRow)
 }
 
-const normalizeDbRow = (row) => ({
-  id: normalizeText(row.id),
-  name: normalizeText(row.name),
-  category: normalizeText(row.category),
-  game_id: normalizeText(row.game_id),
-  stars: normalizeText(row.stars),
-  tags: normalizeTags(row.tags),
-  scores: normalizeScores(row.scores),
-  suit_id: normalizeText(row.suit_id),
-  temp_suit_name: normalizeText(row.temp_suit_name),
-  created_at: normalizeText(row.created_at),
-  updated_at: normalizeText(row.updated_at),
-})
+const normalizeDbRow = (row) => {
+  const tagsList = normalizeTagList(row.tags)
+  return {
+    id: normalizeText(row.id),
+    name: normalizeText(row.name),
+    category: normalizeText(row.category),
+    game_id: normalizeText(row.game_id),
+    stars: normalizeText(row.stars),
+    tags: formatTags(tagsList),
+    tagsList,
+    rawTags: row.tags,
+    scores: normalizeScores(row.scores),
+    suit_id: normalizeText(row.suit_id),
+    temp_suit_name: normalizeText(row.temp_suit_name),
+    created_at: normalizeText(row.created_at),
+    updated_at: normalizeText(row.updated_at),
+  }
+}
 
 const normalizeScores = (scores) => {
   const source = scores && typeof scores === 'object' && !Array.isArray(scores) ? scores : {}
@@ -503,7 +550,9 @@ const sampleRow = (row) => ({
   id: row.id || undefined,
   name: row.name,
   category: row.category,
+  broadCategory: getBroadCategory(row.category),
   game_id: row.game_id,
+  normalizedGameId: stripLeadingZeros(row.game_id),
   stars: row.stars,
   tags: row.tags,
   source: row.source || undefined,
@@ -511,6 +560,8 @@ const sampleRow = (row) => ({
   version: row.version || undefined,
   setSource: row.setSource || undefined,
   isNew: row.isNew || undefined,
+  suit_id: row.suit_id || undefined,
+  temp_suit_name: row.temp_suit_name || undefined,
 })
 
 const analyzeDiff = ({ sourceRows, dbRows, keyFn, limitSamples }) => {
@@ -569,6 +620,11 @@ const analyzeDiff = ({ sourceRows, dbRows, keyFn, limitSamples }) => {
       changed: changed.slice(0, limitSamples),
       dbOnly: dbOnly.slice(0, limitSamples),
     },
+    all: {
+      sourceOnly,
+      changed,
+      dbOnly,
+    },
     conflicts: {
       sourceDuplicateKeys,
       dbDuplicateKeys,
@@ -578,13 +634,36 @@ const analyzeDiff = ({ sourceRows, dbRows, keyFn, limitSamples }) => {
 
 const compareWhitelistFields = (source, db) => {
   const fields = []
-  for (const field of ['name', 'stars', 'scores', 'tags']) {
+  for (const field of ['name', 'stars', 'scores']) {
     const sourceValue = source[field]
     const dbValue = db[field]
     if (!valuesEqual(sourceValue, dbValue)) {
-      fields.push({ field, source: sourceValue, db: dbValue })
+      fields.push({ field, diffType: 'semantic', source: sourceValue, db: dbValue })
     }
   }
+
+  const tagsSemanticEqual = tagsEqual(source, db)
+  const tagsRawEqual = formatRawTags(source.rawTags) === formatRawTags(db.rawTags)
+  if (!tagsSemanticEqual) {
+    fields.push({
+      field: 'tags',
+      diffType: 'semantic',
+      source: source.tags,
+      db: db.tags,
+      sourceRaw: formatRawTags(source.rawTags),
+      dbRaw: formatRawTags(db.rawTags),
+    })
+  } else if (!tagsRawEqual) {
+    fields.push({
+      field: 'tags',
+      diffType: 'format-only',
+      source: source.tags,
+      db: db.tags,
+      sourceRaw: formatRawTags(source.rawTags),
+      dbRaw: formatRawTags(db.rawTags),
+    })
+  }
+
   return fields
 }
 
@@ -604,6 +683,184 @@ const buildDbStats = (dbRows, columns) => {
   }
 }
 
+const countByObjectEntries = (entries) => {
+  const counts = {}
+  for (const entry of entries) {
+    counts[entry] = (counts[entry] || 0) + 1
+  }
+  return counts
+}
+
+const topCounts = (counts, limit) => Object.entries(counts)
+  .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hans-CN'))
+  .slice(0, limit)
+  .map(([name, count]) => ({ name, count }))
+
+const getSemanticFields = (changedItem) => changedItem.fields
+  .filter((field) => field.diffType !== 'format-only')
+  .map((field) => field.field)
+
+const hasTagsFormatOnly = (changedItem) => changedItem.fields
+  .some((field) => field.field === 'tags' && field.diffType === 'format-only')
+
+const hasTagsSemanticDiff = (changedItem) => changedItem.fields
+  .some((field) => field.field === 'tags' && field.diffType === 'semantic')
+
+const getFieldCombinationKey = (fields) => [...new Set(fields)].sort().join('+')
+
+const buildChangedFieldDistribution = (changedRows) => {
+  const distribution = {
+    'name-only': 0,
+    'stars-only': 0,
+    'scores-only': 0,
+    'tags-only semantic': 0,
+    'tags-format-only': 0,
+    mixed: 0,
+    'scores+tags': 0,
+    'name+tags': 0,
+    'other combinations': {},
+  }
+
+  for (const item of changedRows) {
+    const semanticFields = getSemanticFields(item)
+    const combination = getFieldCombinationKey(semanticFields)
+    const tagsFormatOnly = hasTagsFormatOnly(item)
+
+    if (tagsFormatOnly && semanticFields.length === 0) {
+      distribution['tags-format-only'] += 1
+    } else if (combination === 'name') {
+      distribution['name-only'] += 1
+    } else if (combination === 'stars') {
+      distribution['stars-only'] += 1
+    } else if (combination === 'scores') {
+      distribution['scores-only'] += 1
+    } else if (combination === 'tags') {
+      distribution['tags-only semantic'] += 1
+    } else if (combination === 'scores+tags') {
+      distribution['scores+tags'] += 1
+      distribution.mixed += 1
+    } else if (combination === 'name+tags') {
+      distribution['name+tags'] += 1
+      distribution.mixed += 1
+    } else {
+      const key = tagsFormatOnly ? `${combination || 'none'}+tags-format-only` : combination
+      distribution['other combinations'][key] = (distribution['other combinations'][key] || 0) + 1
+      if (semanticFields.length > 1 || tagsFormatOnly) distribution.mixed += 1
+    }
+  }
+
+  return distribution
+}
+
+const classifyDbOnly = (item) => ({
+  ...item,
+  classification: 'custom/local-review-candidate',
+  recommendation: 'keep for manual review in this read-only draft; do not delete automatically',
+})
+
+const buildSuitMappingReview = ({ sourceRows, dbRows, limitSamples }) => {
+  const sourceRowsWithSuit = sourceRows.filter((row) => row.suit)
+  const sourceRowsWithoutSuit = sourceRows.filter((row) => !row.suit)
+  const dbRowsWithSuitId = dbRows.filter((row) => row.suit_id)
+  const dbRowsWithTempSuitName = dbRows.filter((row) => row.temp_suit_name)
+  const sourceSuitNameCounts = countByObjectEntries(sourceRowsWithSuit.map((row) => row.suit))
+
+  return {
+    sourceRowsWithSuitCount: sourceRowsWithSuit.length,
+    sourceRowsWithoutSuitCount: sourceRowsWithoutSuit.length,
+    dbRowsWithSuitIdCount: dbRowsWithSuitId.length,
+    dbRowsWithTempSuitNameCount: dbRowsWithTempSuitName.length,
+    sourceSuitNameDistributionTop50: topCounts(sourceSuitNameCounts, 50),
+    sampleSourceRowsWithSuit: sourceRowsWithSuit.slice(0, limitSamples).map(sampleRow),
+    sampleDbRowsWithSuitFields: dbRows
+      .filter((row) => row.suit_id || row.temp_suit_name)
+      .slice(0, limitSamples)
+      .map(sampleRow),
+    requiresSeparateSuitMappingTask: true,
+    note: 'Do not auto-overwrite suit_id or temp_suit_name from this draft.',
+  }
+}
+
+const buildAnalysis = ({ upstreamRows, dbRows, normalized, limitSamples }) => {
+  const normalizedSourceOnly = normalized.all.sourceOnly
+  const normalizedChanged = normalized.all.changed
+  const normalizedDbOnlyAll = normalized.all.dbOnly.map(classifyDbOnly)
+
+  return {
+    changedFieldDistribution: buildChangedFieldDistribution(normalizedChanged),
+    tagsFormatOnlyCount: normalizedChanged.filter(hasTagsFormatOnly).length,
+    tagsSemanticDiffCount: normalizedChanged.filter(hasTagsSemanticDiff).length,
+    normalizedSourceOnlyCategoryCounts: countBy(normalizedSourceOnly, (item) => item.source.category || '(blank)'),
+    normalizedSourceOnlyBroadCategoryCounts: countBy(normalizedSourceOnly, (item) => item.source.broadCategory || '(blank)'),
+    normalizedSourceOnlyVersionCounts: countBy(normalizedSourceOnly, (item) => item.source.version || '(blank)'),
+    normalizedSourceOnlySamples: normalizedSourceOnly.slice(0, limitSamples),
+    normalizedDbOnlyAll,
+    suitMappingReview: buildSuitMappingReview({ sourceRows: upstreamRows, dbRows, limitSamples }),
+  }
+}
+
+const groupCandidateUpdatesByField = (changedRows) => {
+  const groups = {
+    name: [],
+    stars: [],
+    scores: [],
+    tagsSemantic: [],
+    tagsFormatOnly: [],
+    mixed: [],
+  }
+
+  for (const item of changedRows) {
+    const semanticFields = getSemanticFields(item)
+    const tagsFormatOnly = hasTagsFormatOnly(item)
+    const semanticFieldSet = new Set(semanticFields)
+
+    if (semanticFieldSet.has('name')) groups.name.push(item)
+    if (semanticFieldSet.has('stars')) groups.stars.push(item)
+    if (semanticFieldSet.has('scores')) groups.scores.push(item)
+    if (semanticFieldSet.has('tags')) groups.tagsSemantic.push(item)
+    if (tagsFormatOnly) groups.tagsFormatOnly.push(item)
+    if (semanticFields.length > 1 || (tagsFormatOnly && semanticFields.length > 0)) groups.mixed.push(item)
+  }
+
+  return groups
+}
+
+const buildFinalizedSyncSetDraft = ({ normalized, analysis }) => {
+  const normalizedChanged = normalized.all.changed
+  const candidateUpdatesByField = groupCandidateUpdatesByField(normalizedChanged)
+
+  return {
+    draftOnly: true,
+    notAnApplyPlan: true,
+    noSqlGenerated: true,
+    matchingKey: 'normalized: getBroadCategory(category) + stripLeadingZeros(game_id) + name',
+    candidateInserts: normalized.all.sourceOnly.map((item) => ({
+      ...item,
+      draftAction: 'candidate-insert',
+    })),
+    candidateUpdatesByField,
+    tagsReviewSet: [
+      ...candidateUpdatesByField.tagsSemantic.map((item) => ({
+        ...item,
+        reviewType: 'tags-semantic-diff',
+      })),
+      ...candidateUpdatesByField.tagsFormatOnly.map((item) => ({
+        ...item,
+        reviewType: 'tags-format-only',
+        recommendation: 'no content update needed unless storage format cleanup is separately approved',
+      })),
+    ],
+    dbOnlyReviewSet: analysis.normalizedDbOnlyAll,
+    suitMappingReviewSet: {
+      requiresSeparateSuitMappingTask: true,
+      sourceSuitNameDistributionTop50: analysis.suitMappingReview.sourceSuitNameDistributionTop50,
+      sampleSourceRowsWithSuit: analysis.suitMappingReview.sampleSourceRowsWithSuit,
+      sampleDbRowsWithSuitFields: analysis.suitMappingReview.sampleDbRowsWithSuitFields,
+      recommendation: 'review suit identity separately; do not auto-generate suit_id overwrite operations',
+    },
+  }
+}
+
 const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples }) => {
   const exact = analyzeDiff({
     sourceRows: upstream.rows,
@@ -616,6 +873,16 @@ const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples })
     dbRows,
     keyFn: createNormalizedKey,
     limitSamples,
+  })
+  const analysis = buildAnalysis({
+    upstreamRows: upstream.rows,
+    dbRows,
+    normalized,
+    limitSamples,
+  })
+  const finalizedSyncSetDraft = buildFinalizedSyncSetDraft({
+    normalized,
+    analysis,
   })
 
   if (upstream.expandedCount !== EXPECTED_EXPANDED_COUNT) {
@@ -653,6 +920,8 @@ const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples })
     },
     exactKey: exact,
     normalizedKey: normalized,
+    analysis,
+    finalizedSyncSetDraft,
   }
 }
 
@@ -698,9 +967,12 @@ const printSummary = (report, limitSamples) => {
   printSamples(`Normalized DB-only samples (limit ${limitSamples})`, report.normalizedKey.samples.dbOnly)
   printConflictSummary('Normalized key conflicts', report.normalizedKey.conflicts)
 
+  printAnalysisSummary(report.analysis)
+
   console.log('Schema note:')
   console.log('- Upstream source/version/setSource/isNew are source context only, not DB field requirements.')
   console.log('- Upstream suit is source context only; DB suit boundary remains suit_id / temp_suit_name.')
+  console.log('- finalizedSyncSetDraft is a read-only draft, not an apply plan; no SQL is generated.')
 }
 
 const printDiffSummary = (title, diff) => {
@@ -747,6 +1019,45 @@ const printConflictSummary = (title, conflicts) => {
   for (const item of conflicts.dbDuplicateKeys) {
     console.log(`- DB duplicate ${item.key}: ${item.count}`)
   }
+  console.log('')
+}
+
+const printAnalysisSummary = (analysis) => {
+  console.log('Finalized sync set draft analysis')
+  console.log('Changed field distribution:')
+  for (const [key, value] of Object.entries(analysis.changedFieldDistribution)) {
+    if (key === 'other combinations') {
+      console.log(`- ${key}: ${stableStringify(value)}`)
+    } else {
+      console.log(`- ${key}: ${value}`)
+    }
+  }
+  console.log(`- tags format-only rows: ${analysis.tagsFormatOnlyCount}`)
+  console.log(`- tags semantic diff rows: ${analysis.tagsSemanticDiffCount}`)
+  console.log('')
+
+  console.log('Normalized source-only broad category counts:')
+  for (const [category, count] of Object.entries(analysis.normalizedSourceOnlyBroadCategoryCounts).sort((a, b) => a[0].localeCompare(b[0], 'zh-Hans-CN'))) {
+    console.log(`- ${category}: ${count}`)
+  }
+  console.log('')
+
+  console.log('Normalized DB-only all:')
+  if (analysis.normalizedDbOnlyAll.length === 0) {
+    console.log('- none')
+  } else {
+    for (const item of analysis.normalizedDbOnlyAll) {
+      console.log(`- ${item.key}: id=${item.db.id || '(blank)'}; classification=${item.classification}`)
+    }
+  }
+  console.log('')
+
+  console.log('Suit mapping review:')
+  console.log(`- source rows with suit: ${analysis.suitMappingReview.sourceRowsWithSuitCount}`)
+  console.log(`- source rows without suit: ${analysis.suitMappingReview.sourceRowsWithoutSuitCount}`)
+  console.log(`- DB rows with suit_id: ${analysis.suitMappingReview.dbRowsWithSuitIdCount}`)
+  console.log(`- DB rows with temp_suit_name: ${analysis.suitMappingReview.dbRowsWithTempSuitNameCount}`)
+  console.log('- requires separate suit mapping task: true')
   console.log('')
 }
 
