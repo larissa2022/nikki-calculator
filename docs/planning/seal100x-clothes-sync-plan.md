@@ -2,7 +2,13 @@
 
 ## 1. Status
 
-This is a planning document for a future clothes data synchronization task. It is based on the PR #49 production SELECT-only audit result.
+This is a planning document for the seal100x clothes data synchronization task.
+
+Core task:
+
+- Sync Nikki UP2U3 / 奇迹暖暖 clothing item data from `https://seal100x.github.io/nikkiup2u3/` into Nikki Calculator's database.
+- The current upstream implementation target is `https://seal100x.github.io/nikkiup2u3_data/wardrobe.js`, which is the compressed / encoded wardrobe data source used by the existing audit script.
+- The primary database target is `public.clothes`.
 
 Current authorization status:
 
@@ -14,14 +20,33 @@ Current authorization status:
 - No business code change is authorized.
 - Any actual data synchronization must be handled as a separate `database/data-sync` task.
 
-## 2. Scope
+## 2. Confirmed Source-of-Truth Decision
+
+Confirmed user decision:
+
+- seal100x is the content source of truth for clothing item data.
+- If seal100x clothing item data conflicts with existing Nikki Calculator `public.clothes` data, seal100x should win.
+- The current database originally came from the same upstream family, but it is now behind game progress and may contain inaccurate player-entered or locally maintained records.
+
+Important boundary:
+
+- seal100x is the clothing item content source of truth.
+- seal100x is not automatically the source of truth for database schema, RLS, Supabase policies, Vercel configuration, user wardrobe ownership data, pending review workflow, or local governance documents.
+- Schema changes, RLS changes, user data changes, and deployment configuration changes require separate task classification and approval.
+
+## 3. Scope
 
 This plan covers:
 
 - `source-only` clothes records.
 - `changed` clothes records.
 - `DB-only` clothes records.
+- Field mapping from seal100x upstream data into current `public.clothes` fields.
 - `tags` differences.
+- `scores` differences.
+- `stars` differences.
+- `name` differences.
+- `category` matching / mapping.
 - `suit_id` and `temp_suit_name` mapping questions.
 - Validation strategy.
 - Backup and rollback requirements.
@@ -34,17 +59,38 @@ This plan does not cover:
 - Vercel or CI automation rollout.
 - Production data write execution.
 - Business code changes.
+- User wardrobe ownership migration.
+- Pending review workflow redesign.
 
-## 3. Audit Inputs
+## 4. Audit Inputs
 
-Source PR:
+Source PRs:
 
-- PR: #49, `工具：支持 seal100x 生产只读审计模式`.
-- Merge commit: `c634ce24480f7c171de824d5883895a3c4628a98`.
-- Audit mode: production SELECT-only / dry-run read-only.
+- PR #48: added the first seal100x clothes diff read-only audit script.
+- PR #49: added explicit production SELECT-only audit mode.
+- PR #50: added the initial planning document.
+
+Current audit script:
+
+```text
+scripts/audit/seal100x-clothes-diff.mjs
+```
+
+Current npm script:
+
+```text
+npm run audit:seal100x-clothes
+```
+
+Audit mode currently available:
+
+- development read-only audit.
+- production SELECT-only audit, requiring explicit `--target production --confirm-production-readonly`.
+
+Production audit source:
+
 - Production project ref: `fopyjewbsvusftpqbtml`.
 - Target table: production `clothes`.
-- Source: seal100x / upstream expanded clothes data.
 - JSON report path used during audit: `tmp/seal100x-production-clothes-diff.json`.
 - The JSON report was not committed; PR #49 body is the current committed audit summary source.
 
@@ -77,56 +123,90 @@ Normalized key diff statistics:
 | DB duplicate keys | 0 |
 | total conflict keys | 0 |
 
-Known sample patterns from PR #49:
+Initial interpretation:
 
-- Exact `source-only` samples are mainly clothes present in source but not production DB.
-- Exact `changed` samples listed in PR #49 have differences in `tags`.
-- Exact `DB-only` samples are production DB rows not found in source by exact key.
-- Conflict samples: none.
+- The exact key result is too noisy to use directly as an insert/update plan.
+- The normalized key result is a better first-pass analysis layer, but it is still not an authorized write set.
+- A finalized sync set must be generated before any write task.
 
-## 4. Proposed Sync Classification
+## 5. Current Script Capability
 
-### 4.1 Source-only
+The current audit script can:
 
-Meaning: rows exist in seal100x / upstream source data, but do not exist in production DB under the audit key.
+- Fetch seal100x upstream `wardrobe.js`.
+- Expand upstream wardrobe data.
+- Normalize upstream rows into mapped fields.
+- Read Supabase `public.clothes` using SELECT only.
+- Compare source and DB rows using exact key and normalized key.
+- Report source-only, changed, DB-only, duplicate, and conflict counts.
+- Output JSON under `tmp/` or `.cache/`.
+- Refuse obvious service-role keys.
+- Refuse development audit against the production project ref.
+- Require explicit confirmation for production SELECT-only audit.
+
+The current audit script cannot yet:
+
+- Generate a finalized sync set.
+- Apply inserts.
+- Apply updates.
+- Generate rollback SQL or inverse patches.
+- Backup production.
+- Validate development sample writes.
+- Map suit identity safely into `suit_id` / `temp_suit_name` without additional strategy.
+- Decide whether DB-only records should be kept, marked, or removed.
+
+## 6. Proposed Sync Classification
+
+### 6.1 Source-only
+
+Meaning: rows exist in seal100x upstream source data, but do not exist in production DB under the selected matching key.
 
 Initial planning direction:
 
 - Treat as candidate inserts only.
 - Do not insert automatically from this planning document.
+- Prefer normalized-key analysis before exact-key insertion decisions.
 - Build a finalized sync set before any write task.
 
 Unconfirmed strategy:
 
-- Whether all source-only records should be inserted.
+- Whether all normalized source-only records should be inserted.
 - Whether inserts should be split by category, suit, batch size, or risk level.
 - Whether high-risk categories need manual review before insertion.
 - Whether a development dry-run and sample write must precede any production write.
 
-### 4.2 Changed
+### 6.2 Changed
 
 Meaning: rows exist in both source and production DB, but at least one audited field differs.
 
-Initial planning direction:
+Confirmed principle:
 
-- Treat as candidate updates only.
-- Split differences by field before deciding update policy.
+- For clothing item content conflicts, seal100x should win.
+
+Execution constraint:
+
+- Even if seal100x should win, updates must be split by field and validated before writing.
 - Do not update all changed rows as a single undifferentiated batch.
 
 Field groups:
 
-- Safer metadata candidates: fields whose source of truth is confirmed and whose update does not affect identity or suit mapping.
-- `tags`: not safe for default bulk overwrite.
-- `suit_id` / `temp_suit_name`: not safe for default bulk overwrite until mapping is confirmed.
-- Identity / key fields: require separate audit and approval.
+- `name`
+- `stars`
+- `scores`
+- `tags`
+- mixed field changes
+- identity / key fields
+- suit mapping fields
 
-Important constraint:
+Initial planning direction:
 
-- PR #49 changed samples are `tags` differences, but this does not by itself authorize bulk `tags` overwrite.
+- Generate a field-level changed summary first.
+- Separate safer content fields from identity-sensitive fields.
+- Do not bulk-overwrite `tags`, `suit_id`, or `temp_suit_name` until their mapping strategy is confirmed.
 
-### 4.3 DB-only
+### 6.3 DB-only
 
-Meaning: rows exist in production DB, but do not exist in seal100x / upstream source data under the audit key.
+Meaning: rows exist in production DB, but do not exist in seal100x upstream source data under the selected matching key.
 
 Initial planning direction:
 
@@ -134,37 +214,72 @@ Initial planning direction:
 - Do not delete automatically.
 - Do not archive, mark, or clean up without a separate confirmed strategy.
 
-Unconfirmed strategy:
+Reason:
 
-- Whether DB-only records are legacy valid rows, local-only rows, source gaps, category/key normalization issues, or cleanup candidates.
-- Whether they should be preserved, marked, manually reviewed, or later cleaned.
+- DB-only records may be legacy valid rows, local-only rows, source gaps, category/key normalization issues, or cleanup candidates.
+- Destructive operations require separate approval and rollback.
 
-## 5. Field-level Strategy
+## 7. Field-level Strategy
 
-### 5.1 tags
+### 7.1 tags
 
-Current status:
+Confirmed principle:
 
-- `tags` bulk overwrite is not confirmed.
-- PR #49 changed samples show `tags` differences, but sample evidence is not an execution decision.
+- If `tags` are clothing item content from seal100x and conflict with stale local values, seal100x is the intended source of truth.
+
+Execution constraint:
+
+- `tags` bulk overwrite is not automatically authorized by this planning document.
+- Generate a tags diff review first.
+- Confirm whether there are local app-specific tags that must be preserved before bulk apply.
 
 Risk:
 
 - Bulk overwrite may affect filtering, display behavior, classification support, and user-facing search logic.
-- If local tags contain corrections or app-specific semantics, upstream overwrite may regress behavior.
 
-Default strategy:
+### 7.2 scores
 
-- Do not auto-overwrite `tags`.
-- Generate a tags diff review first.
-- Confirm whether source or production DB is the source of truth for each tags class.
+Confirmed principle:
 
-### 5.2 suit_id and temp_suit_name
+- Scores derived from seal100x wardrobe grades are clothing item content.
+- If score data conflicts with stale local values, seal100x-derived scores are the intended content source.
+
+Execution constraint:
+
+- Confirm that current score conversion matrix is correct for all categories before applying score updates.
+- Field-level audit must identify score-only rows and mixed-diff rows separately.
+
+### 7.3 stars and name
+
+Confirmed principle:
+
+- `stars` and `name` are clothing item content fields.
+- If they conflict with stale local data, seal100x is the intended source of truth.
+
+Execution constraint:
+
+- Name changes may affect matching, display, and duplicate detection.
+- Updates must be generated from a finalized sync set, not from raw exact-key noise.
+
+### 7.4 category
+
+Current status:
+
+- `category` participates in exact key matching.
+- normalized key collapses broad categories for comparison.
+
+Unconfirmed strategy:
+
+- Whether `category` should be overwritten to seal100x category values.
+- Whether category should remain a matching field only.
+- Whether category changes need a separate review because user workflows and short-code input depend on category.
+
+### 7.5 suit_id and temp_suit_name
 
 Current status:
 
 - Mapping strategy is not confirmed.
-- Source-of-truth relationship between upstream suit data and local `suit_id` / `temp_suit_name` is not confirmed in this plan.
+- seal100x upstream exposes suit context, but the current DB uses `suit_id` and `temp_suit_name`.
 
 Risk:
 
@@ -177,7 +292,7 @@ Default strategy:
 - Generate a mapping review before any update.
 - Confirm how upstream suit identity maps to local fields.
 
-### 5.3 Identity and key fields
+### 7.6 Identity and key fields
 
 Identity-sensitive fields include at least:
 
@@ -192,38 +307,95 @@ Default strategy:
 - If identity/key changes are needed, split them into a separate audit and approval step.
 - Confirm duplicate detection and rollback before any identity/key write.
 
-## 6. Execution Gates Before Any database/data-sync Task
+## 8. Execution Gates Before Any database/data-sync Task
 
 Before any real `database/data-sync` task, the following must be confirmed:
 
-1. Whether to generate a finalized sync set from the production audit result.
-2. Whether source-only rows are inserted all at once or by category / suit / batch.
-3. Which changed fields are allowed to update.
-4. Whether `tags` can be bulk-overwritten.
-5. Whether DB-only rows are preserved, marked, manually reviewed, or later cleaned.
-6. How `suit_id` and `temp_suit_name` map to upstream suit data.
-7. Whether to build and run a development dry-run / sample-write tool first.
-8. Production backup method.
-9. Production rollback method.
-10. Production validation checklist.
-11. Explicit approver for production write.
-12. Whether to create a separate CI PR. First version recommendation: `workflow_dispatch` + development only.
+1. Whether to use normalized key as the main matching basis.
+2. Whether to generate a finalized sync set from the production audit result.
+3. Whether source-only rows are inserted all at once or by category / suit / batch.
+4. Which changed fields are allowed to update.
+5. Whether `tags` can be bulk-overwritten.
+6. Whether `scores` can be bulk-overwritten.
+7. Whether `stars` and `name` can be bulk-overwritten.
+8. Whether `category` can be overwritten or only used for matching.
+9. Whether DB-only rows are preserved, marked, manually reviewed, or later cleaned.
+10. How `suit_id` and `temp_suit_name` map to upstream suit data.
+11. Whether to build and run a development dry-run / sample-write tool first.
+12. Production backup method.
+13. Production rollback method.
+14. Production validation checklist.
+15. Explicit approver for production write.
+16. Whether to create a separate CI PR. First version recommendation: `workflow_dispatch` + development only.
 
-## 7. Recommended Next Task Split
+## 9. Responsibility Split
+
+### 9.1 User
+
+The user is responsible for:
+
+- Final product judgment.
+- Final sync strategy decisions.
+- Approval for development write.
+- Approval for production write.
+- Approval for merge operations.
+- Approval for `main`, production, Supabase write, Vercel write, env, migration, or destructive operations.
+
+### 9.2 ChatGPT
+
+ChatGPT is responsible for:
+
+- Reading and aligning governance documents.
+- Directly completing docs-only tasks through the GitHub connector.
+- Triage and read-only review across GitHub / Vercel / Supabase.
+- Separating facts, decisions, preferences, and open questions.
+- Classifying tasks as docs / business / database / config / release / incident.
+- Producing Codex-ready instructions for non-doc execution tasks.
+- Reviewing PR scope and rollback.
+
+ChatGPT must not:
+
+- Approve formal Rules.
+- Execute production writes.
+- Execute Supabase writes without explicit approval.
+- Execute Vercel writes without explicit approval.
+- Auto-merge PRs.
+- Turn unconfirmed strategy into final decisions.
+
+### 9.3 Codex
+
+Codex is responsible for:
+
+- Running local commands.
+- Running the existing audit script.
+- Modifying scripts or code when authorized.
+- Generating finalized sync set artifacts.
+- Building development-only dry-run / sample apply tooling.
+- Running tests / build.
+- Committing, pushing, and opening PRs for non-doc execution tasks when authorized.
+
+Codex must not:
+
+- Expand scope on its own.
+- Write production without explicit approval.
+- Commit tmp JSON reports, secrets, keys, tokens, authorization links, or keyring details.
+- Mix data-sync work with RLS security remediation.
+
+## 10. Recommended Next Task Split
 
 Recommended follow-up tasks:
 
-1. `database/data-sync` planning confirmation.
-2. Development dry-run tooling.
-3. Development sample write.
-4. Production backup and read-only preflight.
-5. Production apply, only after explicit approval.
-6. Optional CI PR using `workflow_dispatch` and development-only scope first.
-7. Separate `database/security` task for Supabase advisor risks.
+1. `database/data-sync planning`: generate finalized sync set draft, read-only.
+2. `database/tooling`: build development-only dry-run / sample apply tool.
+3. `database/data-sync development`: run approved development sample write.
+4. `database/preflight production`: confirm backup and rerun production SELECT-only audit.
+5. `database/production`: production apply, only after explicit approval.
+6. `config/ci`: optional CI PR using `workflow_dispatch` and development-only scope first.
+7. `database/security`: separate Supabase advisor / RLS task.
 
-## 8. Validation Plan
+## 11. Validation Plan
 
-### 8.1 Read-only validation
+### 11.1 Read-only validation
 
 Before any write task:
 
@@ -232,10 +404,11 @@ Before any write task:
 - Confirm duplicate key count remains `0` for selected keys.
 - Review category distribution.
 - Review tags diff summary.
+- Review score diff summary.
 - Review suit mapping consistency.
 - Generate sample rows for each planned operation class.
 
-### 8.2 Development validation
+### 11.2 Development validation
 
 Before production write:
 
@@ -245,7 +418,7 @@ Before production write:
 - Rehearse rollback on the development sample.
 - Perform UI smoke check if affected queries or display paths depend on changed data.
 
-### 8.3 Production validation
+### 11.3 Production validation
 
 Only after explicit production approval:
 
@@ -258,16 +431,16 @@ Only after explicit production approval:
 - Verify random samples from source-only, changed, and DB-only classes.
 - Confirm rollback readiness after apply.
 
-## 9. Rollback Plan
+## 12. Rollback Plan
 
-### 9.1 Rollback for this docs-only PR
+### 12.1 Rollback for docs-only changes
 
 If this planning document is wrong or premature:
 
 - Before merge: close the PR or push a correction commit.
-- After merge to `develop`: open a revert PR that removes or corrects `docs/planning/seal100x-clothes-sync-plan.md`.
+- After merge to `develop`: open a revert PR that removes or corrects this file.
 
-### 9.2 Required rollback design for future database/data-sync
+### 12.2 Required rollback design for future database/data-sync
 
 A future data-sync task must define rollback before any write:
 
@@ -279,15 +452,17 @@ A future data-sync task must define rollback before any write:
 - Separate rollback validation.
 - No destructive DB-only cleanup without separate approval.
 
-## 10. Open Questions
+## 13. Open Questions
 
-1. Should a finalized sync set be generated from the PR #49 production audit result?
+1. Should normalized key be the primary matching basis for finalized sync set generation?
 2. Should source-only rows be inserted all at once or split by category / suit / batch?
-3. Which changed fields are allowed to update?
-4. Are `tags` differences allowed to be bulk-overwritten?
-5. Should DB-only rows be preserved, marked, manually reviewed, or later cleaned?
-6. What is the approved mapping strategy for `suit_id` and `temp_suit_name`?
-7. Should development dry-run / sample-write tooling be built before any production plan?
-8. What backup, rollback, and validation method is required for production write?
-9. Should CI be added in a separate PR, starting with `workflow_dispatch` + development only?
-10. Should Supabase advisor security risks be handled as a separate `database/security` task before or after clothes sync planning?
+3. Which changed fields are allowed to update first?
+4. Are `tags` differences allowed to be bulk-overwritten after diff review?
+5. Are `scores`, `stars`, and `name` differences allowed to be bulk-overwritten from seal100x?
+6. Should `category` be overwritten from seal100x or used only for matching?
+7. Should DB-only rows be preserved, marked, manually reviewed, or later cleaned?
+8. What is the approved mapping strategy for `suit_id` and `temp_suit_name`?
+9. Should development dry-run / sample-write tooling be built before any production plan?
+10. What backup, rollback, and validation method is required for production write?
+11. Should CI be added in a separate PR, starting with `workflow_dispatch` + development only?
+12. Should Supabase advisor security risks be handled as a separate `database/security` task before or after clothes sync execution?
