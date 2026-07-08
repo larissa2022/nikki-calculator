@@ -354,7 +354,7 @@ const fetchRowsById = async (supabase, ids) => {
     .in('id', ids)
 
   if (error) {
-    fail(`Failed to read development sample rows before apply: ${error.message}`)
+    throw new Error(`Failed to read development sample rows: ${error.message}`)
   }
 
   const rows = new Map()
@@ -377,14 +377,102 @@ const assertCurrentRowsMatchPlan = ({ samples, rowsById }) => {
   for (const sample of samples) {
     const row = rowsById.get(sample.id)
     if (!row) {
-      fail(`Development row not found for fixed sample id ${sample.id}`)
+      throw new Error(`Development row not found for fixed sample id ${sample.id}`)
     }
 
     const currentValue = row[sample.field]
     if (!valuesEqual(currentValue, sample.before)) {
-      fail(`Development row ${sample.id} ${sample.field} does not match the expected before value; refusing to apply`)
+      throw new Error(`Development row ${sample.id} ${sample.field} does not match the expected before value; refusing to apply`)
     }
   }
+}
+
+const summarizeSampleForFailure = (sample) => ({
+  id: sample.id,
+  field: sample.field,
+  name: sample.name,
+  before: sample.before,
+  after: sample.after,
+  rollbackDraft: sample.rollbackDraft,
+})
+
+const manualRollbackInstruction = (appliedRow) => ({
+  id: appliedRow.id,
+  field: appliedRow.field,
+  restoreValue: appliedRow.rollbackDraft.restoreValue,
+})
+
+const rollbackAppliedRows = async ({ supabase, appliedRows }) => {
+  const rolledBackRows = []
+  const failedRollbackRows = []
+
+  for (const appliedRow of [...appliedRows].reverse()) {
+    const restoreValue = appliedRow.rollbackDraft.restoreValue
+    const { data, error } = await supabase
+      .from('clothes')
+      .update({ [appliedRow.field]: restoreValue })
+      .eq('id', appliedRow.id)
+      .select('id,name,category,game_id,stars,scores')
+      .single()
+
+    if (error) {
+      failedRollbackRows.push({
+        ...manualRollbackInstruction(appliedRow),
+        error: error.message,
+      })
+      continue
+    }
+
+    if (!valuesEqual(data?.[appliedRow.field], restoreValue)) {
+      failedRollbackRows.push({
+        ...manualRollbackInstruction(appliedRow),
+        error: 'rollback verification mismatch',
+      })
+      continue
+    }
+
+    rolledBackRows.push({
+      ...manualRollbackInstruction(appliedRow),
+      returned: data,
+    })
+  }
+
+  return {
+    attempted: appliedRows.length > 0,
+    rolledBackCount: rolledBackRows.length,
+    failedRollbackCount: failedRollbackRows.length,
+    rolledBackRows,
+    failedRollbackRows,
+    manualRollbackRequired: failedRollbackRows,
+  }
+}
+
+const createPartialFailureError = ({ cause, samples, failedIndex, notExecutedStartIndex, appliedRows, rollbackResult }) => {
+  const failedSample = Number.isInteger(failedIndex) ? samples[failedIndex] : null
+  const notExecutedRows = Number.isInteger(notExecutedStartIndex)
+    ? samples.slice(notExecutedStartIndex).map(summarizeSampleForFailure)
+    : []
+  const error = new Error(`Development sample apply failed: ${cause.message}`)
+  error.partialFailureReport = {
+    status: 'partial-failure',
+    failure: {
+      message: cause.message,
+      failedRow: failedSample ? summarizeSampleForFailure(failedSample) : null,
+    },
+    successfulAppliedRows: appliedRows.map((row) => ({
+      id: row.id,
+      field: row.field,
+      before: row.before,
+      after: row.after,
+      returned: row.returned,
+    })),
+    notExecutedRows,
+    successfulRowsRollbackDraft: appliedRows.map((row) => row.rollbackDraft),
+    automaticRollback: rollbackResult,
+    manualRollbackRequired: rollbackResult.manualRollbackRequired,
+    note: 'No SQL is generated. If automatic rollback failed, use manualRollbackRequired id/field/restoreValue.',
+  }
+  return error
 }
 
 const applyDevelopmentSample = async ({ plan, env }) => {
@@ -398,34 +486,72 @@ const applyDevelopmentSample = async ({ plan, env }) => {
   assertCurrentRowsMatchPlan({ samples, rowsById: beforeRowsById })
 
   const appliedRows = []
-  for (const sample of samples) {
-    const { data, error } = await supabase
-      .from('clothes')
-      .update({ [sample.field]: sample.after })
-      .eq('id', sample.id)
-      .select('id,name,category,game_id,stars,scores')
-      .single()
+  let currentIndex = null
+  let currentPhase = 'update'
 
-    if (error) {
-      fail(`Failed to update development row ${sample.id}: ${error.message}`)
+  try {
+    for (const [index, sample] of samples.entries()) {
+      currentIndex = index
+      currentPhase = 'update'
+      const { data, error } = await supabase
+        .from('clothes')
+        .update({ [sample.field]: sample.after })
+        .eq('id', sample.id)
+        .select('id,name,category,game_id,stars,scores')
+        .single()
+
+      if (error) {
+        throw new Error(`Failed to update development row ${sample.id}: ${error.message}`)
+      }
+
+      appliedRows.push({
+        id: sample.id,
+        field: sample.field,
+        before: sample.before,
+        after: sample.after,
+        returned: data,
+        rollbackDraft: sample.rollbackDraft,
+      })
     }
 
-    appliedRows.push({
-      id: sample.id,
-      field: sample.field,
-      before: sample.before,
-      after: sample.after,
-      returned: data,
-      rollbackDraft: sample.rollbackDraft,
+    currentIndex = null
+    currentPhase = 'verify'
+
+    const afterRowsById = await fetchRowsById(supabase, ids)
+    for (const [index, sample] of samples.entries()) {
+      const row = afterRowsById.get(sample.id)
+      if (!valuesEqual(row?.[sample.field], sample.after)) {
+        currentIndex = index
+        throw new Error(`Post-apply verification failed for development row ${sample.id}`)
+      }
+    }
+  } catch (error) {
+    let rollbackResult
+    try {
+      rollbackResult = await rollbackAppliedRows({ supabase, appliedRows })
+    } catch (rollbackError) {
+      rollbackResult = {
+        attempted: appliedRows.length > 0,
+        rolledBackCount: 0,
+        failedRollbackCount: appliedRows.length,
+        rolledBackRows: [],
+        failedRollbackRows: appliedRows.map((row) => ({
+          ...manualRollbackInstruction(row),
+          error: rollbackError.message,
+        })),
+        manualRollbackRequired: appliedRows.map(manualRollbackInstruction),
+      }
+    }
+    throw createPartialFailureError({
+      cause: error,
+      samples,
+      failedIndex: currentIndex,
+      notExecutedStartIndex: currentPhase === 'update' && Number.isInteger(currentIndex)
+        ? currentIndex + 1
+        : samples.length,
+      appliedRows,
+      rollbackResult,
     })
-  }
-
-  const afterRowsById = await fetchRowsById(supabase, ids)
-  for (const sample of samples) {
-    const row = afterRowsById.get(sample.id)
-    if (!valuesEqual(row?.[sample.field], sample.after)) {
-      fail(`Post-apply verification failed for development row ${sample.id}`)
-    }
   }
 
   return {
@@ -483,5 +609,9 @@ const main = async () => {
 
 main().catch((error) => {
   console.error(`ERROR: ${error.message}`)
+  if (error.partialFailureReport) {
+    console.error('Partial failure handling report:')
+    console.error(JSON.stringify(error.partialFailureReport, null, 2))
+  }
   process.exit(1)
 })
