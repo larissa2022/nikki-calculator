@@ -479,6 +479,34 @@ const fetchClothesRows = async (supabase, columns) => {
   return rows.map(normalizeDbRow)
 }
 
+const fetchSuitRows = async (supabase) => {
+  const rows = []
+  let from = 0
+
+  while (true) {
+    const to = from + PAGE_SIZE - 1
+    const { data, error } = await supabase
+      .from('suits')
+      .select('id,name,source')
+      .range(from, to)
+
+    if (error) {
+      throw new Error(`Failed to read public.suits at range ${from}-${to}: ${error.message}`)
+    }
+
+    const page = data || []
+    rows.push(...page)
+    if (page.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+
+  return rows.map((row) => ({
+    id: normalizeText(row.id),
+    name: normalizeText(row.name),
+    source: normalizeText(row.source),
+  }))
+}
+
 const normalizeDbRow = (row) => {
   const tagsList = normalizeTagList(row.tags)
   return {
@@ -554,6 +582,7 @@ const sampleRow = (row) => ({
   game_id: row.game_id,
   normalizedGameId: stripLeadingZeros(row.game_id),
   stars: row.stars,
+  scores: row.scores,
   tags: row.tags,
   source: row.source || undefined,
   suit: row.suit || undefined,
@@ -758,18 +787,139 @@ const classifyDbOnly = (item) => ({
   recommendation: 'keep for manual review in this read-only draft; do not delete automatically',
 })
 
-const buildSuitMappingReview = ({ sourceRows, dbRows, limitSamples }) => {
+const normalizeSuitName = (value) => normalizeText(value)
+  .normalize('NFKC')
+  .replace(/\s+/g, '')
+
+const buildSuitMappingReview = ({ sourceRows, dbRows, suitRows, limitSamples }) => {
   const sourceRowsWithSuit = sourceRows.filter((row) => row.suit)
   const sourceRowsWithoutSuit = sourceRows.filter((row) => !row.suit)
   const dbRowsWithSuitId = dbRows.filter((row) => row.suit_id)
   const dbRowsWithTempSuitName = dbRows.filter((row) => row.temp_suit_name)
   const sourceSuitNameCounts = countByObjectEntries(sourceRowsWithSuit.map((row) => row.suit))
+  const sourceSuitNames = [...new Set(sourceRowsWithSuit.map((row) => row.suit))]
+  const exactDbGroups = groupBy(suitRows, (row) => row.name)
+  const normalizedDbGroups = groupBy(suitRows, (row) => normalizeSuitName(row.name))
+  const exactMatches = []
+  const normalizedReview = []
+  const unmatched = []
+  const ambiguous = []
+  const suffixAliasMatches = []
+
+  for (const sourceSuitName of sourceSuitNames) {
+    const clothingCount = sourceSuitNameCounts[sourceSuitName] || 0
+    const exactRows = exactDbGroups.get(sourceSuitName) || []
+    if (exactRows.length === 1) {
+      exactMatches.push({ sourceSuitName, clothingCount, suitId: exactRows[0].id })
+      continue
+    }
+    if (exactRows.length > 1) {
+      ambiguous.push({ sourceSuitName, clothingCount, reason: 'duplicate-exact-name', candidates: exactRows })
+      continue
+    }
+
+    const normalizedRows = normalizedDbGroups.get(normalizeSuitName(sourceSuitName)) || []
+    if (normalizedRows.length === 1) {
+      normalizedReview.push({ sourceSuitName, clothingCount, candidate: normalizedRows[0] })
+    } else if (normalizedRows.length > 1) {
+      ambiguous.push({ sourceSuitName, clothingCount, reason: 'duplicate-normalized-name', candidates: normalizedRows })
+    } else {
+      const strippedName = sourceSuitName.endsWith('·套') ? sourceSuitName.slice(0, -2) : ''
+      const strippedRows = strippedName ? exactDbGroups.get(strippedName) || [] : []
+      if (strippedRows.length === 1) {
+        suffixAliasMatches.push({
+          sourceSuitName,
+          clothingCount,
+          matchedSuitName: strippedRows[0].name,
+          suitId: strippedRows[0].id,
+        })
+      } else if (strippedRows.length > 1) {
+        ambiguous.push({
+          sourceSuitName,
+          clothingCount,
+          reason: 'duplicate-suffix-alias-name',
+          candidates: strippedRows,
+        })
+      } else {
+        unmatched.push({ sourceSuitName, clothingCount })
+      }
+    }
+  }
+
+  const uniqueSuitByName = new Map(exactMatches.map((item) => [item.sourceSuitName, item.suitId]))
+  const suitNameById = new Map(suitRows.map((row) => [row.id, row.name]))
+  const sourceGroups = groupBy(sourceRows, createNormalizedKey)
+  const dbGroups = groupBy(dbRows, createNormalizedKey)
+  const existingExact = []
+  const existingMissingLink = []
+  const existingMismatch = []
+  const existingUnexpectedLink = []
+  const existingUnresolvableSourceSuit = []
+
+  for (const [key, sourceGroup] of sourceGroups.entries()) {
+    const dbGroup = dbGroups.get(key)
+    if (sourceGroup.length !== 1 || !dbGroup || dbGroup.length !== 1) continue
+    const sourceRow = sourceGroup[0]
+    const dbRow = dbGroup[0]
+    const actualSuitName = suitNameById.get(dbRow.suit_id) || ''
+    const item = {
+      key: displayKey(key),
+      clothesId: dbRow.id,
+      sourceSuitName: sourceRow.suit || null,
+      currentSuitId: dbRow.suit_id || null,
+      currentSuitName: actualSuitName || null,
+      candidateSuitId: sourceRow.suit ? uniqueSuitByName.get(sourceRow.suit) || null : null,
+    }
+
+    if (!sourceRow.suit) {
+      if (dbRow.suit_id) existingUnexpectedLink.push(item)
+    } else if (!uniqueSuitByName.has(sourceRow.suit)) {
+      existingUnresolvableSourceSuit.push(item)
+    } else if (!dbRow.suit_id) {
+      existingMissingLink.push(item)
+    } else if (actualSuitName === sourceRow.suit) {
+      existingExact.push(item)
+    } else {
+      existingMismatch.push(item)
+    }
+  }
 
   return {
     sourceRowsWithSuitCount: sourceRowsWithSuit.length,
     sourceRowsWithoutSuitCount: sourceRowsWithoutSuit.length,
     dbRowsWithSuitIdCount: dbRowsWithSuitId.length,
     dbRowsWithTempSuitNameCount: dbRowsWithTempSuitName.length,
+    dbSuitCount: suitRows.length,
+    sourceUniqueSuitNameCount: sourceSuitNames.length,
+    exactMatchCount: exactMatches.length,
+    exactMatchClothingCount: exactMatches.reduce((sum, item) => sum + item.clothingCount, 0),
+    normalizedReviewCount: normalizedReview.length,
+    suffixAliasMatchCount: suffixAliasMatches.length,
+    unmatchedCount: unmatched.length,
+    ambiguousCount: ambiguous.length,
+    exactMatches,
+    normalizedReview,
+    suffixAliasMatches,
+    unmatched,
+    ambiguous,
+    existingClothes: {
+      exactMatchCount: existingExact.length,
+      missingLinkCount: existingMissingLink.length,
+      mismatchCount: existingMismatch.length,
+      unexpectedLinkCount: existingUnexpectedLink.length,
+      unresolvableSourceSuitCount: existingUnresolvableSourceSuit.length,
+      missingLinks: existingMissingLink,
+      mismatches: existingMismatch,
+      unexpectedLinks: existingUnexpectedLink,
+      unresolvableSourceSuits: existingUnresolvableSourceSuit,
+      samples: {
+        exactMatches: existingExact.slice(0, limitSamples),
+        missingLinks: existingMissingLink.slice(0, limitSamples),
+        mismatches: existingMismatch.slice(0, limitSamples),
+        unexpectedLinks: existingUnexpectedLink.slice(0, limitSamples),
+        unresolvableSourceSuits: existingUnresolvableSourceSuit.slice(0, limitSamples),
+      },
+    },
     sourceSuitNameDistributionTop50: topCounts(sourceSuitNameCounts, 50),
     sampleSourceRowsWithSuit: sourceRowsWithSuit.slice(0, limitSamples).map(sampleRow),
     sampleDbRowsWithSuitFields: dbRows
@@ -777,11 +927,11 @@ const buildSuitMappingReview = ({ sourceRows, dbRows, limitSamples }) => {
       .slice(0, limitSamples)
       .map(sampleRow),
     requiresSeparateSuitMappingTask: true,
-    note: 'Do not auto-overwrite suit_id or temp_suit_name from this draft.',
+    note: 'Only unique exact-name matches are automatic candidates. Normalized, missing, or ambiguous names require review.',
   }
 }
 
-const buildAnalysis = ({ upstreamRows, dbRows, normalized, limitSamples }) => {
+const buildAnalysis = ({ upstreamRows, dbRows, suitRows, normalized, limitSamples }) => {
   const normalizedSourceOnly = normalized.all.sourceOnly
   const normalizedChanged = normalized.all.changed
   const normalizedDbOnlyAll = normalized.all.dbOnly.map(classifyDbOnly)
@@ -795,7 +945,7 @@ const buildAnalysis = ({ upstreamRows, dbRows, normalized, limitSamples }) => {
     normalizedSourceOnlyVersionCounts: countBy(normalizedSourceOnly, (item) => item.source.version || '(blank)'),
     normalizedSourceOnlySamples: normalizedSourceOnly.slice(0, limitSamples),
     normalizedDbOnlyAll,
-    suitMappingReview: buildSuitMappingReview({ sourceRows: upstreamRows, dbRows, limitSamples }),
+    suitMappingReview: buildSuitMappingReview({ sourceRows: upstreamRows, dbRows, suitRows, limitSamples }),
   }
 }
 
@@ -828,16 +978,54 @@ const groupCandidateUpdatesByField = (changedRows) => {
 const buildFinalizedSyncSetDraft = ({ normalized, analysis }) => {
   const normalizedChanged = normalized.all.changed
   const candidateUpdatesByField = groupCandidateUpdatesByField(normalizedChanged)
+  const exactSuitIds = new Map(
+    analysis.suitMappingReview.exactMatches.map((item) => [item.sourceSuitName, item.suitId])
+  )
+  const suffixAliasSuits = new Map(
+    analysis.suitMappingReview.suffixAliasMatches.map((item) => [item.sourceSuitName, item])
+  )
+  const unmatchedSuitNames = new Set(
+    analysis.suitMappingReview.unmatched.map((item) => item.sourceSuitName)
+  )
+
+  const candidateInserts = normalized.all.sourceOnly.map((item) => {
+    const sourceSuitName = item.source.suit || ''
+    let suitResolution = { type: 'none', suitId: null, sourceSuitName: null }
+    if (exactSuitIds.has(sourceSuitName)) {
+      suitResolution = {
+        type: 'exact-existing',
+        suitId: exactSuitIds.get(sourceSuitName),
+        sourceSuitName,
+      }
+    } else if (suffixAliasSuits.has(sourceSuitName)) {
+      const alias = suffixAliasSuits.get(sourceSuitName)
+      suitResolution = {
+        type: 'suffix-alias-existing',
+        suitId: alias.suitId,
+        sourceSuitName,
+        matchedSuitName: alias.matchedSuitName,
+      }
+    } else if (unmatchedSuitNames.has(sourceSuitName)) {
+      suitResolution = {
+        type: 'missing-suit',
+        suitId: null,
+        sourceSuitName,
+      }
+    }
+
+    return {
+      ...item,
+      draftAction: 'candidate-insert',
+      suitResolution,
+    }
+  })
 
   return {
     draftOnly: true,
     notAnApplyPlan: true,
     noSqlGenerated: true,
     matchingKey: 'normalized: getBroadCategory(category) + stripLeadingZeros(game_id) + name',
-    candidateInserts: normalized.all.sourceOnly.map((item) => ({
-      ...item,
-      draftAction: 'candidate-insert',
-    })),
+    candidateInserts,
     candidateUpdatesByField,
     tagsReviewSet: [
       ...candidateUpdatesByField.tagsSemantic.map((item) => ({
@@ -853,15 +1041,21 @@ const buildFinalizedSyncSetDraft = ({ normalized, analysis }) => {
     dbOnlyReviewSet: analysis.normalizedDbOnlyAll,
     suitMappingReviewSet: {
       requiresSeparateSuitMappingTask: true,
+      exactMatches: analysis.suitMappingReview.exactMatches,
+      normalizedReview: analysis.suitMappingReview.normalizedReview,
+      suffixAliasMatches: analysis.suitMappingReview.suffixAliasMatches,
+      unmatched: analysis.suitMappingReview.unmatched,
+      ambiguous: analysis.suitMappingReview.ambiguous,
+      existingClothes: analysis.suitMappingReview.existingClothes,
       sourceSuitNameDistributionTop50: analysis.suitMappingReview.sourceSuitNameDistributionTop50,
       sampleSourceRowsWithSuit: analysis.suitMappingReview.sampleSourceRowsWithSuit,
       sampleDbRowsWithSuitFields: analysis.suitMappingReview.sampleDbRowsWithSuitFields,
-      recommendation: 'review suit identity separately; do not auto-generate suit_id overwrite operations',
+      recommendation: 'use unique exact-name matches as candidates; review normalized, missing, and ambiguous suit names before writing suit_id',
     },
   }
 }
 
-const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples }) => {
+const buildReport = ({ upstream, dbRows, suitRows, columns, warnings, env, limitSamples }) => {
   const exact = analyzeDiff({
     sourceRows: upstream.rows,
     dbRows,
@@ -877,6 +1071,7 @@ const buildReport = ({ upstream, dbRows, columns, warnings, env, limitSamples })
   const analysis = buildAnalysis({
     upstreamRows: upstream.rows,
     dbRows,
+    suitRows,
     normalized,
     limitSamples,
   })
@@ -1057,6 +1252,18 @@ const printAnalysisSummary = (analysis) => {
   console.log(`- source rows without suit: ${analysis.suitMappingReview.sourceRowsWithoutSuitCount}`)
   console.log(`- DB rows with suit_id: ${analysis.suitMappingReview.dbRowsWithSuitIdCount}`)
   console.log(`- DB rows with temp_suit_name: ${analysis.suitMappingReview.dbRowsWithTempSuitNameCount}`)
+  console.log(`- DB suits: ${analysis.suitMappingReview.dbSuitCount}`)
+  console.log(`- source unique suit names: ${analysis.suitMappingReview.sourceUniqueSuitNameCount}`)
+  console.log(`- unique exact-name matches: ${analysis.suitMappingReview.exactMatchCount} suits / ${analysis.suitMappingReview.exactMatchClothingCount} clothes`)
+  console.log(`- normalized-name review: ${analysis.suitMappingReview.normalizedReviewCount}`)
+  console.log(`- suffix-alias matches: ${analysis.suitMappingReview.suffixAliasMatchCount}`)
+  console.log(`- unmatched suit names: ${analysis.suitMappingReview.unmatchedCount}`)
+  console.log(`- ambiguous suit names: ${analysis.suitMappingReview.ambiguousCount}`)
+  console.log(`- existing clothes with correct suit link: ${analysis.suitMappingReview.existingClothes.exactMatchCount}`)
+  console.log(`- existing clothes missing suit link: ${analysis.suitMappingReview.existingClothes.missingLinkCount}`)
+  console.log(`- existing clothes suit mismatch: ${analysis.suitMappingReview.existingClothes.mismatchCount}`)
+  console.log(`- existing clothes unexpected suit link: ${analysis.suitMappingReview.existingClothes.unexpectedLinkCount}`)
+  console.log(`- existing clothes with unresolved source suit: ${analysis.suitMappingReview.existingClothes.unresolvableSourceSuitCount}`)
   console.log('- requires separate suit mapping task: true')
   console.log('')
 }
@@ -1094,9 +1301,11 @@ const main = async () => {
   const { existingColumns, warnings: columnWarnings } = await probeExistingColumns(supabase)
   warnings.push(...columnWarnings)
   const dbRows = await fetchClothesRows(supabase, existingColumns)
+  const suitRows = await fetchSuitRows(supabase)
   const report = buildReport({
     upstream,
     dbRows,
+    suitRows,
     columns: existingColumns,
     warnings,
     env,
