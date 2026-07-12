@@ -31,10 +31,10 @@
 | 缺陷修复 | `docs/planning/缺陷文档.md` 和相关代码；涉及产品语义时追加 `DECISIONS.md` |
 | `main`、production、release、hotfix | `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` |
 | database、Supabase、SQL、RPC、RLS、migration | `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/database/数据库变更记录.md`；按需读取 `schema.md` |
-| 文档职责冲突或文档收口 | `docs/README.md`；必要时读取 `docs/FILE_GOVERNANCE.md` |
-| 复盘、Pattern Candidate、Rule Candidate | `docs/ai/LESSONS.md` |
+| 文档职责冲突或文档收口 | `docs/README.md` |
+| 复盘、Pattern Candidate、Rule Candidate 或未采纳方案复查 | `docs/ai/LESSONS.md` |
 
-不要因为旧对话、历史报告、历史计划或文件存在而自动扩大读取和执行范围。
+不要因为旧对话、历史报告、历史计划或文件存在而自动扩大读取和执行范围。`docs/archive/**` 仅用于历史审计，不参与当前任务路由。
 
 ## 3. 启动回执
 
