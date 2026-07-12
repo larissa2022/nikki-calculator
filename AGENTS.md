@@ -25,7 +25,7 @@
 
 | 条件 | 必须补读 |
 | --- | --- |
-| 用户说“继续”“下一步”或询问当前进度 | `docs/ai/CURRENT_TASK.md` |
+| 用户说“继续”“下一步”、询问进度或开始项目任务 | `docs/ai/CURRENT_TASK.md` |
 | 任何文件修改、commit、push 或 PR 创建 | `docs/ai/RULES.md`，以及 `docs/ai/WORKFLOWS.md` 中对应任务章节 |
 | 产品规则、用户行为或技术口径变化 | `docs/ai/DECISIONS.md`；按需读取 `docs/requirements/**`、`docs/planning/**` |
 | 缺陷修复 | `docs/planning/缺陷文档.md` 和相关代码；涉及产品语义时追加 `DECISIONS.md` |
@@ -33,6 +33,8 @@
 | database、Supabase、SQL、RPC、RLS、migration | `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/database/数据库变更记录.md`；按需读取 `schema.md` |
 | 文档职责冲突或文档收口 | `docs/README.md` |
 | 复盘、Pattern Candidate、Rule Candidate 或未采纳方案复查 | `docs/ai/LESSONS.md` |
+
+`CURRENT_TASK.md` 是业务看板，重点记录业务目标、技术目标、最近完成、下一步任务和阻塞；分支创建、命令顺序和新任务启动规则放在本文件或 `WORKFLOWS.md`，不得占据看板主体。
 
 不要因为旧对话、历史报告、历史计划或文件存在而自动扩大读取和执行范围。`docs/archive/**` 仅用于历史审计，不参与当前任务路由。
 
@@ -51,9 +53,18 @@
 停止点：
 ```
 
-只读任务不需要单独等待确认，但最终回传仍应说明实际读取范围。已获任务级授权的批次不得逐命令重复询问；范围变化、命令失败、环境变化或触发停止点时必须暂停。
+只读任务不需要单独等待确认，但最终回传仍应说明实际读取范围。
 
-## 4. 强制边界摘要
+## 4. 连续批次执行
+
+- 用户已经确认目标和任务级范围后，默认一次连续执行到当前授权的停止点：只读盘点 → 创建分支 → 修改 → 验证 → commit / push → 创建 PR。
+- 不在分支创建、单个文件修改、单次 commit、push 或 PR 创建之间逐步等待确认。
+- 不为“任务已启动”“PR 已创建”“PR 已合并”分别建立多个纯状态 PR；看板只在业务状态或下一步任务实质变化时更新。
+- 对话进度只在发现关键结论、触发风险门禁或完成一个有意义的里程碑时更新，不逐条播报低层工具动作。
+- 只有以下情况暂停：进入需单独确认的敏感操作、范围或环境变化、工具失败、规则冲突、出现未确认产品语义、验证失败或 rollback 不明确。
+- PR merge、`main`、production、database / Supabase 写入、Vercel 写入、migration、历史改写和分支删除仍需单独明确确认。
+
+## 5. 强制边界摘要
 
 - 用户本人是最终决策者。
 - docs、business、database、config、release 不在同一 PR 混合，除非用户明确授权。
@@ -64,6 +75,12 @@
 
 完整强规则见 `docs/ai/RULES.md`，具体执行步骤见 `docs/ai/WORKFLOWS.md`。
 
-## 5. 回传格式
+## 6. 回传格式
 
-只回传：完成内容、修改文件、验证结果、风险、rollback、尚未确认、建议下一步。不要粘贴无关日志、完整大 JSON、SQL 全量结果或重复历史背景；默认最多提供 10 条异常样本。
+最终回传只保留：完成内容、修改文件、验证结果、commit / PR、风险、rollback、尚未确认、下一步任务。
+
+每次项目任务完成后必须附上：
+
+[当前任务看板](https://github.com/larissa2022/nikki-calculator/blob/develop/docs/ai/CURRENT_TASK.md)
+
+回传中的“下一步任务”必须与看板一致。不要粘贴无关日志、完整大 JSON、SQL 全量结果或重复历史背景；默认最多提供 10 条异常样本。
