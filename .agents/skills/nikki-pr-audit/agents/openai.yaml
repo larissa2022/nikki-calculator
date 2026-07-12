@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nikki PR 中文审核"
+  short_description: "用中文判断 Nikki PR 风险、合并条件与回滚方式"
+  default_prompt: "使用 $nikki-pr-audit 审核这个 Nikki Calculator PR，并给出中文合并结论。"
