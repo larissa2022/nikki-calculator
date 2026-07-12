@@ -8,7 +8,7 @@
 - 类型：`docs`，Fast Lane。
 - 目标分支：`develop`。
 - 工作分支：`docs/consolidate-document-archive`。
-- PR：尚未创建。
+- PR：#67，状态 open，尚未 merge。
 
 ## 目标
 
@@ -24,29 +24,26 @@
 
 - PR #66 已合并到 `develop`，merge commit：`4ca13eff0666681a74b332c407b68df06c81f624`。
 - 已从最新 `develop` 创建 `docs/consolidate-document-archive`。
-- 已建立 `docs/archive/` 并写入归档索引。
-- 已归档 Codex 历史报告摘要和 Token 使用审计。
-- 正在更新活动入口并删除重复旧文件。
+- 已建立 `docs/archive/` 和归档索引。
+- Token 使用审计已迁入归档目录。
+- 原 Codex 历史报告已从活动目录移除；归档摘要记录原 blob SHA，完整原文仍保存在 Git 历史。
+- `CONVERSATION_HANDOFF.md`、`FILE_GOVERNANCE.md`、`REJECTED_IDEAS.md` 已删除，其职责已由现有核心文档承担。
+- 活动入口引用已更新。
+- PR #67 已创建到 `develop`。
 - 未修改 `RULES.md`、代码、数据库、Supabase、Vercel、env、migration 或构建配置。
 - 未操作 `main`、production 或 PR merge。
 
 ## 下一步
 
-1. 删除已完成职责迁移的旧文件。
-2. 对 `develop...docs/consolidate-document-archive` 执行只读差异检查。
-3. 创建 docs-only PR 到 `develop`。
-4. PR merge 必须由用户再次明确确认。
-5. 是否同步到 `main` 属于独立 release 任务，需先做 `develop -> main` 只读审计。
+1. 对 PR #67 复核 changed files、归档边界和活动入口。
+2. 用户再次明确确认后才能 merge PR #67 到 `develop`。
+3. merge 后将当前看板收口为 Phase 2 已完成。
+4. 是否同步到 `main` 属于独立 release 任务，需先做 `develop -> main` 只读审计。
 
 ## 当前允许范围
 
-- `AGENTS.md`
-- `docs/README.md`
-- `docs/ai/WORKFLOWS.md`（仅在发现现有执行单不足时修改）
-- `docs/ai/LESSONS.md`（仅在存在实际迁移内容时修改）
-- `docs/ai/CURRENT_TASK.md`
-- `docs/archive/**`
-- 删除已被上述文件替代的五个旧文档。
+- 只读检查 PR #67、活动入口和归档文件。
+- 如复核发现 Phase 2 引入的文档断链，只允许在当前分支修正对应文档。
 
 ## 禁止事项与停止点
 
@@ -57,7 +54,7 @@
 
 ## Rollback
 
-- PR merge 前：关闭 PR，保留 `develop` 不变。
+- PR merge 前：关闭 PR #67，`develop` 保持不变。
 - merge 到 `develop` 后：创建独立 revert PR。
 - 完整旧报告仍可从 Git 历史和原 blob SHA 恢复。
 - 无代码、数据库、Supabase、Vercel 或 production rollback 需求。
