@@ -11,6 +11,11 @@
 - `docs/ai/RULES.md` 只承担强门禁，`docs/ai/WORKFLOWS.md` 承担执行流程，`docs/README.md` 承担人工文档索引。
 - 历史报告已移入 `docs/archive/**`，不参与当前任务路由。
 
+## 最近完成
+
+- 2026-07-12：完成 `BUG-20260711-015` development 浏览器验证；冲突短编号被安全跳过，混合输入中的有效编号正常录入，弹窗和结果报告文案符合预期。
+- 验证未登录执行；仅在临时浏览器会话构造冲突样本，无数据库、Supabase、Vercel 或 production 写入。
+
 ## 新任务启动
 
 1. 从最新 `develop` 创建窄范围任务分支。
