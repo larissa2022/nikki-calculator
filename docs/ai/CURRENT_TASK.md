@@ -2,33 +2,31 @@
 
 > 最后核对：2026-07-12（北京时间）。
 
-## 业务目标
-
-保持仓库轻量、可理解、可恢复：保留仍有运行、审计或回滚价值的文件，删除中间产物和空文档；清理已合并分支，同时保护 `main` 与 `develop` 并明确二者发布进度。
-
 ## 当前状态
 
-- 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
-- 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
-- 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
-- 所有已有明确替代或合并证据的废弃分支均已删除；`main`、`develop` 均未删除。
-- PR #56～#58 已合并到 `develop`，三个临时分支已删除。
-- PR #59 已合并到 `main`；`develop` 已完整进入 `main` 历史，两个保护分支文件树一致。
+- 当前无活动任务。
+- Phase 1“收口 AI / Codex 文档入口”已完成：PR #66 已合并到 `develop`，merge commit 为 `4ca13eff0666681a74b332c407b68df06c81f624`。
+- Phase 2“合并重复职责并归档历史材料”已完成：PR #67 已合并到 `develop`，merge commit 为 `5e5e0491663e42b10bd1cd1c9c1ffb3d4f423f6d`。
+- `AGENTS.md` 现为唯一自动入口；读取路由只在该文件维护。
+- `docs/ai/RULES.md` 只承担强门禁，`docs/ai/WORKFLOWS.md` 承担执行流程，`docs/README.md` 承担人工文档索引。
+- 历史报告已移入 `docs/archive/**`，不参与当前任务路由。
 
-## 保留分支
+## 新任务启动
 
-- `main`、`develop`：永久保护。
-- `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
-- 除上述三个分支外，不保留已结束任务的本地或远端分支。
-
-## 下一步
-
-1. 本轮仓库清理和分支同步已完成，无开放 PR。
-2. 后续 contributions / points 数据库草案必须作为独立 Strict Lane 任务重新审核。
-3. 新任务继续从 `develop` 创建窄分支，不直接改写 `main` 或 `develop`。
+1. 从最新 `develop` 创建窄范围任务分支。
+2. 按仓库根目录 `AGENTS.md` 进行任务分类和条件读取。
+3. 在修改前明确允许范围、禁止事项、验收、停止点和 rollback。
+4. 新任务不得继承本轮已经结束的临时授权。
 
 ## 当前边界
 
-- `tmp/**` 只留本地并已加入忽略，不得提交。
-- 不删除仍有明确用途且没有替代物的分支。
-- 不直接 push `main` / `develop`，不 merge PR，不操作 production。
+- 不直接修改 `main`、production、数据库、Supabase、Vercel、env 或 migration。
+- PR merge、`main`、production、database、Supabase、Vercel 和修改 `RULES.md` 仍需用户单独明确确认。
+- 如需将本轮文档治理同步到 `main`，必须作为独立 release 任务先执行 `develop -> main` 只读差异审计。
+- `docs/archive/**` 只用于历史审计，不作为当前状态或执行依据。
+
+## Rollback
+
+- 本看板收口 PR merge 前：关闭 PR。
+- merge 到 `develop` 后：创建独立 revert PR。
+- 无代码、数据库、Supabase、Vercel 或 production rollback 需求。
