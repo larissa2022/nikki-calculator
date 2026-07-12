@@ -11,24 +11,23 @@
 - 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
 - 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
 - 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
-- 已删除本地废弃分支 36 个、远端废弃分支 37 个；`main`、`develop` 均未删除。
+- 已删除本地废弃分支 39 个、远端废弃分支 40 个；`main`、`develop` 均未删除。
 - PR #56～#58 已合并到 `develop`，三个临时分支已删除。
-- 已创建发布 PR #59；发布分支文件树与 `develop` 完全一致，等待 `main` 合并授权。
+- PR #59 已合并到 `main`；`develop` 已完整进入 `main` 历史，两个保护分支文件树一致。
 
 ## 保留分支
 
 - `main`、`develop`：永久保护。
 - `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
-- `codex/sync-develop-main-20260712`：PR #59 的临时发布分支，合并或关闭后删除。
 
 ## 下一步
 
-1. 审核并决定是否合并 PR #59 到 `main`。
-2. 合并后删除发布分支，刷新本地 `main` / `develop` 并验证文件树一致。
-3. 未经单独确认不 merge `main`，不强制改写任何保护分支。
+1. 本轮仓库清理和分支同步已完成，无开放 PR。
+2. 后续 contributions / points 数据库草案必须作为独立 Strict Lane 任务重新审核。
+3. 新任务继续从 `develop` 创建窄分支，不直接改写 `main` 或 `develop`。
 
 ## 当前边界
 
 - `tmp/**` 只留本地并已加入忽略，不得提交。
-- 不删除没有合并证据的分支。
+- 不删除仍有明确用途且没有替代物的分支。
 - 不直接 push `main` / `develop`，不 merge PR，不操作 production。
