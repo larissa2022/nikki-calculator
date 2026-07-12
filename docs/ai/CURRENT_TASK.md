@@ -11,7 +11,7 @@
 - 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
 - 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
 - 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
-- 已删除本地废弃分支 39 个、远端废弃分支 40 个；`main`、`develop` 均未删除。
+- 所有已有明确替代或合并证据的废弃分支均已删除；`main`、`develop` 均未删除。
 - PR #56～#58 已合并到 `develop`，三个临时分支已删除。
 - PR #59 已合并到 `main`；`develop` 已完整进入 `main` 历史，两个保护分支文件树一致。
 
@@ -19,6 +19,7 @@
 
 - `main`、`develop`：永久保护。
 - `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
+- 除上述三个分支外，不保留已结束任务的本地或远端分支。
 
 ## 下一步
 
