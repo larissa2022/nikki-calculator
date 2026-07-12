@@ -11,21 +11,20 @@
 - 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
 - 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
 - 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
-- 已删除本地废弃分支 29 个、远端废弃分支 30 个；`main`、`develop` 均未删除。
+- 已删除本地废弃分支 33 个、远端废弃分支 34 个；`main`、`develop` 均未删除。
 - 本地 `main` 已同步到 `origin/main`；本地 `develop` 与 `origin/develop` 一致。
 - 远端分支进度：`main` 独有 17 个提交，`develop` 独有 28 个提交，不能使用 fast-forward 直接互相覆盖。
 
 ## 保留分支
 
 - `main`、`develop`：永久保护。
-- 3 个 contributions / points 数据库草案分支：尚无合并证据，暂不删除。
-- `docs/streamline-codex-approval-workflow`：尚无合并证据，暂不删除。
-- `revert/pr-35-release`：尚无合并证据，暂不删除。
+- `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
+- `codex/workflow-cleanup`、`codex/seal100x-audit-closure`、`codex/import-conflict-copy`：当前 PR #56～#58 的临时分支，合并后删除。
 
 ## 下一步
 
-1. 将当前有用改动按 docs/config、审计工具、业务文案拆分验证，避免混入同一 PR。
-2. 合并到 `develop` 后，重新执行 `develop → main` 发布审计。
+1. PR #56～#58 已按 docs/config、审计工具、业务文案拆分并验证，等待合并授权。
+2. 合并到 `develop` 后删除三个临时分支，并重新执行 `develop → main` 发布审计。
 3. `main` 同步必须走发布 PR；未经单独确认不 merge，不强制改写任何保护分支。
 
 ## 当前边界
