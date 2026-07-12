@@ -151,6 +151,32 @@
 
 如果读取后发现必须修改 `RULES.md` 或 `DECISIONS.md`，但用户没有单独明确授权，立即暂停并回传原因。
 
+## 2.2 缺陷分级与工作区收口
+
+### A 类：纯前端体验问题
+
+适用于 UI 文案、显示状态和页面刷新体验，不改变数据库结构、权限、积分或正式库写入链路。
+
+流程：登记一句话缺陷，直接修复，运行 `npm.cmd run verify`，用户验证后更新缺陷状态并单独提交。
+
+### B 类：数据库、权限或 RPC 问题
+
+适用于 schema、RLS、RPC、trigger、批量数据修复、管理员权限和 production 写入链路。
+
+流程：登记缺陷，先写 migration，在 development 执行 `npm.cmd run db:check`、`npm.cmd run db:push:dev`、`npm.cmd run db:types:safe` 和 `npm.cmd run verify`，完成 dev 冒烟测试，更新数据库变更记录和缺陷状态，再单独提交。进入 production 前必须确认备份、dev 验证、migration 已提交和 rollback 已记录。
+
+### C 类：需求风险或产品口径不明
+
+适用于改变用户路径、审核规则、积分规则、权限边界，或存在多种合理解释的需求。先记录风险并给出一至两个方案，等待用户确认后再开发。
+
+### 收口检查
+
+1. `git status --short` 只剩明确暂缓文件。
+2. 已验证功能拥有独立提交，未验证功能仍停留在工作区或独立分支。
+3. 数据库变更记录写明 development / production 状态、验证和 rollback。
+4. 缺陷文档状态与实际验证结果一致。
+5. 一个任务验收通过后立即更新 `CURRENT_TASK.md` 并结束当前对话，独立任务重新建立执行单。
+
 ## ChatGPT 预审批与 Codex 连续执行流程
 
 本流程主要用于 Fast Lane，减少 docs-only / 只读任务中不必要的执行中断。敏感命令的风险说明和授权边界，应优先在 ChatGPT 生成 Codex 指令前完成；Codex 收到用户已确认的任务级授权后，应在授权范围内连续执行。
