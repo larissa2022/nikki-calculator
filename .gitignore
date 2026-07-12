@@ -51,3 +51,6 @@ supabase/.temp/
 # Local database operation scripts that may contain production snapshots or
 # destructive SQL. Keep them out of the repository.
 docs/database/local-only/
+
+# Local audit reports, database backups, rollback files, and generated payloads.
+tmp/

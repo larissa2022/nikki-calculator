@@ -1,31 +1,34 @@
-# 当前任务
+# 当前任务看板
 
-当前任务：需求治理与执行入口整理已完成，进入收口状态。
+> 最后核对：2026-07-12（北京时间）。
 
-## 已完成
+## 业务目标
 
-- PR #37：记录 PR #17 数据库审计结论。
-- PR #38：整理需求治理与执行入口。
-- PR #39：新增需求源门禁规则。
-- PR #40：同步治理文档到 main。
+保持仓库轻量、可理解、可恢复：保留仍有运行、审计或回滚价值的文件，删除中间产物和空文档；清理已合并分支，同时保护 `main` 与 `develop` 并明确二者发布进度。
 
 ## 当前状态
 
-- 当前没有业务开发在进行。
-- 陪审团 / 重审 / 积分业务开发仍暂停。
-- 本轮收口只更新当前任务状态。
-- 未执行 Supabase / SQL / Vercel / production 额外操作。
-- 未修改业务代码、数据库、migration、env 或构建配置。
+- 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
+- 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
+- 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
+- 已删除本地废弃分支 33 个、远端废弃分支 34 个；`main`、`develop` 均未删除。
+- 本地 `main` 已同步到 `origin/main`；本地 `develop` 与 `origin/develop` 一致。
+- 远端分支进度：`main` 独有 17 个提交，`develop` 独有 28 个提交，不能使用 fast-forward 直接互相覆盖。
 
-## 下一阶段候选
+## 保留分支
 
-1. 需求文档正文结构审计。
-2. Supabase advisor 安全风险拆分。
-3. 陪审团 / 重审 / 积分需求到执行计划梳理。
-4. 业务开发入口审计。
+- `main`、`develop`：永久保护。
+- `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
+- `codex/workflow-cleanup`、`codex/seal100x-audit-closure`、`codex/import-conflict-copy`：当前 PR #56～#58 的临时分支，合并后删除。
 
-## 进入业务开发前门槛
+## 下一步
 
-- 必须按 `docs/ai/RULES.md` 的“需求源门禁”确认事实源与决策层级。
-- 必须按 `docs/ai/WORKFLOWS.md` 的“需求到执行计划工作流”列出目标、依据、范围、风险分类、未确认事项、验证方式和 rollback。
-- 涉及未确认产品口径、字段、状态值、权限边界或数据安全时，必须暂停并取得用户确认。
+1. PR #56～#58 已按 docs/config、审计工具、业务文案拆分并验证，等待合并授权。
+2. 合并到 `develop` 后删除三个临时分支，并重新执行 `develop → main` 发布审计。
+3. `main` 同步必须走发布 PR；未经单独确认不 merge，不强制改写任何保护分支。
+
+## 当前边界
+
+- `tmp/**` 只留本地并已加入忽略，不得提交。
+- 不删除没有合并证据的分支。
+- 不直接 push `main` / `develop`，不 merge PR，不操作 production。

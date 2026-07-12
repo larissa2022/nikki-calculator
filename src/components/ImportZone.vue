@@ -317,7 +317,7 @@ const handleCodeImport = async () => {
 
     if (conflicts.length > 0) {
       const conflictText = conflicts.map(item => `${item.category} #${item.game_id}`).join('、')
-      alert(`⚠️ 编号冲突：${conflictText}\n同一一级分类下存在多个归一化短编号相同的图鉴条目，本次已跳过这些编号。`)
+      alert(`以下编号暂时无法自动录入：${conflictText}\n图鉴中有多件服装使用相同编号，系统无法确定你要录入哪一件，因此没有把这些服装加入衣柜。请改用“按名称录入”；其他可识别的编号会照常录入。`)
     }
 
     const updatedOwnedIds = Array.from(ownedSet)
@@ -434,7 +434,7 @@ const handleImport = () => {
             <div v-if="importStats.conflictCodes.length > 0" class="space-y-3">
               <div class="flex items-center gap-2 px-1">
                 <span class="text-amber-500">⚠️</span>
-                <h4 class="font-black text-sm text-slate-700 m-0">编号冲突，已跳过</h4>
+                <h4 class="font-black text-sm text-slate-700 m-0">有些编号无法自动识别</h4>
               </div>
               <div class="missing-code-grid">
                 <div v-for="item in importStats.conflictCodes" :key="`${item.category}_${item.game_id}`" class="missing-code-card">
@@ -443,7 +443,7 @@ const handleImport = () => {
                 </div>
               </div>
               <p class="missing-code-note">
-                同一一级分类下存在多个归一化短编号相同的图鉴条目；为避免录错，本次没有写入这些编号。
+                图鉴中有多件服装使用这些编号，系统无法确定你要录入哪一件，因此没有加入衣柜。请改用“按名称录入”；其他可识别的编号会照常录入。
               </p>
             </div>
 
