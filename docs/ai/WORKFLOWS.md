@@ -2,34 +2,56 @@
 
 ## 0. 用途与权威关系
 
-本文档只记录可迭代的执行流程、命令顺序、检查清单和回传模板。
+本文档只记录可迭代的执行流程、检查清单、验证、rollback 和回传格式。
 
 - 唯一自动启动入口：仓库根目录 `AGENTS.md`。
 - 强规则与安全门禁：[`RULES.md`](RULES.md)。
-- 当前任务事实：[`CURRENT_TASK.md`](CURRENT_TASK.md)。
+- 当前业务看板：[`CURRENT_TASK.md`](CURRENT_TASK.md)。
 - 产品与技术 Final 决策：[`DECISIONS.md`](DECISIONS.md)。
 - 若本文与 `RULES.md` 冲突，以 `RULES.md` 为准。
 
-本文不再维护另一套“默认必读清单”；读取路由只在 `AGENTS.md` 中定义。
+读取路由只在 `AGENTS.md` 中定义，不在本文维护第二套默认必读清单。
 
-## 1. 任务启动流程
+## 1. CURRENT_TASK.md 的职责
 
-### 1.1 分类
+`CURRENT_TASK.md` 是当前业务看板，不是 Git 操作日志，也不是新任务启动说明。
 
-开始前将任务归类为一种主类型：
+必须优先展示：
 
-- `read-only`：只读盘点、审计、解释。
+1. 业务目标。
+2. 技术目标。
+3. 当前阶段 / 状态。
+4. 最近完成。
+5. 下一步任务，按优先级排序。
+6. 阻塞、风险或待确认事项。
+
+不得把以下内容作为看板主体：
+
+- 创建分支、commit、push、PR 的通用步骤。
+- 每一次工具调用或审批流水。
+- 已结束任务的长篇历史。
+- “当前无任务，所以从 develop 开分支”之类的流程说明。
+
+流程规则放在 `AGENTS.md` 和本文。看板只在业务状态、技术阶段或下一步任务发生实质变化时更新，不因 PR 从 open 变为 merged 单独创建状态 PR。
+
+## 2. 任务启动与连续执行
+
+### 2.1 分类
+
+任务先归类为一种主类型：
+
+- `read-only`：盘点、审计、解释。
 - `docs`：只修改文档。
-- `business`：修改业务代码或用户行为。
-- `database`：schema、SQL、RPC、RLS、migration 或远程数据状态。
+- `business`：业务代码或用户行为。
+- `database`：schema、SQL、RPC、RLS、migration 或远程数据。
 - `config`：env、构建、CI、Vercel 或部署配置。
-- `release`：`main`、production、hotfix、发布或 PR merge。
+- `release`：PR merge、`main`、production、hotfix 或发布。
 
-不得为了方便把多种风险类型混入同一 PR。
+不得为了方便把无关风险类型混入同一 PR。
 
-### 1.2 启动回执
+### 2.2 启动回执
 
-任何修改开始前，先输出：
+修改前输出一次：
 
 ```text
 当前分支：
@@ -42,83 +64,91 @@
 停止点：
 ```
 
-只读任务可在最终回传中合并说明，不需要额外等待。用户已经确认任务级授权时，在授权范围内连续执行；不要逐命令重复询问。
+只读任务可在最终回传中合并说明。用户已经确认任务级授权时，不得在同一授权范围内逐命令重复询问。
 
-### 1.3 五项执行单
+### 2.3 默认连续批次
 
-进入 Codex 前只传递当前有效内容：
+一次授权默认覆盖当前任务允许的完整机械流程：
 
-1. 目标。
-2. 允许修改。
-3. 禁止事项。
-4. 验收。
-5. 停止点。
+1. 只读盘点和事实核对。
+2. 创建或切换窄范围分支。
+3. 修改全部允许文件。
+4. 运行相称验证。
+5. 检查 diff 和工作区。
+6. commit、push。
+7. 创建目标 PR。
+8. 输出完整结果和下一步。
 
-旧对话只保留仍然有效的事实和授权，不复制完整历史流水。
+不得把上述流程拆成“建分支一次确认、改一个文件一次确认、commit 一次确认、push 一次确认、建 PR 一次确认”。
 
-### 1.4 低 Token 原则
+对话中的进度更新只在以下节点出现：
+
+- 已发现关键结论或根因。
+- 进入新的风险阶段。
+- 验证失败或范围变化。
+- 已完成一个有意义的里程碑。
+
+### 2.4 必须暂停的情况
+
+- 即将进入 PR merge、`main`、production、database / Supabase 写入、Vercel 写入、migration、历史改写、分支删除或修改 `RULES.md`。
+- 当前分支、目标分支、环境或文件范围与任务单不一致。
+- 工具失败、验证失败、规则冲突或 rollback 不明确。
+- 出现未确认的产品语义、权限边界或数据策略。
+
+不得通过更换命令、连接器或把操作拆成小变体绕过暂停点。
+
+### 2.5 低 Token 与低摩擦
 
 - 只读取 `AGENTS.md` 路由出的文件、用户指定文件和当前任务直接相关内容。
-- 不默认加载全部治理、复盘、历史报告和长期规划。
-- 超大 JSON、SQL 结果和日志只在本地处理；对话返回计数、分类、异常和最多 10 条样本。
-- `CURRENT_TASK.md` 只保存当前目标、状态、边界、下一步和阻塞，不保存执行流水或累计统计。
-- 一个独立目标验收后立即收口；新目标使用新执行单。
-- 不得为了节省 token 删除 production 前值检查、事务数量检查、提交后回读、备份或 rollback。
+- 超大 JSON、SQL 结果和日志在本地处理，只回传计数、分类、异常和最多 10 条样本。
+- 一次授权内尽可能完成整个可执行批次，不为纯状态变化重复建 PR。
+- 安全门禁不能因节省 token 被删除：production 前值检查、事务数量检查、提交后回读、备份和 rollback 依据必须保留。
 
-## 2. 三档任务流
+## 3. 三档任务流
 
-### 2.1 Fast Lane
+### 3.1 Fast Lane
 
 适用于 `read-only` 或普通 `docs`，且不涉及：
 
 - `main`、production、release。
 - database、Supabase、Vercel、env、migration。
-- PR merge、历史改写、删除分支。
+- PR merge、历史改写、分支删除。
 - 修改 `RULES.md`。
 
-流程：
+流程：最小读取 → 明确范围与验收 → 一次性完成修改和验证 → 创建到 `develop` 的 PR。
 
-1. 按 `AGENTS.md` 读取最小上下文。
-2. 明确文件范围、验证和 rollback。
-3. 在一次任务级授权内连续执行允许步骤。
-4. 提交前检查 diff 只包含允许文件。
-5. 创建 PR 到 `develop`；不自动 merge。
-
-### 2.2 Standard Lane
+### 3.2 Standard Lane
 
 适用于普通 `business` 或非生产 `config`，且不涉及 Strict Lane 条件。
 
 流程：
 
-1. 读取 `RULES.md` 和本任务相关章节。
-2. 只读盘点分支、工作区和相关代码。
-3. 明确需求依据、允许范围、禁止范围、测试和 rollback。
-4. 修改并运行相称验证。
-5. 提交前回传修改范围、验证、风险和未确认事项。
-6. 推送窄分支并创建到 `develop` 的 PR；不自动 merge。
+1. 读取 `RULES.md` 和相关代码 / 文档。
+2. 盘点分支、工作区和真实调用链。
+3. 明确需求依据、测试和 rollback。
+4. 一次性完成修改与相称验证。
+5. 推送窄分支并创建到 `develop` 的 PR。
 
-### 2.3 Strict Lane
+### 3.3 Strict Lane
 
 以下任一条件即进入 Strict Lane：
 
-- `main`、production、release、hotfix。
+- `main`、production、release、hotfix、PR merge。
 - database、Supabase、SQL、RPC、RLS、migration。
 - Vercel、env、production deployment。
-- PR merge。
-- 历史改写或删除分支。
+- 历史改写或分支删除。
 - 修改 `RULES.md`。
 
 必须：
 
 1. 读取 `RULES.md` 和对应治理、环境或数据库文档。
-2. 明确目标环境、目标分支、影响范围、备份、验证和 rollback。
-3. 由用户针对本任务单独确认。
-4. 门禁失败、范围变化或进入新环境时暂停并重新确认。
-5. `gh pr merge` 永远需要用户再次明确确认。
+2. 明确目标环境、目标分支、影响范围、验证和 rollback。
+3. 获得用户针对该敏感阶段的明确确认。
+4. 环境、范围或门禁变化时重新确认。
 
-## 3. 通用状态盘点
+## 4. 通用状态盘点
 
-本地执行时按需检查：
+本地按需检查：
 
 ```bash
 git status --short
@@ -126,74 +156,43 @@ git branch --show-current
 git fetch origin
 ```
 
-需要远端事实时，继续确认：
+远端继续确认：
 
 - base / head 分支。
-- PR 状态和 changed files。
-- 本地分支是否落后或偏离远端。
+- PR 状态、changed files、commits、mergeability 和 checks。
+- 分支是否落后或偏离。
 - 是否存在未提交或未 push 内容。
 
-`git fetch` 和只读 GitHub 查询不修改远端；`git pull` 会修改本地分支，不应被描述为纯只读。
+`git fetch` 和 GitHub 只读查询不修改远端；`git pull` 会修改本地状态，不得描述为纯只读。
 
-## 4. 需求到执行计划
+## 5. 需求与缺陷
 
-涉及业务规则、产品口径、数据库结构、审核流程、用户权益或现有功能语义变化时：
+涉及产品规则、数据库结构、权限、用户权益或现有语义变化时：
 
-1. 读取 `DECISIONS.md` 和相关需求、规划、技术文档。
-2. 只把 Final 决策和用户本轮明确确认内容作为执行依据。
-3. 列出字段缺失、规则冲突、待确认产品口径和数据风险。
-4. 将已确认需求拆成阶段、暂停点、验收和可回滚的最小任务。
-5. 标记影响范围：前端、RPC、RLS、migration、env、Vercel、Supabase、production。
-6. 按 docs、business、database、config、release 分类。
-7. 未确认事项不得直接进入实现。
+1. 读取 `DECISIONS.md` 和相关需求 / 规划 / 技术文档。
+2. 只把 Final 决策和用户本轮明确确认作为执行依据。
+3. 列出规则冲突、待确认口径和数据风险。
+4. 拆成可验证、可回滚的阶段任务。
+5. 标记影响范围并按风险分类。
+6. 未确认事项不得直接实现。
 
-发现必须修改 `RULES.md` 或 `DECISIONS.md`，但用户没有单独授权时，立即停止。
+缺陷分类：
 
-## 5. 缺陷工作流
+- A 类：纯前端体验问题，窄范围修复并运行前端验证。
+- B 类：数据库、权限或 RPC 问题，进入 Strict Lane，development 先验证。
+- C 类：需求或产品口径不明，先列事实和方案，等待确认。
 
-### A 类：纯前端体验问题
+收口时检查：
 
-不改变数据库结构、权限、正式库写入或产品口径。登记缺陷，窄范围修复，运行相称前端验证，由用户完成必要人工验收。
+- 工作区只剩明确暂缓内容。
+- 修改和验证与任务目标一致。
+- 数据库记录与实际环境一致。
+- 缺陷状态与验证结果一致。
+- `CURRENT_TASK.md` 的业务状态和下一步仍准确。
 
-### B 类：数据库、权限或 RPC 问题
+## 6. PR 工作流
 
-进入 Strict Lane：先准备 migration 或可审计修复方案，在 development 验证，记录备份、前检、后检和 rollback；production 前再次确认。
-
-### C 类：需求风险或产品口径不明
-
-先记录事实和风险，提供一至两个方案，等待用户确认后再开发。
-
-### 收口检查
-
-- `git status --short` 只剩明确暂缓文件。
-- 已验证功能拥有独立提交。
-- 数据库变更记录与实际环境状态一致。
-- 缺陷状态与人工或自动验证结果一致。
-- 当前任务看板已更新。
-
-## 6. ChatGPT 预审批与连续执行
-
-ChatGPT 在执行前完成任务级预审批：
-
-- 目标、允许修改、禁止范围。
-- 敏感命令及用途。
-- 是否涉及 `main`、production、database、Supabase、Vercel。
-- 验证、失败处理和 rollback。
-
-用户确认后，Codex 或 ChatGPT 连接器可在授权范围内连续执行。以下情况必须停止：
-
-- 工具或审批层拒绝。
-- 命令失败。
-- 修改文件超出允许范围。
-- 当前分支、目标分支或环境与任务单不一致。
-- 出现未授权的敏感操作。
-- rollback 不明确。
-
-不得通过更换命令、页面、连接器或拆分变体绕过拒绝。
-
-## 7. PR 只读检查
-
-合并或发布前：
+### 6.1 合并前只读检查
 
 1. 刷新远端状态。
 2. 查看 base...head 差异和 PR changed files。
@@ -202,47 +201,37 @@ ChatGPT 在执行前完成任务级预审批：
 5. 核对 PR base、head、状态、mergeable、commits 和 checks。
 6. 回传风险、rollback 和未确认事项。
 
-只读工具可使用 GitHub 连接器或：
+连接器或 `gh pr view`、`gh pr diff`、`gh run list` 的结果必须与 changed files / diff 交叉确认。
 
-```bash
-gh pr view <number> --repo <owner/repo>
-gh pr diff <number> --repo <owner/repo>
-gh run list --repo <owner/repo>
-```
-
-工具查询必须和 changed files / diff 交叉确认。
-
-## 8. 纯文档 PR
+### 6.2 纯文档 PR
 
 1. 从 `develop` 创建 `docs/<topic>`。
-2. 只修改任务单允许的文件。
+2. 一次性修改任务单允许的全部文件。
 3. 禁止顺手修改代码、数据库、构建配置、env 或运行脚本。
-4. 提交前检查：
+4. 提交前检查 diff、工作区和链接。
+5. 使用中文 commit，push 后创建到 `develop` 的 PR。
+6. PR body 写明概述、范围、验证、风险和 rollback。
+7. merge 前取得用户单独确认。
 
-```bash
-git status --short
-git diff --name-status
-git diff
-```
+修改 `RULES.md` 仍属于 Strict Lane。
 
-5. 使用中文 commit，推送任务分支。
-6. 创建 PR 到 `develop`。
-7. PR body 写明概述、范围、验证、风险和 rollback。
-8. merge 前重新执行 PR 只读检查并取得用户确认。
+### 6.3 状态文档原则
 
-修改 `RULES.md` 的 docs-only 任务仍属于 Strict Lane，必须有用户单独授权。
+- 不为“PR 已创建”“PR 已合并”单独建立看板 PR。
+- `CURRENT_TASK.md` 只记录稳定的业务事实和可执行下一步，不记录短时 PR 状态。
+- 完成输出必须链接当前看板；发现看板已失真时，在当前允许的 docs 批次中一起修正。
 
-## 9. develop 到 main 发布
+## 7. develop 到 main 发布
 
 1. 确认 `main = production`、`develop = development / preview`。
 2. 执行 `develop -> main` 只读差异审计。
-3. 将变更按风险分类；混入无关高风险内容时停止并拆分。
+3. 分类全部 changed files；混入无关高风险内容时停止并拆分。
 4. 确认 Vercel 和 Supabase 环境绑定。
 5. 涉及数据库时确认 development 验证、备份、project ref 和 rollback。
-6. production merge 前再次获得用户明确确认。
-7. 合并后只观察和回传；不得自动执行 rollback。
+6. production merge 前再次获得明确确认。
+7. 合并后观察部署状态并回传，不得自动 rollback。
 
-## 10. 数据库与 Supabase
+## 8. 数据库与 Supabase
 
 开始前必须读取：
 
@@ -256,37 +245,39 @@ git diff
 
 1. 确认目标 project ref 和 dev / prod 环境。
 2. 先在 development 验证 migration 或数据修复。
-3. 已应用 migration 的修正新增 patch migration。
-4. production 操作前确认备份、前值、预计行数、事务方案、后检和 rollback。
+3. 已应用 migration 的修正必须新增 patch migration。
+4. production 前确认备份、前值、预计行数、事务方案、后检和 rollback。
 5. apply 后回读关键数据并更新数据库变更记录。
 
-`psql` 即使只计划执行查询，也按高风险数据库入口处理，必须明确连接环境和 SQL 范围。
+`psql` 即使只执行查询，也按高风险数据库入口处理，必须明确连接环境和 SQL 范围。
 
-## 11. 敏感命令分类
+## 9. 敏感操作分类
 
 | 类别 | 示例 | 要求 |
 | --- | --- | --- |
-| 远端读取 | `git fetch`、`gh pr view`、`gh pr diff` | 说明目的；失败即停止 |
-| 本地写入 | `git add`、`git commit`、`git restore` | 明确路径和 rollback；破坏性恢复需单独确认 |
-| 远端写入 | `git push`、`gh pr create`、`gh pr close` | 任务级预审批；`gh pr merge` 单独确认 |
-| 历史改写 | `reset --hard`、`clean`、rebase、force push | 逐项确认影响和 rollback |
-| 数据库 | `supabase db push`、migration、`psql` | Strict Lane，确认环境、备份和 rollback |
+| 远端读取 | `git fetch`、`gh pr view`、`gh pr diff` | 可连续执行；失败时停止 |
+| 普通任务写入 | branch、修改、commit、push、PR create | 任务级授权内连续执行 |
+| PR merge | `gh pr merge`、连接器 merge | 每个 PR 单独确认 |
+| 历史改写 | reset、clean、rebase、force push、删分支 | 逐项确认影响和 rollback |
+| 数据库 | Supabase write、migration、`psql` | Strict Lane，确认环境、备份和 rollback |
 | Vercel / production | deploy、env、rollback | Strict Lane，确认 project、环境和流量影响 |
 
-已授权的普通 docs-only 批次可以连续执行 branch、修改、diff、commit、push、PR create；不包含 merge、main、production 或分支删除。
-
-## 12. 回传模板
+## 10. 最终回传模板
 
 ```text
 完成内容：
-当前分支：
 修改文件：
 验证结果：
 commit / PR：
 风险：
 rollback：
 尚未确认：
-建议下一步：
+下一步任务：
+当前任务看板：<链接>
 ```
 
-成功时只返回结论、数量和异常；失败时只提供定位所需的关键错误。无数据库、Vercel 或 production 变更时明确说明。
+当前任务看板固定链接：
+
+[CURRENT_TASK.md](https://github.com/larissa2022/nikki-calculator/blob/develop/docs/ai/CURRENT_TASK.md)
+
+成功时只返回结论、数量和异常；失败时只提供定位所需的关键错误。回传中的“下一步任务”必须和看板一致。无数据库、Vercel 或 production 变更时明确说明。
