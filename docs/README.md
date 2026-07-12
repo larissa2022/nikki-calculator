@@ -35,6 +35,7 @@ AI / Codex 开始任务前，按“默认必读 + 条件读取”进入，不再
 
 - 具体操作流程见 [AI / Codex 操作手册](ai/WORKFLOWS.md)。
 - PR 状态、`mergeable`、changed files、workflow 查询和 `gh` 使用规范都在 `WORKFLOWS.md` 中维护。
+- 缺陷分级和工作区收口规则统一维护在 [AI / Codex 操作手册](ai/WORKFLOWS.md) 的 2.2 节。
 - docs-only / 只读检查等低风险任务采用 Fast Lane：在任务级预审批和明确范围内连续执行，具体规则见 [AI / Codex 操作手册](ai/WORKFLOWS.md)。
 - `RULES.md` 保留强规则和门禁；如果 `WORKFLOWS.md` 与 `RULES.md` 冲突，以 `RULES.md` 为准。
 - 当前任务状态以 [当前任务](ai/CURRENT_TASK.md) 为准；历史执行流水不要作为当前任务事实源。
@@ -67,7 +68,6 @@ AI / Codex 开始任务前，按“默认必读 + 条件读取”进入，不再
 | [技术实现文档](planning/技术实现文档.md) | 技术实现层：记录基于执行计划的表结构、RPC、RLS、前端模块和测试方案 |
 | [缺陷文档](planning/缺陷文档.md) | 记录已发现缺陷、影响范围、状态和建议修复方向 |
 | [角色权限数字化迁移方案](planning/角色权限数字化迁移方案.md) | 记录 `profiles.role` 从字符串权限迁移到数字权限的安全方案 |
-| [工作流优化方案](planning/工作流优化方案.md) | 记录缺陷分级、数据库安全命令和工作区收口规则 |
 
 ## 数据库
 

@@ -64,3 +64,34 @@
 - `docs/ai/CODEX_REPORT.md` 已明确为历史执行报告 / 归档参考；是否进一步拆分为归档目录或按日期归档，需用户后续单独确认。
 - 暂不新增 `docs/ai/DOCUMENT_MAP.md`：当前 `docs/FILE_GOVERNANCE.md` 可以承载文件职责参考，新增更细入口可能造成重复。若后续 `docs/ai` 文件继续扩张，再单独评估。
 - 暂不删除 `docs/ai/REJECTED_IDEAS.md`：该文件仍与 `RULES.md` 中的 Rejected Ideas 机制有关，删除前需要单独评估是否修改规则层。
+
+## 6. 2026-07-12 文档审计结论
+
+### 当前在用入口
+
+- 默认入口：`docs/README.md`、`docs/ai/RULES.md`、`docs/ai/WORKFLOWS.md`、`docs/ai/CURRENT_TASK.md`。
+- 对话交接：`docs/ai/CONVERSATION_HANDOFF.md`。
+- 产品与技术口径：`docs/ai/DECISIONS.md`、`docs/requirements/**`、`docs/planning/开发文档.md`、`docs/planning/技术实现文档.md`。
+- 缺陷和回归：`docs/planning/缺陷文档.md`、`docs/ai/TEST_CHECKLIST.md`。
+- 数据库任务：`docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/database/数据库变更记录.md`、`docs/database/schema.md`。
+
+### 条件读取或历史保留
+
+- `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`：仅涉及 main、production、release 时读取。
+- `docs/database/SUPABASE_REVIEW.md`：Supabase 审查和 contributions / points 草案复核时读取。
+- `docs/planning/角色权限数字化迁移方案.md`：未来权限迁移方案，production 未执行，不作为当前实现事实。
+- `docs/planning/seal100x-clothes-sync-plan.md`：已完成同步任务的历史计划，后续只作为审计背景读取。
+- `docs/ai/CODEX_REPORT.md`：历史执行报告，不作为当前状态来源。
+- `docs/ai/LESSONS.md`、`docs/ai/REJECTED_IDEAS.md`：复盘和规则候选机制，低频条件读取；即使内容暂时为空也保留入口职责。
+
+### 本次合并或删除
+
+- `docs/planning/工作流优化方案.md`：有效内容已合并到 `docs/ai/WORKFLOWS.md` 2.2 节，原文件删除。
+- `docs/ai/TASK_QUEUE.md`：空壳文件，已删除。
+- `docs/ai/TOKEN_AUDIT_2026-07-12.md`：一次性报告已由长期版 `docs/ai/TOKEN_USAGE_AUDIT.md` 替代，不保留重复入口。
+
+### SQL 文件边界
+
+- `docs/database/dev_test_data.sql` 和 `docs/database/local-only/**` 仅用于 development / 本地审计，不能当作默认工作流或 production 脚本。
+- `docs/database/read-only/生产pending盘点.sql` 是只读 production 盘点工具，执行前仍需 Strict Lane 环境确认。
+- `docs/database/local-only/production_pending_batch_20260628.sql` 是历史 production 写入草案，只能作为审计材料，禁止按当前任务直接执行。

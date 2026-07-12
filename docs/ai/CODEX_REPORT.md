@@ -343,7 +343,7 @@ Rule Pruning Phase completed。
 - `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`：明确 `main = production`、`develop = development / preview`，以及 feature / fix / docs 分支默认从 `develop` 拉出并合回 `develop`。
 - `docs/ai/RULES.md`：补充分支与环境治理入口，明确 Vercel production 只对应 `main`，Vercel preview / dev 只对应 `develop` 或短期 feature 分支，数据库任务必须先确认 Supabase project ref。
 - `README.md` 与 `docs/README.md`：新增 AI / Codex 开始任务前必须先读 `docs/ai/RULES.md` 和环境治理文档的入口。
-- `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/planning/工作流优化方案.md`：补充分支、Vercel、Supabase 环境对应关系和检查要求。
+- `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/ai/WORKFLOWS.md`：补充分支、Vercel、Supabase 环境对应关系和检查要求。
 
 当前 GitHub / Git 状态盘点：
 - 默认分支：本地远端引用显示 `origin/HEAD -> origin/main`，因此按当前本地可见状态判断默认分支为 `main`。`gh` CLI 在本环境不可用，GitHub repo metadata 只能部分通过连接器读取。
