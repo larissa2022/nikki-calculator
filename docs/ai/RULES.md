@@ -1,12 +1,12 @@
-# Rules
+# 项目规则
 
 用途：记录已经生效或待审核的协作规则。`RULES.md` 是宪法层，只保存强规则、角色边界、门禁和安全边界；具体操作流程放在 [`WORKFLOWS.md`](WORKFLOWS.md)。若 `WORKFLOWS.md` 与本文件冲突，以本文件为准。
 
 正式 Rule 只能由用户本人批准，ChatGPT、Codex、Gemini 都不能自行批准正式 Rule。
 
-## Core Governance Layer
+## 核心治理层
 
-### Core Governance Rules
+### 核心治理规则
 
 - 用户本人是最终决策者，也是正式 Rule 的唯一批准者。
 - GitHub 是唯一事实源；未 push = 不存在。
@@ -19,7 +19,7 @@
 - 禁止未验证设计进入 Rule。
 - 遇到需求风险、规则冲突、字段缺失或会改变用户行为的地方，先暂停并向用户确认。
 
-### Rule Gate
+### 规则门禁
 
 一条规则进入正式 Rule 前，必须同时满足：
 
@@ -29,7 +29,7 @@
 
 说明：重复行为验证可作为形成 Verified Pattern 的依据，但不作为独立强制门槛。
 
-## Rule System v2.1
+## 规则系统 v2.1
 
 保留三层结构，升级路径固定为：
 
@@ -41,7 +41,7 @@ Candidate Rule -> Verified Pattern -> Rule
 
 禁止跳级：Candidate Rule 不得直接升级为 Rule。
 
-## Rule Pollution Guard（规则防污染机制）
+## 规则防污染机制
 
 - `RULES.md` 只能包含跨项目稳定原则、强边界、门禁和安全约束。
 - 具体 git / gh 命令、PR 检查步骤、commit / push / PR 创建流程、rollback 回传模板和每一步回传格式，必须放入 [`WORKFLOWS.md`](WORKFLOWS.md)。
@@ -53,7 +53,7 @@ Candidate Rule -> Verified Pattern -> Rule
 - 所有实现细节必须进入 `DECISIONS.md`、`WORKFLOWS.md` 或项目实现层。
 - ChatGPT / Codex 不得将实现方案升级为 Rule，除非用户明确确认且跨项目适用。
 
-## Fact Rebuildability Principles（事实可重算原则）
+## 事实可重算原则
 
 - 所有核心系统必须满足“事实可重算”。
 - 不允许依赖可变状态存储最终结果。
@@ -64,7 +64,7 @@ Candidate Rule -> Verified Pattern -> Rule
 - 核心业务数据必须具备数据库层约束（唯一性 / 不可变性 / 状态合法性）。
 - 不可仅依赖应用层逻辑保证一致性。
 
-## Project Rules
+## 项目规则明细
 
 项目级规则，用于约束本仓库开发、测试、数据库和文档协作。
 
@@ -121,18 +121,18 @@ Candidate Rule -> Verified Pattern -> Rule
 - 不得为了完善方案自行扩展项目中未确认存在的字段。
 - 字段相关规则必须以 `DECISIONS.md`、现有数据库结构、现有代码、用户明确确认内容为准。
 
-## Candidate / Pattern Governance
+## 候选规则与模式治理
 
 以下内容保留原则性约束；具体复盘、登记和清理动作可放入 [`WORKFLOWS.md`](WORKFLOWS.md) 或 `LESSONS.md`。
 
-### Candidate Cleanup Policy
+### 候选规则清理策略
 
 - Candidate Rule 保留最多 10 条。
 - 超过 10 条时，必须进入 Verified Pattern，或移入 Rejected Ideas 并从 Rule Candidates 移除。
 - Candidate Rule 超过 30 天未验证时，标记为 stale。
 - stale Candidate Rule 不自动删除，必须进入 Review Queue。
 
-### Pattern Registry
+### 模式登记
 
 - Verified Pattern 必须有唯一编号，例如 `Pattern-01`、`Pattern-02`。
 - Verified Pattern 必须基于至少 2 次 GitHub 可验证行为。
@@ -140,7 +140,7 @@ Candidate Rule -> Verified Pattern -> Rule
 - Pattern 状态包括 Active、Deprecated、Superseded。
 - 每个 Pattern 必须记录来源说明、对应 Rule 或“未升级”状态。
 
-### Rule Evolution Log
+### 规则演进记录
 
 记录 Candidate Rule -> Verified Pattern -> Rule 的转化历史。每条记录必须包含：
 
@@ -150,14 +150,14 @@ Candidate Rule -> Verified Pattern -> Rule
 - 用户确认时间。
 - GitHub commit reference；如果不存在，标记为“无”。
 
-## Personal Rules
+## 个人规则
 
 用户个人偏好和协作习惯规则。
 
 - 用户本人负责最终产品判断、功能审核、流程把控和产品测试。
 - git commit 信息使用中文。
 
-## Rule Candidates
+## 候选规则
 
 待用户本人审核的候选规则。审核通过后才能移动到 Project Rules 或 Personal Rules。
 

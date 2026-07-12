@@ -18,7 +18,9 @@
     "db:push:dev": "npm run db:check && supabase db push",
     "verify:db": "npm run db:check && npm run db:types:dev && npm run build",
     "db:diff": "supabase db diff --schema public",
-    "db:pull": "supabase db pull"
+    "db:pull": "supabase db pull",
+    "audit:seal100x-clothes": "node scripts/audit/seal100x-clothes-diff.mjs",
+    "data-sync:seal100x-clothes-sample": "node scripts/data-sync/seal100x-clothes-sample-apply.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",
