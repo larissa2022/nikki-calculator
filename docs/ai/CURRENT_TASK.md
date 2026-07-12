@@ -2,33 +2,53 @@
 
 > 最后核对：2026-07-12（北京时间）。
 
-## 业务目标
+## 当前任务
 
-保持仓库轻量、可理解、可恢复：保留仍有运行、审计或回滚价值的文件，删除中间产物和空文档；清理已合并分支，同时保护 `main` 与 `develop` 并明确二者发布进度。
+- 名称：Phase 1——收口 AI / Codex 文档入口。
+- 类型：`docs`；因修改 `RULES.md`，按 Strict Lane 管理。
+- 目标分支：`develop`。
+- 工作分支：`docs/consolidate-ai-document-entry`。
+- PR：#66，状态 open，尚未 merge。
+
+## 目标
+
+建立一套实际生效、无重复冲突的文档入口：
+
+1. `AGENTS.md` 作为唯一自动入口和读取路由。
+2. `RULES.md` 只保留强门禁与安全边界。
+3. `WORKFLOWS.md` 只保留执行流程、验证、rollback 和回传模板。
+4. `CURRENT_TASK.md` 只保留当前活动任务事实。
+5. `docs/README.md` 只作为人工文档索引。
 
 ## 当前状态
 
-- 已删除 13 个 seal100x 中间产物，共 1,319,798,714 字节。
-- 保留 production 前备份、完整回滚 SQL、255 条分数备份和三份用户 before / after 历史。
-- 已删除空的 `TASK_QUEUE.md`；历史证据、测试清单、决策和规则文档继续保留。
-- 所有已有明确替代或合并证据的废弃分支均已删除；`main`、`develop` 均未删除。
-- PR #56～#58 已合并到 `develop`，三个临时分支已删除。
-- PR #59 已合并到 `main`；`develop` 已完整进入 `main` 历史，两个保护分支文件树一致。
-
-## 保留分支
-
-- `main`、`develop`：永久保护。
-- `db-contributions-points-schema`：保留最新 contributions / points 数据库草案；两个指向旧提交的重复分支已删除。
-- 除上述三个分支外，不保留已结束任务的本地或远端分支。
+- 已从 `develop` 创建 `docs/consolidate-ai-document-entry`。
+- 已修改上述五个授权文件。
+- PR #66 已创建到 `develop`。
+- 未修改代码、数据库、Supabase、Vercel、env、migration 或构建配置。
+- 未操作 `main`、production 或 PR merge。
 
 ## 下一步
 
-1. 本轮仓库清理和分支同步已完成，无开放 PR。
-2. 后续 contributions / points 数据库草案必须作为独立 Strict Lane 任务重新审核。
-3. 新任务继续从 `develop` 创建窄分支，不直接改写 `main` 或 `develop`。
+1. 对 PR #66 执行只读复核：changed files、链接、职责边界和高风险门禁保留情况。
+2. 用户确认后才能 merge PR #66 到 `develop`。
+3. Phase 1 稳定后，再单独讨论 Phase 2：合并重复模板、迁移归档报告、删除确认无引用的空壳文件。
+4. 如需把本次治理文档同步到 `main`，必须另做 `develop -> main` 差异审计并再次确认。
 
-## 当前边界
+## 当前允许范围
 
-- `tmp/**` 只留本地并已加入忽略，不得提交。
-- 不删除仍有明确用途且没有替代物的分支。
-- 不直接 push `main` / `develop`，不 merge PR，不操作 production。
+- 只允许修改：`AGENTS.md`、`docs/ai/RULES.md`、`docs/ai/WORKFLOWS.md`、`docs/ai/CURRENT_TASK.md`、`docs/README.md`。
+- 允许只读检查 PR #66 和上述文件差异。
+
+## 禁止事项与停止点
+
+- 不 merge PR。
+- 不操作 `main` 或 production。
+- 不修改其他文档、代码、数据库、Supabase、Vercel、env、migration 或构建配置。
+- 发现文件范围扩大、核心安全门禁遗漏、链接失效或规则冲突时，停止并回传。
+
+## Rollback
+
+- merge 前：关闭 PR #66。
+- merge 到 `develop` 后：创建独立 revert PR。
+- 无代码、数据库、Supabase、Vercel 或 production rollback 需求。
