@@ -68,6 +68,12 @@ function containsSecretMaterial(text) {
 
 function shellGuard(command, eventName) {
   const cmd = normalize(command);
+  const mergeMatch = cmd.match(/\bgh\s+pr\s+merge\s+(\d+)\b/);
+  const approvedMergeMatch = cmd.match(/nikki_approved_pr_merge\s*=\s*['"]?(\d+)/);
+
+  if (mergeMatch && mergeMatch[1] !== approvedMergeMatch?.[1]) {
+    deny(eventName, "Blocked gh pr merge. Set NIKKI_APPROVED_PR_MERGE to the explicitly approved PR number in the same command.");
+  }
 
   const blocks = [
     {
@@ -85,10 +91,6 @@ function shellGuard(command, eventName) {
     {
       pattern: /\bgit\s+push\s+origin\s+main\b/,
       reason: "Blocked push to main. main maps to production and requires separate release confirmation."
-    },
-    {
-      pattern: /\bgh\s+pr\s+merge\b/,
-      reason: "Blocked gh pr merge. PR merge requires separate explicit user confirmation."
     },
     {
       pattern: /\bvercel\b[^&|;\n]*(--prod|deploy|rollback|env\s+(add|rm|remove))/,
