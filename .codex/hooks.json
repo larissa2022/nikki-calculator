@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/strict-lane-guard.mjs\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"node (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/strict-lane-guard.mjs')\"",
+            "timeout": 10,
+            "statusMessage": "Checking Nikki command boundaries"
+          }
+        ]
+      },
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/strict-lane-guard.mjs\"",
+            "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"node (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/strict-lane-guard.mjs')\"",
+            "timeout": 10,
+            "statusMessage": "Checking Nikki edit boundaries"
+          }
+        ]
+      }
+    ]
+  }
+}

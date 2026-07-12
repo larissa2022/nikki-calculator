@@ -1,4 +1,4 @@
-# Workflows
+# 工作流程
 
 ## 0. 用途
 
@@ -10,16 +10,17 @@
 
 ## 1. 三档任务流与任务开始流程
 
-任务开始先读取默认必读文档，再按任务类型选择任务流。
+任务开始先读取最小必要上下文，再按任务类型选择任务流。
 
 默认必读：
 
-- `docs/ai/RULES.md`
-- `docs/ai/CURRENT_TASK.md`
-- `docs/ai/WORKFLOWS.md`
+- 仓库根目录 `AGENTS.md`。
+- 用户明确指定的文件。
 
 条件读取：
 
+- 需要了解当前进度：读取 `docs/ai/CURRENT_TASK.md`。
+- 需要确认操作流程或出现治理冲突：读取 `docs/ai/WORKFLOWS.md` 和 `docs/ai/RULES.md`。
 - 涉及 `main` / production / release：读取 `docs/governance/BRANCH_ENVIRONMENT_POLICY.md`。
 - 涉及 database / Supabase：读取 `docs/database/环境信息.md` 和 `docs/database/数据库开发安全方案.md`。
 - 涉及产品 / 技术口径：读取 `docs/ai/DECISIONS.md`。
@@ -27,7 +28,7 @@
 - 文档职责冲突：读取 `docs/FILE_GOVERNANCE.md`。
 - 复盘 / 规则候选整理：读取 `docs/ai/LESSONS.md`。
 
-### 1.1 Fast Lane
+### 1.1 快速通道（Fast Lane）
 
 适用于 docs-only / 只读检查，且同时满足：
 
@@ -54,7 +55,7 @@
 - 命令失败或审批层拒绝。
 - rollback 不明确。
 
-### 1.2 Standard Lane
+### 1.2 标准通道（Standard Lane）
 
 适用于 business 代码或普通非生产配置，且不涉及 `main` / production / database / Supabase / Vercel / merge / 历史改写 / `RULES.md`。
 
@@ -66,7 +67,7 @@
 4. 实施修改并运行相称的检查。
 5. 提交前回传修改范围、风险判断和验证结果。
 
-### 1.3 Strict Lane
+### 1.3 严格通道（Strict Lane）
 
 适用于任何高风险任务，包括：
 
@@ -84,12 +85,26 @@
 - production / database / merge 门禁不因 docs-only 或预审批而弱化。
 - `gh pr merge` 永远需要用户单独明确确认。
 
+### 1.4 低 Token 执行流
+
+适用于所有任务，并作为三档任务流的共同默认方式。
+
+1. **最小上下文**：只读取 `AGENTS.md`、用户指定文件和当前任务直接相关的代码；不默认加载历史流水账或全部治理文档。
+2. **五项执行单**：进入 Codex 前只传递目标、允许修改、禁止事项、验收、停止点；旧对话只保留仍然有效的事实和授权。
+3. **批次一次授权**：同一数据库批次可一次授权备份、前检、事务 apply、后检和 rollback 草案；门禁失败、范围变化或进入新环境时才重新确认。
+4. **紧凑审计**：超大 JSON、SQL 结果和日志只保存在本地；对话默认只返回计数、分类、异常和最多 10 条样本，不粘贴完整原始数据。
+5. **一屏看板**：`CURRENT_TASK.md` 只保留业务目标、当前状态、下一步、阻塞和待确认；执行流水写入对应变更记录。
+6. **分级模型**：文档整理、状态汇总和普通只读审计优先使用低成本模型；复杂代码、生产异常和高风险判断再使用高推理模型。
+7. **完成即收口**：验收通过后立即更新看板、记录验证与回滚依据并结束当前对话；独立任务开启新对话，不继续叠加上下文。
+
+不得为了节省 token 删除 production 前值门禁、事务数量检查、提交后回读、rollback 或用户录入 before / after 历史。
+
 ## 2. 通用任务开始检查
 
-1. 读取任务所需文档：
-   - `docs/ai/RULES.md`
-   - `docs/ai/CURRENT_TASK.md`
-   - `docs/ai/WORKFLOWS.md`
+1. 读取最小必要上下文：
+   - 仓库根目录 `AGENTS.md`
+   - 用户明确指定的文件
+   - 需要当前进度时读取 `docs/ai/CURRENT_TASK.md`
    - 按三档任务流补读条件文档
 2. 执行本地只读盘点：
    - `git status`
@@ -211,7 +226,7 @@
    - 是否包含 production 写库脚本
 7. 回传 rollback 方案和未确认事项。
 
-## 4. docs-only PR 流程
+## 4. 纯文档 PR 流程
 
 适用于只修改文档的工作流。
 
@@ -306,7 +321,7 @@ docs-only 文件治理任务还应确认：
    - rollback 方案
    - project ref 再确认
 
-## 8. 审批层高风险命令 Preflight
+## 8. 审批层高风险命令执行前检查
 
 以下命令容易触发审批层拦截。这些分类用于 ChatGPT 生成 Codex 指令前的任务级预审批，不是让 Codex 在执行中反复询问。执行前应在 ChatGPT 指令中说明目的、是否只读、是否会修改远端或 production、是否需要用户确认。若已预先确认且仍在授权范围内，Codex 可继续执行；若被审批层拒绝，应立即停止，不反复重试，不换方式绕过。
 
@@ -424,7 +439,7 @@ Preflight：
 
 ## 9. 回传模板
 
-每一步或每个阶段完成后，优先回传：
+每个阶段或整个授权批次完成后，优先回传；已授权批次不逐命令重复回传：
 
 - `git status`
 - 当前分支
@@ -433,6 +448,8 @@ Preflight：
 - 风险判断
 - rollback 方案
 - 未确认事项
+
+默认不粘贴完整日志、超大 JSON、SQL 全量结果或重复的历史背景。成功时只回传结论、数量和异常；失败时只提供定位所需的关键错误。
 
 rollback 回传建议写清：
 
