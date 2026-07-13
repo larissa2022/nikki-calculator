@@ -1,15 +1,17 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useWardrobe } from '../composables/useWardrobe'
 import MissingItemsQueue from './MissingItemsQueue.vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
 import { suitService } from '../api/suitService'
 import { getBroadCategory } from '../composables/useScoreEngine'
+import { createScopedDraftKey, readFreshDraft, removeDraft, writeDraft } from '../utils/draftStorage'
 
 const props = defineProps({
   wardrobe: { type: Array, required: true },
   ownedIds: { type: Array, required: true },
-  isLoggedIn: { type: Boolean, default: false }
+  isLoggedIn: { type: Boolean, default: false },
+  userId: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update:ownedIds', 'save-cloud', 'refresh-profile'])
@@ -25,12 +27,16 @@ const importStats = reactive({ show: false, newCount: 0, dupCount: 0, failCount:
 const lastNotFoundNames = ref([])
 const isSaving = ref(false)
 const availableSuits = ref([])
-const IMPORT_DRAFT_KEY = 'nikki.importZoneDraft.v1'
+const draftRestoreNotice = ref('')
+const IMPORT_DRAFT_PREFIX = 'nikki.importZoneDraft.v2:'
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const DRAFT_SAVE_DELAY_MS = 300
 const PROCESS_BATCH_SIZE = 500
 const CLOUD_REQUEST_TIMEOUT_MS = 15000
 const IMPORT_TASK_TIMEOUT_MS = 20000
 const CODE_IMPORT_CATEGORIES = ['发型', '连衣裙', '外套', '上装', '下装', '袜子', '鞋子', '饰品', '妆容', '萤光之灵']
+let draftSaveTimer = null
+let isRestoringDraft = false
 
 const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -41,36 +47,53 @@ const withTimeout = (promise, timeoutMs, message) => Promise.race([
   })
 ])
 
-const readImportDraft = () => {
-  try {
-    const raw = localStorage.getItem(IMPORT_DRAFT_KEY)
-    if (!raw) return null
-    const draft = JSON.parse(raw)
-    if (!draft?.updatedAt || Date.now() - draft.updatedAt > DRAFT_TTL_MS) {
-      localStorage.removeItem(IMPORT_DRAFT_KEY)
-      return null
-    }
-    return draft
-  } catch (err) {
-    console.warn('读取录入草稿失败:', err)
-    return null
-  }
+const getImportDraftKey = (userId = props.userId) => createScopedDraftKey(IMPORT_DRAFT_PREFIX, userId)
+
+const readImportDraft = (userId = props.userId) => {
+  return readFreshDraft(localStorage, getImportDraftKey(userId), DRAFT_TTL_MS)
 }
 
-const saveImportDraft = () => {
-  try {
-    localStorage.setItem(IMPORT_DRAFT_KEY, JSON.stringify({
-      importMode: importMode.value,
-      importText: importText.value,
-      codeImportCategory: codeImportCategory.value,
-      codeImportText: codeImportText.value,
-      lastNotFoundNames: lastNotFoundNames.value,
-      importStats: JSON.parse(JSON.stringify(importStats)),
-      updatedAt: Date.now()
-    }))
-  } catch (err) {
-    console.warn('保存录入草稿失败:', err)
+const hasImportDraftContent = () => Boolean(
+  importText.value.trim()
+  || codeImportText.value.trim()
+  || lastNotFoundNames.value.length
+  || importStats.show
+  || importStats.missingCodes.length
+  || importStats.conflictCodes.length
+)
+
+const saveImportDraft = (userId = props.userId) => {
+  const draftKey = getImportDraftKey(userId)
+  if (!hasImportDraftContent()) {
+    removeDraft(localStorage, draftKey)
+    return
   }
+  writeDraft(localStorage, draftKey, {
+    importMode: importMode.value,
+    importText: importText.value,
+    codeImportCategory: codeImportCategory.value,
+    codeImportText: codeImportText.value,
+    lastNotFoundNames: lastNotFoundNames.value,
+    importStats: JSON.parse(JSON.stringify(importStats))
+  })
+}
+
+const flushImportDraft = (userId = props.userId) => {
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer)
+    draftSaveTimer = null
+  }
+  saveImportDraft(userId)
+}
+
+const scheduleImportDraftSave = () => {
+  if (isRestoringDraft) return
+  if (draftSaveTimer) clearTimeout(draftSaveTimer)
+  const userId = props.userId
+  draftSaveTimer = setTimeout(() => {
+    draftSaveTimer = null
+    saveImportDraft(userId)
+  }, DRAFT_SAVE_DELAY_MS)
 }
 
 const normalizeCodeImportCategory = (category) => {
@@ -78,9 +101,10 @@ const normalizeCodeImportCategory = (category) => {
   return CODE_IMPORT_CATEGORIES.includes(broadCategory) ? broadCategory : '连衣裙'
 }
 
-const restoreImportDraft = () => {
-  const draft = readImportDraft()
+const restoreImportDraft = (userId = props.userId) => {
+  const draft = readImportDraft(userId)
   if (!draft) return
+  isRestoringDraft = true
   importMode.value = draft.importMode === 'code' ? 'code' : 'name'
   importText.value = draft.importText || ''
   codeImportCategory.value = normalizeCodeImportCategory(draft.codeImportCategory || '连衣裙')
@@ -97,11 +121,21 @@ const restoreImportDraft = () => {
       conflictCodes: Array.isArray(draft.importStats.conflictCodes) ? draft.importStats.conflictCodes : []
     })
   }
+  draftRestoreNotice.value = '已恢复你在 24 小时内保存的衣柜录入草稿，请确认内容后继续。'
+  nextTick(() => { isRestoringDraft = false })
 }
+
+const handleBeforeUnload = () => flushImportDraft()
 
 onMounted(async () => {
   restoreImportDraft()
+  window.addEventListener('beforeunload', handleBeforeUnload)
   try { availableSuits.value = await suitService.getAllSuits(); } catch (err) { console.error('加载失败', err); }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  flushImportDraft()
 })
 
 watch(
@@ -113,7 +147,7 @@ watch(
     lastNotFoundNames: lastNotFoundNames.value,
     importStats: { ...importStats }
   }),
-  saveImportDraft,
+  scheduleImportDraftSave,
   { deep: true }
 )
 
@@ -349,6 +383,10 @@ const handleImport = () => {
     <div class="mb-4">
       <h2 class="text-xl font-black text-pink-500 m-0 border-b-2 border-dashed border-pink-100 pb-3">📥 极速录入衣柜</h2>
     </div>
+
+    <div v-if="draftRestoreNotice" class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+      {{ draftRestoreNotice }}
+    </div>
     
     <div class="flex flex-col gap-3">
       <div class="mode-switch">
@@ -413,7 +451,7 @@ const handleImport = () => {
               </div>
             </div>
 
-            <MissingItemsQueue v-model="lastNotFoundNames" :availableSuits="availableSuits" />
+            <MissingItemsQueue v-model="lastNotFoundNames" :availableSuits="availableSuits" :userId="props.userId" />
 
             <div v-if="importStats.missingCodes.length > 0" class="space-y-3">
               <div class="flex items-center gap-2 px-1">
@@ -452,6 +490,7 @@ const handleImport = () => {
               v-model="missingCodeContributionNames"
               :availableSuits="availableSuits"
               :prefills="missingCodeContributionPrefills"
+              :userId="props.userId"
             />
 
             <div v-if="importStats.newClothes.length > 0" class="space-y-3">

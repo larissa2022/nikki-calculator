@@ -1,8 +1,9 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
 import { calculateItemScores } from '../composables/useScoreEngine'
 import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { createScopedDraftKey, readFreshDraft, removeDraft, writeDraft } from '../utils/draftStorage'
 import ClothesEntryForm from './ClothesEntryForm.vue'
 
 
@@ -13,7 +14,8 @@ const lastNotFoundNames = defineModel({ type: Array, required: true })
 // 🌟 把它赋值给 props 变量
 const props = defineProps({
   availableSuits: { type: Array, required: true },
-  prefills: { type: Object, default: () => ({}) }
+  prefills: { type: Object, default: () => ({}) },
+  userId: { type: String, default: '' }
 })
 
 // 2. 100% 移入原版本所需的独立表单状态
@@ -22,10 +24,13 @@ const activeContribution = ref(null)
 const isSubmittingContrib = ref(false)
 const suitSearchText = ref('')
 const submitHint = ref('')
-const DRAFT_PREFIX = 'nikki.missingItemDraft.v1:'
+const DRAFT_PREFIX = 'nikki.missingItemDraft.v2:'
 const DRAFT_TTL_MS = 24 * 60 * 60 * 1000
+const DRAFT_SAVE_DELAY_MS = 300
 const SUBMIT_TIMEOUT_MS = 12000
 const SLOW_REQUEST_HINT_MS = 5000
+let draftSaveTimer = null
+let isRestoringDraft = false
 
 const createContributionFormState = (name = '') => {
   const prefill = props.prefills[name] || null
@@ -38,44 +43,40 @@ const createContributionFormState = (name = '') => {
 
 const contribForm = reactive(createContributionFormState())
 
-const getDraftKey = (name) => `${DRAFT_PREFIX}${encodeURIComponent(name || '')}`
+const getDraftKey = (name, userId = props.userId) => createScopedDraftKey(DRAFT_PREFIX, userId, name)
 
-const readContributionDraft = (name) => {
-  try {
-    const raw = localStorage.getItem(getDraftKey(name))
-    if (!raw) return null
-    const draft = JSON.parse(raw)
-    if (!draft?.updatedAt || Date.now() - draft.updatedAt > DRAFT_TTL_MS) {
-      localStorage.removeItem(getDraftKey(name))
-      return null
-    }
-    return draft
-  } catch (err) {
-    console.warn('读取缺失项草稿失败:', err)
-    return null
-  }
+const readContributionDraft = (name, userId = props.userId) => {
+  return readFreshDraft(localStorage, getDraftKey(name, userId), DRAFT_TTL_MS)
 }
 
-const saveContributionDraft = (name) => {
+const saveContributionDraft = (name, userId = props.userId) => {
   if (!name) return
-  try {
-    localStorage.setItem(getDraftKey(name), JSON.stringify({
-      form: JSON.parse(JSON.stringify(contribForm)),
-      suitSearchText: suitSearchText.value,
-      updatedAt: Date.now()
-    }))
-  } catch (err) {
-    console.warn('保存缺失项草稿失败:', err)
-  }
+  writeDraft(localStorage, getDraftKey(name, userId), {
+    form: JSON.parse(JSON.stringify(contribForm)),
+    suitSearchText: suitSearchText.value
+  })
 }
 
-const clearContributionDraft = (name) => {
-  if (!name) return
-  try {
-    localStorage.removeItem(getDraftKey(name))
-  } catch (err) {
-    console.warn('清理缺失项草稿失败:', err)
+const flushContributionDraft = (name = activeContribution.value, userId = props.userId) => {
+  if (draftSaveTimer) {
+    clearTimeout(draftSaveTimer)
+    draftSaveTimer = null
   }
+  if (name) saveContributionDraft(name, userId)
+}
+
+const scheduleContributionDraftSave = (name, userId = props.userId) => {
+  if (isRestoringDraft) return
+  if (draftSaveTimer) clearTimeout(draftSaveTimer)
+  draftSaveTimer = setTimeout(() => {
+    draftSaveTimer = null
+    saveContributionDraft(name, userId)
+  }, DRAFT_SAVE_DELAY_MS)
+}
+
+const clearContributionDraft = (name, userId = props.userId) => {
+  if (!name) return
+  removeDraft(localStorage, getDraftKey(name, userId))
 }
 
 const withTimeout = (promise, timeoutMs = SUBMIT_TIMEOUT_MS) => Promise.race([
@@ -85,14 +86,23 @@ const withTimeout = (promise, timeoutMs = SUBMIT_TIMEOUT_MS) => Promise.race([
   })
 ])
 
-watch(activeContribution, (newVal) => {
+const restoreContributionDraft = (name, userId = props.userId) => {
+  isRestoringDraft = true
+  submitHint.value = ''
   suitSearchText.value = ''
-  Object.assign(contribForm, createContributionFormState(newVal || ''))
-  const draft = readContributionDraft(newVal)
+  Object.assign(contribForm, createContributionFormState(name || ''))
+  const draft = readContributionDraft(name, userId)
   if (draft?.form) {
     Object.assign(contribForm, draft.form)
     suitSearchText.value = draft.suitSearchText || ''
+    submitHint.value = '已恢复你在 24 小时内保存的补录草稿，请确认内容后再提交。'
   }
+  nextTick(() => { isRestoringDraft = false })
+}
+
+watch(activeContribution, (newVal, oldVal) => {
+  if (oldVal && lastNotFoundNames.value.includes(oldVal)) flushContributionDraft(oldVal)
+  restoreContributionDraft(newVal)
 })
 
 watch(
@@ -102,16 +112,29 @@ watch(
     form: { ...contribForm }
   }),
   (draft) => {
-    if (draft.active) saveContributionDraft(draft.active)
+    if (draft.active) scheduleContributionDraftSave(draft.active)
   },
   { deep: true }
 )
 
 watch(lastNotFoundNames, (names) => {
   if (activeContribution.value && !names.includes(activeContribution.value)) {
+    if (draftSaveTimer) {
+      clearTimeout(draftSaveTimer)
+      draftSaveTimer = null
+    }
     clearContributionDraft(activeContribution.value)
     activeContribution.value = null
   }
+})
+
+const handleBeforeUnload = () => flushContributionDraft()
+
+onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  flushContributionDraft()
 })
 
 // 🌟 新增：玩家点击“一键申请并应用”时的逻辑
@@ -270,6 +293,10 @@ const submitContribution = async (name) => {
     submitHint.value = '';
     setTimeout(() => {
       alert(`🎉 提交成功！`);
+      if (draftSaveTimer) {
+        clearTimeout(draftSaveTimer)
+        draftSaveTimer = null
+      }
       clearContributionDraft(name);
       lastNotFoundNames.value = lastNotFoundNames.value.filter(n => n !== name);
       activeContribution.value = null;
