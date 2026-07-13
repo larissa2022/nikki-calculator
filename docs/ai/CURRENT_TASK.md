@@ -1,36 +1,37 @@
 # 当前任务看板
 
-> 最后更新：2026-07-13 23:35（北京时间）
+> 最后更新：2026-07-13 23:44（北京时间）
 
 ## 业务目标
 
-- 避免缺失图鉴补录在刷新、网络波动或账号切换时丢失或误恢复其他用户的填写内容。
+- 在不破坏现有“提交 → 审核入库 → 提交者衣柜写回”主流程的前提下，让有效贡献者与积分奖励可追溯、可重算。
 
 ## 技术目标
 
-- 按用户隔离 24 小时本地草稿，节流保存并在恢复时明确提示；提交成功后清理对应草稿。
+- 先只读审计 `clothing_contributions` + `points_ledger` 的最小数据模型和现有 RPC 接入点，形成可拆分、可验证、可回滚的数据库方案。
 
 ## 当前阶段
 
-- `BUG-20260625-004` 已完成本地、Preview 和 development 登录用户验收并关闭；PR #74 等待合并确认。
+- PR #74 已合并到 `develop`，草稿恢复缺陷已收口；积分 / 贡献者进入只读设计与数据库门禁准备阶段。
+- 已关闭的 PR #17 不按原方案恢复，后续从 `develop` 重新拆分最小任务。
 
 ## 最近完成
 
-- 草稿存储 4 项单元测试、Vite 构建、Preview 刷新恢复 / 清空、离线失败保留和在线成功清理均通过。
-- development 保留 1 条授权测试记录：`pending_clothes.id = 23`，名称 `Codex草稿验收-20260713-231920`，状态 `pending`。
+- `BUG-20260625-004` 完成本地、Preview、development 登录用户验收并关闭；PR #74 合并提交为 `ffbc880`。
 
 ## 下一步任务
 
-- 确认是否将 PR #74 合并到 `develop`；合并后再规划下一项业务目标。
+- 只读核对现有 migration、生成类型与入库 / 补全 RPC，输出积分 / 贡献者第一阶段说明文档、拆分顺序、验证步骤和 rollback；不创建或执行 migration。
 
 ## 阻塞与待确认
 
-- PR #74 merge 尚未授权；积分 / 贡献者阶段仍需另行确认数据库门禁。
+- 任何 database / Supabase / migration 实现均需另行确认 development project ref、影响范围、前后检查和 rollback。
+- 设计需先收口 `source_pending_id`、幂等去重、RLS / grants、公开读取边界及 `game_id = N` 的计分唯一性。
 
 ## 通用边界
 
-- 不操作 `main`、production、database、Supabase、Vercel、env 或 migration；不再新增 development 测试写入；开发 PR 不自动 merge。
+- 当前仅允许只读审计和 docs 规划；不操作 `main`、production、database、Supabase、Vercel、env 或 migration；开发 PR 不自动 merge。
 
 ## Rollback
 
-- merge 前关闭开发 PR；merge 后通过独立 revert PR 回滚，旧版 v1 草稿键不删除；授权保留的测试 pending 记录不删除。
+- 规划 PR 可直接关闭；后续数据库工作按最小独立 PR 执行，development 验证失败时停止，不进入 production。
