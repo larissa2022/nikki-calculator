@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-13 22:42（北京时间）
+> 最后更新：2026-07-13 22:44（北京时间）
 
 ## 业务目标
 
@@ -12,7 +12,7 @@
 
 ## 当前阶段
 
-- 已完成代码修改、本地单元测试和构建，等待 Preview 人工验收。
+- 已完成代码修改、本地单元测试和构建，开发 PR 等待人工验收。
 
 ## 最近完成
 
@@ -20,11 +20,11 @@
 
 ## 下一步任务
 
-- 创建 `develop` PR，并在 Preview 验证刷新恢复、失败保留和成功清理。
+- 在可访问的 Preview 会话中验证刷新恢复、失败保留和成功清理。
 
 ## 阻塞与待确认
 
-- `points_ledger` / `clothing_contributions` 需另行确认 development project ref、migration 验证和 rollback 后启动。
+- Preview 需要 Vercel 登录，当前自动浏览器无法进入应用；`points_ledger` / `clothing_contributions` 仍需另行确认数据库门禁。
 
 ## 通用边界
 
