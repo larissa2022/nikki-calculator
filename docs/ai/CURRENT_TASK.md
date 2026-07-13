@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-13 22:54（北京时间）
+> 最后更新：2026-07-13 23:35（北京时间）
 
 ## 业务目标
 
@@ -12,24 +12,25 @@
 
 ## 当前阶段
 
-- 已完成代码修改、本地自动验证和 Preview 无写入验证，等待登录用户提交场景验收。
+- `BUG-20260625-004` 已完成本地、Preview 和 development 登录用户验收并关闭；PR #74 等待合并确认。
 
 ## 最近完成
 
-- 草稿存储 4 项单元测试、Vite 构建和 Preview 刷新恢复 / 清空验证通过，控制台无错误。
+- 草稿存储 4 项单元测试、Vite 构建、Preview 刷新恢复 / 清空、离线失败保留和在线成功清理均通过。
+- development 保留 1 条授权测试记录：`pending_clothes.id = 23`，名称 `Codex草稿验收-20260713-231920`，状态 `pending`。
 
 ## 下一步任务
 
-- 明确授权 development 测试写入后，验证请求失败保留和真实提交成功清理。
+- 确认是否将 PR #74 合并到 `develop`；合并后再规划下一项业务目标。
 
 ## 阻塞与待确认
 
-- 提交场景会写入 development Supabase，尚未获得本轮明确授权；积分 / 贡献者阶段仍需另行确认数据库门禁。
+- PR #74 merge 尚未授权；积分 / 贡献者阶段仍需另行确认数据库门禁。
 
 ## 通用边界
 
-- 不操作 `main`、production、database、Supabase、Vercel、env 或 migration；开发 PR 不自动 merge。
+- 不操作 `main`、production、database、Supabase、Vercel、env 或 migration；不再新增 development 测试写入；开发 PR 不自动 merge。
 
 ## Rollback
 
-- merge 前关闭开发 PR；merge 后通过独立 revert PR 回滚，旧版 v1 草稿键不删除。
+- merge 前关闭开发 PR；merge 后通过独立 revert PR 回滚，旧版 v1 草稿键不删除；授权保留的测试 pending 记录不删除。
