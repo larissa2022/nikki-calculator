@@ -112,6 +112,7 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 
 填写规则：
 
+- 每次更新看板时，使用北京时间并将“最后更新”精确到分钟，格式固定为 `YYYY-MM-DD HH:mm`。
 - 业务目标由当前任务窗口根据本轮需求文档提炼；具体产品规则以 `DECISIONS.md` 中的 Final 决策为准。
 - 技术目标根据当前代码、技术方案和已确认约束填写。
 - 下一步任务只写当前任务的下一执行阶段，不提前选择新的业务主线。
