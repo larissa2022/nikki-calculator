@@ -16,7 +16,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 
 权威关系：
 
-1. 读取路由和执行节奏只在 `AGENTS.md` 中维护。
+1. 读取路由和连续执行总则以 `AGENTS.md` 为准，具体操作步骤由 `WORKFLOWS.md` 展开。
 2. 强门禁以 `RULES.md` 为准。
 3. 操作流程以 `WORKFLOWS.md` 为准。
 4. 当前业务状态与下一步以 `CURRENT_TASK.md` 为准。
