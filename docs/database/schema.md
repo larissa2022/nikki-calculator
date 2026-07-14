@@ -87,6 +87,7 @@
 | suits_pkey | primary key | suits.id |
 | suits_name_key | unique | suits.name |
 | idx_clothes_suit_id | index | clothes.suit_id |
+| idx_pending_clothes_submitted_by | index | pending_clothes.submitted_by，用于按提交人执行 RLS 查询 |
 | idx_pending_clothes_status | index | pending_clothes.status |
 | idx_pending_suits_status | index | pending_suits.status |
 | idx_profiles_username | index | profiles.username |
@@ -97,12 +98,17 @@
 | 名称 | 类型 | 说明 |
 | --- | --- | --- |
 | auto_link_shadow_suits() | trigger function | 新套装入库后自动关联临时套装名匹配的 clothes / pending_clothes |
+| add_clothes_to_submitter_wardrobes(uuid[], text) | internal function | 审核入库后同步提交人衣柜，仅 `service_role` 可直接执行 |
+| approve_pending_clothes_arbitration(...) | RPC | 管理员审核新服装入库；登录用户可调用，函数内继续校验管理员身份 |
+| complete_existing_clothes_from_pending(...) | RPC | 管理员用待审核记录补全正式库空字段；登录用户可调用，函数内继续校验管理员身份 |
 | deduct_user_quota(uuid) | function | 扣减用户 quota |
 | handle_new_user() | trigger function | auth.users 新用户初始化 profiles |
 | handle_new_user_quota() | trigger function | auth.users 新用户初始化 user_quotas |
+| is_admin_or_super_admin() | function | 判断当前用户是否为管理员或最高站长 |
 | is_super_admin() | function | 判断当前用户是否为 super_admin |
 | normalize_known_clothing_tags(text) | function | 清洗已知服装标签 |
 | submit_clothing_contribution(...) | RPC | 缺失项提交与 5 次一致自动入库 |
+| update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
 
 ## RLS 摘要
@@ -111,14 +117,22 @@
 
 - app_errors
 - clothes
+- pending_clothes
 - pending_suits
 - profiles
 - user_quotas
 - user_wardrobes
 
+`pending_clothes` 当前策略：
+
+- 匿名请求无表级访问权限。
+- 普通登录用户只能提交状态为 `pending` 且 `submitted_by = auth.uid()` 的记录，并只能查看自己的记录。
+- 管理员和最高站长可查看全部记录、更新审核状态；登录角色没有删除权限，也不能修改 `status` 以外的字段。
+- 衣柜同步、额度扣减和用户初始化等内部函数只允许 `service_role` 直接执行。
+
 当前注意事项：
 
-- `pending_clothes` 当前有 insert policy，但 schema dump 中未显示启用 RLS。后续实现审核闭环前需要重新审查。
+- Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
 - 当前 `profiles.role` 为 `text`，并使用 `user`、`admin`、`super_admin` 字符串区分角色；该设计存在非法值、拼写错误和权限判断不一致风险。后续数据库开发应评估迁移为数字角色等级，例如 `0` 普通用户、`1` 普通管理员、`2` 超级管理员，并由前端 option / 常量表做展示映射。
-- 当前部分 grant 较宽，后续新增积分、重审、陪审团前需要做 RLS 收紧审查。
+- `pending_suits` 和 `app_errors` 仍有 Advisor 提示的宽松 policy；不在 DB-0 范围，后续应单独审查。
