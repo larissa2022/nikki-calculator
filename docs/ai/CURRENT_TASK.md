@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-14 13:08（北京时间）
+> 最后更新：2026-07-14 14:32（北京时间）
 
 ## 业务目标
 
@@ -8,33 +8,37 @@
 
 ## 技术目标
 
-- 先只读审计 `clothing_contributions` + `points_ledger` 的最小数据模型和现有 RPC 接入点，形成可拆分、可验证、可回滚的数据库方案。
+- 先完成并验证现有提交、审核权限的安全收口；用户确认主流程正常前，不启动贡献与积分数据结构。
 
 ## 当前阶段
 
-- development `tfwejruvdahonacyldrg` 只读前检已完成并保留记录；未执行任何写 SQL、migration 或配置修改。
-- migration 与本地 12 条记录一致，目标基础表尚不存在，业务重复键为 0；但现有 RLS / RPC 权限门禁未通过。
-- 旧 PR #17 不按原方案恢复，任何 database 实现仍需从 `develop` 重新授权和拆分。
+- DB-0 安全修复已应用到 development，独立 database draft PR #76 已创建；未进入 production。
+- 自动角色矩阵和 Security Advisor 复查已通过 DB-0 目标门禁，现有 2 条申请及管理员角色数据未改变。
+- 当前等待用户按验证说明完成普通用户、管理员和最高站长的业务流程验证；通过前不进入 DB-1。
 
 ## 最近完成
 
-- `clothes(category, game_id)` 重复组、空编号和非数字编号均为 0；2 条 pending 无匿名或孤儿用户关联。
-- 确认 `pending_clothes` 未启用 RLS，且 `add_clothes_to_submitter_wardrobes`、管理员仲裁和正式库补全 RPC 可由 `anon` 执行。
-- Security Advisor 返回 4 个 ERROR、31 个 WARN；live types 比本地多出 `complete_existing_clothes_from_pending`。
+- 普通用户只能提交、查看自己的待审核申请，不能代提交、伪造审核状态、删除或调用内部高权限能力。
+- 管理员和最高站长可查看全部申请、更新审核状态并正常进入审核入库业务校验。
+- Security Advisor 从 35 项降至 16 项，DB-0 目标告警已清除；schema、类型和前端构建均已验证。
 
 ## 下一步任务
 
-- 另行授权 DB-0 development 安全修复方案与独立 database PR：补齐 `pending_clothes` RLS，收紧高权限 RPC grants，并完成角色矩阵和 Advisor 复查；通过前不进入 DB-1。
+1. 准备一个普通用户、一个管理员和一个最高站长账号，只在 development 使用一条可识别的测试服装。
+2. 普通用户提交申请，确认能看到自己的申请且不能看到他人的申请。
+3. 管理员确认待审核列表，先完成一次驳回，再重新提交并完成审核入库，确认提交人的衣柜同步成功。
+4. 最高站长确认能查看全部申请并完成一次状态操作；按“角色、步骤、结果、页面提示、测试服装、北京时间”反馈每一步结果。
+5. 全部通过后再决定 PR #76 是否可合并；任一步失败都停止后续操作、保留测试记录并反馈，不进入 DB-1。
 
 ## 阻塞与待确认
 
-- DB-0 安全修复尚未授权；Performance Advisor 因连续两次连接传输失败仍需复查。
-- PR #75 merge 尚未授权。
+- DB-0 仍待用户业务验证；Performance Advisor 专用接口持续传输失败，已完成 DB-0 相关 catalog 等价检查并保留限制说明。
+- PR #75、PR #76 merge 均未授权。
 
 ## 通用边界
 
-- 当前只读前检已停止；不操作 `main`、production、database 写入、Supabase 配置、Vercel、env 或 migration；开发 PR 不自动 merge。
+- 不操作 `main`、production、Supabase 配置、Vercel 或 env；用户验证反馈前不继续 database 写入、不启动 DB-1，开发 PR 不自动 merge。
 
 ## Rollback
 
-- 本次无数据库写入，不需要数据 rollback；文档记录可独立 revert。后续修复按最小独立 PR 执行，development 验证失败时停止，不进入 production。
+- DB-0 未修改业务数据；验证失败时停止后续操作，以新的 development rollback migration 恢复旧权限，不改写已应用历史，不进入 production。文档更新可独立 revert。
