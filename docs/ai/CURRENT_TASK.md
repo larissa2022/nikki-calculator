@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-13 23:44（北京时间）
+> 最后更新：2026-07-14 12:40（北京时间）
 
 ## 业务目标
 
@@ -12,26 +12,26 @@
 
 ## 当前阶段
 
-- PR #74 已合并到 `develop`，草稿恢复缺陷已收口；积分 / 贡献者进入只读设计与数据库门禁准备阶段。
-- 已关闭的 PR #17 不按原方案恢复，后续从 `develop` 重新拆分最小任务。
+- 积分 / 贡献者当前 migration、生成类型和入库 / 补全 RPC 已完成只读审计；第一阶段拆分、验证与业务验收手册已写入规划文档。
+- 旧 PR #17 不按原方案恢复，任何 database 实现仍需从 `develop` 重新授权和拆分。
 
 ## 最近完成
 
-- `BUG-20260625-004` 完成本地、Preview、development 登录用户验收并关闭；PR #74 合并提交为 `ffbc880`。
+- 已确认自动入库删除来源 pending、前 5 排名不稳定、管理员候选需服务端校验，以及本地 schema / types 落后等实施门禁。
 
 ## 下一步任务
 
-- 只读核对现有 migration、生成类型与入库 / 补全 RPC，输出积分 / 贡献者第一阶段说明文档、拆分顺序、验证步骤和 rollback；不创建或执行 migration。
+- 用户确认“自动入库来源保留、跨来源重复计分、账号删除后审计保留”三项边界；确认后再授权 development 只读前检。
 
 ## 阻塞与待确认
 
-- 任何 database / Supabase / migration 实现均需另行确认 development project ref、影响范围、前后检查和 rollback。
-- 设计需先收口 `source_pending_id`、幂等去重、RLS / grants、公开读取边界及 `game_id = N` 的计分唯一性。
+- 待确认：自动入库保留 approved pending 或不可变快照；跨来源能否重复计分；账号删除后如何匿名化保留贡献 / 流水。
+- development 前检仍需另行确认 project ref `tfwejruvdahonacyldrg`、只读 SQL 范围和输出；PR #75 merge 尚未授权。
 
 ## 通用边界
 
-- 当前仅允许只读审计和 docs 规划；不操作 `main`、production、database、Supabase、Vercel、env 或 migration；开发 PR 不自动 merge。
+- 当前仅允许 docs 规划；不操作 `main`、production、database、Supabase、Vercel、env 或 migration；开发 PR 不自动 merge。
 
 ## Rollback
 
-- 规划 PR 可直接关闭；后续数据库工作按最小独立 PR 执行，development 验证失败时停止，不进入 production。
+- 规划 PR 可关闭或独立 revert；后续数据库工作按最小独立 PR 执行，development 验证失败时停止，不进入 production。
