@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-14 12:52（北京时间）
+> 最后更新：2026-07-14 13:08（北京时间）
 
 ## 业务目标
 
@@ -12,28 +12,29 @@
 
 ## 当前阶段
 
-- 积分 / 贡献者当前 migration、生成类型和入库 / 补全 RPC 已完成只读审计；三项产品与技术边界已确认为 Final，并同步到决策、规划和业务验收手册。
+- development `tfwejruvdahonacyldrg` 只读前检已完成并保留记录；未执行任何写 SQL、migration 或配置修改。
+- migration 与本地 12 条记录一致，目标基础表尚不存在，业务重复键为 0；但现有 RLS / RPC 权限门禁未通过。
 - 旧 PR #17 不按原方案恢复，任何 database 实现仍需从 `develop` 重新授权和拆分。
 
 ## 最近完成
 
-- 已确认自动入库保留来源 pending 并标记 `approved`，不可变快照不替代来源记录。
-- 已确认同一次初始入库每个用户只奖励一次；后续独立有效行为可再次奖励，每个来源事件必须幂等。
-- 已确认账号删除后保留贡献和积分流水，解除身份关联并统一显示“已注销用户”。
+- `clothes(category, game_id)` 重复组、空编号和非数字编号均为 0；2 条 pending 无匿名或孤儿用户关联。
+- 确认 `pending_clothes` 未启用 RLS，且 `add_clothes_to_submitter_wardrobes`、管理员仲裁和正式库补全 RPC 可由 `anon` 执行。
+- Security Advisor 返回 4 个 ERROR、31 个 WARN；live types 比本地多出 `complete_existing_clothes_from_pending`。
 
 ## 下一步任务
 
-- 另行授权 development project ref `tfwejruvdahonacyldrg` 的只读前检，并在执行前确认 SQL 范围、输出、失败处理和 rollback。
+- 另行授权 DB-0 development 安全修复方案与独立 database PR：补齐 `pending_clothes` RLS，收紧高权限 RPC grants，并完成角色矩阵和 Advisor 复查；通过前不进入 DB-1。
 
 ## 阻塞与待确认
 
-- development 只读前检尚未授权；SQL 范围、输出、失败处理和 rollback 仍需在执行前确认。
+- DB-0 安全修复尚未授权；Performance Advisor 因连续两次连接传输失败仍需复查。
 - PR #75 merge 尚未授权。
 
 ## 通用边界
 
-- 当前仅允许 docs 规划；不操作 `main`、production、database、Supabase、Vercel、env 或 migration；开发 PR 不自动 merge。
+- 当前只读前检已停止；不操作 `main`、production、database 写入、Supabase 配置、Vercel、env 或 migration；开发 PR 不自动 merge。
 
 ## Rollback
 
-- 规划 PR 可关闭或独立 revert；后续数据库工作按最小独立 PR 执行，development 验证失败时停止，不进入 production。
+- 本次无数据库写入，不需要数据 rollback；文档记录可独立 revert。后续修复按最小独立 PR 执行，development 验证失败时停止，不进入 production。
