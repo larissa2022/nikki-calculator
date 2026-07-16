@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 SQL dump 见：`supabase/schema.sql`
+完整 SQL dump 见：`supabase/schema.sql`。2026-07-16 DB-1 已以 development live catalog、migration 和生成类型完成后检；本机 `pg_dump` 因远程 SSL EOF 未能刷新该完整 dump，当前 DB-1 结构以 migration 和本摘要为准。
 
 ## 表结构摘要
 
@@ -25,6 +25,15 @@
 | clothes | game_id | text | null | YES |
 | clothes | suit_id | uuid | null | YES |
 | clothes | temp_suit_name | text | null | YES |
+| clothing_contributions | id | uuid | gen_random_uuid() | NO |
+| clothing_contributions | event_id | uuid | null | NO |
+| clothing_contributions | clothes_id | character varying | null | NO |
+| clothing_contributions | user_id | uuid | null | YES |
+| clothing_contributions | source_pending_id | bigint | null | NO |
+| clothing_contributions | contribution_type | text | null | NO |
+| clothing_contributions | contribution_rank | smallint | null | NO |
+| clothing_contributions | source_created_at | timestamp with time zone | null | NO |
+| clothing_contributions | created_at | timestamp with time zone | now() | NO |
 | pending_clothes | id | bigint | identity | NO |
 | pending_clothes | created_at | timestamp with time zone | now() | NO |
 | pending_clothes | name | text | null | YES |
@@ -43,6 +52,15 @@
 | pending_suits | submitted_by | uuid | null | YES |
 | pending_suits | status | text | 'pending' | YES |
 | pending_suits | created_at | timestamp with time zone | now() | YES |
+| points_ledger | id | uuid | gen_random_uuid() | NO |
+| points_ledger | user_id | uuid | null | YES |
+| points_ledger | delta | integer | null | NO |
+| points_ledger | status | text | 'awarded' | NO |
+| points_ledger | source_type | text | null | NO |
+| points_ledger | source_id | uuid | null | YES |
+| points_ledger | reversal_of | uuid | null | YES |
+| points_ledger | occurred_at | timestamp with time zone | now() | NO |
+| points_ledger | created_at | timestamp with time zone | now() | NO |
 | profiles | id | uuid | null | NO |
 | profiles | email | text | null | YES |
 | profiles | nickname | text | null | YES |
@@ -77,11 +95,28 @@
 | clothes_pkey | primary key | clothes.id |
 | clothes_name_category_unique | unique | clothes.name, clothes.category |
 | clothes_suit_id_fkey | foreign key | clothes.suit_id -> suits.id |
+| clothing_contributions_pkey | primary key | clothing_contributions.id |
+| clothing_contributions_clothes_id_fkey | foreign key | clothing_contributions.clothes_id -> clothes.id，删除受限 |
+| clothing_contributions_user_id_fkey | foreign key | clothing_contributions.user_id -> auth.users.id，账号删除后置空 |
+| clothing_contributions_source_pending_id_fkey | foreign key | clothing_contributions.source_pending_id -> pending_clothes.id，删除受限 |
+| clothing_contributions_source_pending_id_key | unique | 每条来源 pending 最多形成一条贡献 |
+| clothing_contributions_event_rank_key | unique | 同一事件的贡献排名唯一 |
+| clothing_contributions_event_user_key | unique | 同一事件、同一真实用户只记录一次 |
+| clothing_contributions_initial_reward_key | partial unique index | 自动入库 / 管理员仲裁共享初始奖励组 |
+| clothing_contributions_clothes_id_idx | index | clothing_contributions.clothes_id |
+| clothing_contributions_user_id_idx | index | clothing_contributions.user_id |
 | pending_clothes_pkey | primary key | pending_clothes.id |
 | pending_clothes_submitted_by_fkey | foreign key | pending_clothes.submitted_by -> auth.users.id |
 | pending_clothes_suit_id_fkey | foreign key | pending_clothes.suit_id -> suits.id |
 | pending_suits_pkey | primary key | pending_suits.id |
 | pending_suits_submitted_by_fkey | foreign key | pending_suits.submitted_by -> auth.users.id |
+| points_ledger_pkey | primary key | points_ledger.id |
+| points_ledger_user_id_fkey | foreign key | points_ledger.user_id -> auth.users.id，账号删除后置空 |
+| points_ledger_source_id_fkey | foreign key | points_ledger.source_id -> clothing_contributions.id，删除受限 |
+| points_ledger_reversal_of_fkey | foreign key | points_ledger.reversal_of -> points_ledger.id，删除受限 |
+| points_ledger_source_id_key | partial unique index | 一条贡献最多产生一条正向流水 |
+| points_ledger_reversal_of_key | partial unique index | 一条原流水最多产生一条扣回流水 |
+| points_ledger_user_occurred_at_idx | index | points_ledger.user_id, occurred_at desc |
 | profiles_pkey | primary key | profiles.id |
 | profiles_username_key | unique | profiles.username |
 | suits_pkey | primary key | suits.id |
@@ -117,8 +152,10 @@
 
 - app_errors
 - clothes
+- clothing_contributions（DB-1 默认拒绝，无 policy）
 - pending_clothes
 - pending_suits
+- points_ledger（DB-1 默认拒绝，无 policy）
 - profiles
 - user_quotas
 - user_wardrobes
@@ -132,6 +169,8 @@
 
 当前注意事项：
 
+- DB-1 两张基础事实表当前均为 0 行；anon、authenticated 无任何表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
+- Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；这是 DB-1 默认拒绝设计，不在本阶段开放读取面。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
 - 当前 `profiles.role` 为 `text`，并使用 `user`、`admin`、`super_admin` 字符串区分角色；该设计存在非法值、拼写错误和权限判断不一致风险。后续数据库开发应评估迁移为数字角色等级，例如 `0` 普通用户、`1` 普通管理员、`2` 超级管理员，并由前端 option / 常量表做展示映射。
