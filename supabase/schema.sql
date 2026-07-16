@@ -808,6 +808,24 @@ CREATE TABLE IF NOT EXISTS "public"."clothes" (
 ALTER TABLE "public"."clothes" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."clothing_contributions" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "event_id" "uuid" NOT NULL,
+    "clothes_id" character varying NOT NULL,
+    "user_id" "uuid",
+    "source_pending_id" bigint NOT NULL,
+    "contribution_type" "text" NOT NULL,
+    "contribution_rank" smallint NOT NULL,
+    "source_created_at" timestamp with time zone NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "clothing_contributions_rank_check" CHECK ((("contribution_rank" >= 1) AND ("contribution_rank" <= 5))),
+    CONSTRAINT "clothing_contributions_type_check" CHECK (("contribution_type" = ANY (ARRAY['auto_entry'::"text", 'admin_arbitration'::"text", 'existing_field_completion'::"text"])))
+);
+
+
+ALTER TABLE "public"."clothing_contributions" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."pending_clothes" (
     "id" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -849,6 +867,26 @@ CREATE TABLE IF NOT EXISTS "public"."pending_suits" (
 
 
 ALTER TABLE "public"."pending_suits" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "public"."points_ledger" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "user_id" "uuid",
+    "delta" integer NOT NULL,
+    "status" "text" DEFAULT 'awarded'::"text" NOT NULL,
+    "source_type" "text" NOT NULL,
+    "source_id" "uuid",
+    "reversal_of" "uuid",
+    "occurred_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "points_ledger_delta_check" CHECK (("delta" <> 0)),
+    CONSTRAINT "points_ledger_entry_shape_check" CHECK (((("source_type" = 'clothing_contribution'::"text") AND ("source_id" IS NOT NULL) AND ("reversal_of" IS NULL) AND ("delta" > 0)) OR (("source_type" = 'reversal'::"text") AND ("source_id" IS NULL) AND ("reversal_of" IS NOT NULL) AND ("delta" < 0)))),
+    CONSTRAINT "points_ledger_source_type_check" CHECK (("source_type" = ANY (ARRAY['clothing_contribution'::"text", 'reversal'::"text"]))),
+    CONSTRAINT "points_ledger_status_check" CHECK (("status" = 'awarded'::"text"))
+);
+
+
+ALTER TABLE "public"."points_ledger" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."stages" (
@@ -920,6 +958,26 @@ ALTER TABLE ONLY "public"."clothes"
 
 
 
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_event_rank_key" UNIQUE ("event_id", "contribution_rank");
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_event_user_key" UNIQUE ("event_id", "user_id");
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_source_pending_id_key" UNIQUE ("source_pending_id");
+
+
+
 ALTER TABLE ONLY "public"."pending_clothes"
     ADD CONSTRAINT "pending_clothes_pkey" PRIMARY KEY ("id");
 
@@ -927,6 +985,11 @@ ALTER TABLE ONLY "public"."pending_clothes"
 
 ALTER TABLE ONLY "public"."pending_suits"
     ADD CONSTRAINT "pending_suits_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."points_ledger"
+    ADD CONSTRAINT "points_ledger_pkey" PRIMARY KEY ("id");
 
 
 
@@ -975,6 +1038,18 @@ ALTER TABLE ONLY "public"."user_wardrobes"
 
 
 
+CREATE INDEX "clothing_contributions_clothes_id_idx" ON "public"."clothing_contributions" USING "btree" ("clothes_id");
+
+
+
+CREATE UNIQUE INDEX "clothing_contributions_initial_reward_key" ON "public"."clothing_contributions" USING "btree" ("clothes_id", "user_id") WHERE (("user_id" IS NOT NULL) AND ("contribution_type" = ANY (ARRAY['auto_entry'::"text", 'admin_arbitration'::"text"])));
+
+
+
+CREATE INDEX "clothing_contributions_user_id_idx" ON "public"."clothing_contributions" USING "btree" ("user_id");
+
+
+
 CREATE INDEX "idx_clothes_suit_id" ON "public"."clothes" USING "btree" ("suit_id");
 
 
@@ -999,6 +1074,18 @@ CREATE INDEX "idx_suits_name" ON "public"."suits" USING "btree" ("name");
 
 
 
+CREATE UNIQUE INDEX "points_ledger_reversal_of_key" ON "public"."points_ledger" USING "btree" ("reversal_of") WHERE ("reversal_of" IS NOT NULL);
+
+
+
+CREATE UNIQUE INDEX "points_ledger_source_id_key" ON "public"."points_ledger" USING "btree" ("source_id") WHERE ("source_id" IS NOT NULL);
+
+
+
+CREATE INDEX "points_ledger_user_occurred_at_idx" ON "public"."points_ledger" USING "btree" ("user_id", "occurred_at" DESC);
+
+
+
 CREATE OR REPLACE TRIGGER "sync_profile_role_fields" BEFORE INSERT OR UPDATE OF "role", "role_level" ON "public"."profiles" FOR EACH ROW EXECUTE FUNCTION "public"."sync_profile_role_fields"();
 
 
@@ -1009,6 +1096,21 @@ CREATE OR REPLACE TRIGGER "trigger_auto_link_shadow_suits" AFTER INSERT ON "publ
 
 ALTER TABLE ONLY "public"."clothes"
     ADD CONSTRAINT "clothes_suit_id_fkey" FOREIGN KEY ("suit_id") REFERENCES "public"."suits"("id") ON DELETE SET NULL;
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_clothes_id_fkey" FOREIGN KEY ("clothes_id") REFERENCES "public"."clothes"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_source_pending_id_fkey" FOREIGN KEY ("source_pending_id") REFERENCES "public"."pending_clothes"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."clothing_contributions"
+    ADD CONSTRAINT "clothing_contributions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1024,6 +1126,21 @@ ALTER TABLE ONLY "public"."pending_clothes"
 
 ALTER TABLE ONLY "public"."pending_suits"
     ADD CONSTRAINT "pending_suits_submitted_by_fkey" FOREIGN KEY ("submitted_by") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "public"."points_ledger"
+    ADD CONSTRAINT "points_ledger_reversal_of_fkey" FOREIGN KEY ("reversal_of") REFERENCES "public"."points_ledger"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."points_ledger"
+    ADD CONSTRAINT "points_ledger_source_id_fkey" FOREIGN KEY ("source_id") REFERENCES "public"."clothing_contributions"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "public"."points_ledger"
+    ADD CONSTRAINT "points_ledger_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE SET NULL;
 
 
 
@@ -1060,10 +1177,16 @@ ALTER TABLE "public"."app_errors" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."clothes" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "public"."clothing_contributions" ENABLE ROW LEVEL SECURITY;
+
+
 ALTER TABLE "public"."pending_clothes" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."pending_suits" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."points_ledger" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
@@ -1237,6 +1360,10 @@ GRANT ALL ON TABLE "public"."clothes" TO "service_role";
 
 
 
+GRANT SELECT,INSERT ON TABLE "public"."clothing_contributions" TO "service_role";
+
+
+
 GRANT ALL ON TABLE "public"."pending_clothes" TO "service_role";
 GRANT SELECT,INSERT ON TABLE "public"."pending_clothes" TO "authenticated";
 
@@ -1254,6 +1381,10 @@ GRANT SELECT,USAGE ON SEQUENCE "public"."pending_clothes_id_seq" TO "authenticat
 GRANT ALL ON TABLE "public"."pending_suits" TO "anon";
 GRANT ALL ON TABLE "public"."pending_suits" TO "authenticated";
 GRANT ALL ON TABLE "public"."pending_suits" TO "service_role";
+
+
+
+GRANT SELECT,INSERT ON TABLE "public"."points_ledger" TO "service_role";
 
 
 

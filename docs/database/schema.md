@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 SQL dump 见：`supabase/schema.sql`。2026-07-16 DB-1 已以 development live catalog、migration 和生成类型完成后检；本机 `pg_dump` 因远程 SSL EOF 未能刷新该完整 dump，当前 DB-1 结构以 migration 和本摘要为准。
+完整 SQL dump 见：`supabase/schema.sql`。2026-07-16 DB-1 已通过 development live catalog、migration、生成类型和完整 schema dump 交叉复核。
 
 ## 表结构摘要
 
