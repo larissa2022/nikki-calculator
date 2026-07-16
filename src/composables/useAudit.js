@@ -326,6 +326,13 @@ export function useAudit() {
     }
 
     // 6. 最终执行入库
+    const resetAuditSelection = () => {
+        Object.assign(newClothes, { ...createClothesEntryFormState(), pendingIds: [] })
+        newClothes.existingClothesId = ''
+        newClothes.requiresManualReview = false
+        auditSelectionInfo.value = null
+    }
+
     const executeSubmit = async () => {
         if (isSubmitting.value) {
             throw new Error('上一条审核还在处理中，请稍等片刻。')
@@ -403,10 +410,7 @@ export function useAudit() {
             }
 
             const successName = newClothes.name
-            Object.assign(newClothes, { ...createClothesEntryFormState(), pendingIds: [] })
-            newClothes.existingClothesId = ''
-            newClothes.requiresManualReview = false
-            auditSelectionInfo.value = null
+            resetAuditSelection()
             await fetchAllData()
             return successName
         } finally {
@@ -414,9 +418,20 @@ export function useAudit() {
         }
     }
 
-    const rejectPendingItem = async (id) => {
-        await adminService.rejectPending('pending_clothes', id)
-        await fetchAllData()
+    const rejectPendingItem = async (ids) => {
+        if (isSubmitting.value) {
+            throw new Error('上一条审核还在处理中，请稍等片刻。')
+        }
+
+        isSubmitting.value = true
+        try {
+            const rejectedIds = await adminService.rejectPendingClothes(ids)
+            resetAuditSelection()
+            await fetchAllData()
+            return rejectedIds.length
+        } finally {
+            isSubmitting.value = false
+        }
     }
 
     const approvePendingSuit = async (suitName) => {
