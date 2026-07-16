@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 22:35（北京时间）
+> 最后更新：2026-07-16 22:37（北京时间）
 
 ## 业务目标
 
@@ -14,7 +14,7 @@
 
 - PR #79（DB-1 设计审定 docs）已合入 `develop`；独立 DB-1 database 分支已创建并仅写入 development `tfwejruvdahonacyldrg`。
 - migration `20260716132522` 已应用：`clothing_contributions` 与 `points_ledger` 均为空表、RLS 默认拒绝，客户端角色无直接权限，`service_role` 仅可读写新增事实。
-- 独立 database PR 正在收口；`main`、production、现有 RPC、业务数据和 Vercel 均未操作。
+- 独立 database 草稿 PR #80 已发布且当前可合并、检查通过；因生成物缺口仍保持草稿。`main`、production、现有 RPC、业务数据和 Vercel 配置均未操作。
 
 ## 最近完成
 
@@ -25,7 +25,7 @@
 
 ## 下一步任务
 
-1. 发布并审核独立 DB-1 database 草稿 PR；因完整 `supabase/schema.sql` 尚未刷新，暂不转为 ready、暂不合并。
+1. 审核独立 DB-1 database 草稿 PR #80；因完整 `supabase/schema.sql` 尚未刷新，暂不转为 ready、暂不合并。
 2. development 远程连接稳定后重新执行 schema dump，确认只反映已应用 migration，再补齐 PR 验证证据。
 3. DB-1 PR 通过完整生成物门禁并由用户另行确认合并前，不进入 DB-2、只读查询面、RPC 接入、前端展示或历史回填。
 
