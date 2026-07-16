@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-15 19:27（北京时间）
+> 最后更新：2026-07-16 12:56（北京时间）
 
 ## 业务目标
 
@@ -8,40 +8,39 @@
 
 ## 技术目标
 
-- 先完成并验证现有提交、审核权限的安全收口；用户确认主流程正常前，不启动贡献与积分数据结构。
+- 先完成并验证现有提交、审核权限的安全收口；相关开发 PR 落入 `develop` 并复查前，不启动贡献与积分数据结构。
 
 ## 当前阶段
 
-- DB-0 安全修复已应用到 development，独立 database draft PR #76 已创建；未进入 production。
-- 自动角色矩阵和 Security Advisor 复查已通过 DB-0 目标门禁，现有 2 条申请及管理员角色数据未改变。
-- 已在 development 创建普通用户、管理员、最高站长三个隔离测试账号，并以进程内环境变量启动本地测试页，排除 Vercel 预览环境歧义。
-- 普通用户提交与 RLS 可见范围已通过；管理员能看到全部申请，但页面没有服装申请驳回入口，业务验证在此停止。未执行重提、入库、衣柜同步或最高站长状态操作，不进入 DB-1。
+- DB-0 安全修复已应用到 development，独立 database draft PR #76 待最终审计与合并确认；未进入 production。
+- `pending_clothes` 服装申请驳回入口已在独立 business draft PR #77 实现，三角色 development 业务链全部通过。
+- DB-1 尚未启动；`main`、production 未操作。
 
 ## 最近完成
 
-- 普通用户只能提交、查看自己的待审核申请，不能代提交、伪造审核状态、删除或调用内部高权限能力。
-- 管理员和最高站长可查看全部申请、更新审核状态并正常进入审核入库业务校验。
-- Security Advisor 从 35 项降至 16 项，DB-0 目标告警已清除；schema、类型和前端构建均已验证。
-- 普通测试用户提交 `DB0验证服装-202607151910`（连衣裙 #99071501）成功，只能看到自己的 1 条 pending，看到他人申请 0 条。
-- 管理员测试账号能看到全部 2 条 pending 并打开测试候选；候选页只有“一键入库并结案”，没有驳回按钮。
+- 管理员完成首次驳回；普通用户重提后，最高站长看到全部 2 条申请并完成第二次驳回；普通用户再次提交后由管理员审核入库。
+- 测试服装 `DB0验证服装-202607151910` 的 pending 历史为 `rejected / rejected / approved`；正式服装 ID 为 `custom_1784177220092`。
+- 普通用户“我的衣柜”已显示测试服装；数据库复查 `ordinary_wardrobe_synced = true`。
+- PR #77 本地 4 项测试、Vite build、Vercel Preview 和两项 PR checks 通过。
+- DB-0 复查确认 `pending_clothes` RLS 与三项策略仍生效；内部衣柜写回 RPC 未开放给普通登录用户，两项管理员 RPC 保留函数内管理员守卫。
 
 ## 下一步任务
 
-1. 用户确认“驳回”是否明确指 `pending_clothes` 服装申请；若是，另开窄范围 business PR，把现有 `rejectPendingItem` 接入管理员候选页并补页面提示。
-2. 修复通过后复用现有测试账号与测试服装，完成管理员驳回、普通用户重提、管理员入库和提交者衣柜同步验证。
-3. 再由最高站长确认查看全部申请并完成一次状态操作，按“角色、步骤、结果、页面提示、测试服装、北京时间”保留记录。
-4. 全部通过后再决定 PR #76 是否可合并；任一步失败都停止并反馈，不进入 DB-1。
+1. 分别完成 PR #76（database）与 PR #77（business）的最终只读审计，确认 diff、验证证据、Advisor 例外和 rollback。
+2. 用户单独确认后，建议先合并 PR #76，再合并 PR #77；不自动 merge。
+3. 合并后在 development 做一次窄范围冒烟复查；通过后再决定是否启动 DB-1。
 
 ## 阻塞与待确认
 
-- DB-0 业务验证阻塞于管理员页面缺少服装申请驳回入口；现有 `rejectPendingItem` 尚未接入页面，驳回口径待用户确认。
-- Performance Advisor 专用接口持续传输失败，已完成 DB-0 相关 catalog 等价检查并保留限制说明。
-- PR #75、PR #76 merge 均未授权。
+- PR #75、PR #76、PR #77 merge 均未授权。
+- Security Advisor 仍对两项管理员 `SECURITY DEFINER` RPC 报告 authenticated execute WARN；当前由函数内管理员守卫授权，需在 PR #76 最终审计中明确接受或调整。
+- Performance Advisor 专用接口历史上存在传输失败；DB-0 相关 catalog 等价检查已保留。
 
 ## 通用边界
 
-- 不操作 `main`、production、Supabase 配置、Vercel 或 env；用户验证反馈前不继续 database 写入、不启动 DB-1，开发 PR 不自动 merge。
+- 不操作 `main`、production、Supabase / Vercel 配置、env 或 DB-1；三个 PR 不混合范围，开发 PR 不自动 merge。
 
 ## Rollback
 
-- development 保留 3 个隔离测试账号和 1 条 pending 测试服装；最终验证完成后按数据库记录清理，现阶段不删除以保留证据。DB-0 权限回退仍使用新的 rollback migration，不改写已应用历史；文档更新可独立 revert。
+- PR #76 使用新 rollback migration 回退，不改写已应用历史；PR #77 与 docs PR #75 分别使用独立 revert。
+- development 保留 3 个隔离测试账号和全部测试记录；账号密码已最终随机轮换并注销旧会话，清理需另行授权。
