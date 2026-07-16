@@ -91,6 +91,57 @@ export type Database = {
           },
         ]
       }
+      clothing_contributions: {
+        Row: {
+          clothes_id: string
+          contribution_rank: number
+          contribution_type: string
+          created_at: string
+          event_id: string
+          id: string
+          source_created_at: string
+          source_pending_id: number
+          user_id: string | null
+        }
+        Insert: {
+          clothes_id: string
+          contribution_rank: number
+          contribution_type: string
+          created_at?: string
+          event_id: string
+          id?: string
+          source_created_at: string
+          source_pending_id: number
+          user_id?: string | null
+        }
+        Update: {
+          clothes_id?: string
+          contribution_rank?: number
+          contribution_type?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          source_created_at?: string
+          source_pending_id?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clothing_contributions_clothes_id_fkey"
+            columns: ["clothes_id"]
+            isOneToOne: false
+            referencedRelation: "clothes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clothing_contributions_source_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: true
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_clothes: {
         Row: {
           category: string | null
@@ -170,6 +221,57 @@ export type Database = {
           submitted_by?: string | null
         }
         Relationships: []
+      }
+      points_ledger: {
+        Row: {
+          created_at: string
+          delta: number
+          id: string
+          occurred_at: string
+          reversal_of: string | null
+          source_id: string | null
+          source_type: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          delta: number
+          id?: string
+          occurred_at?: string
+          reversal_of?: string | null
+          source_id?: string | null
+          source_type: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          delta?: number
+          id?: string
+          occurred_at?: string
+          reversal_of?: string | null
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "points_ledger_reversal_of_fkey"
+            columns: ["reversal_of"]
+            isOneToOne: false
+            referencedRelation: "points_ledger"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "clothing_contributions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

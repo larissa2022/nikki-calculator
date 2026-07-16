@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 14:22（北京时间）
+> 最后更新：2026-07-16 23:38（北京时间）
 
 ## 业务目标
 
@@ -8,40 +8,36 @@
 
 ## 技术目标
 
-- DB-0 已完成，DB-1 基础事实表设计已审定；实现仍需单独 database 授权，不接入现有 RPC、public view 或历史回填。
+- DB-0 已完成；DB-1 两张基础事实表已在 development 落地并验证，不接入现有 RPC、public view、前端或历史回填。
 
 ## 当前阶段
 
-- PR #76（database）、PR #77（business）和收口 PR #78（docs）已依次合入 `develop`，DB-0 权限与驳回业务链完成。
-- 合并后 development 数据库、页面、衣柜、构建和部署状态冒烟通过。
-- DB-1 字段、约束、RLS 默认拒绝、验证矩阵与 rollback 门禁已完成文档审定；migration 和 development 写入尚未启动，`main`、production 未操作。
+- PR #79（DB-1 设计审定 docs）已合入 `develop`；独立 DB-1 database 分支已创建并仅写入 development `tfwejruvdahonacyldrg`。
+- migration `20260716132522` 已应用：`clothing_contributions` 与 `points_ledger` 均为空表、RLS 默认拒绝，客户端角色无直接权限，`service_role` 仅可读写新增事实。
+- 独立 database PR #80 的 migration、生成物与验证已完成，已转为 ready 且 Preview checks 通过；`main`、production、现有 RPC、业务数据和 Vercel 配置均未操作。
 
 ## 最近完成
 
-- PR #76 合并提交 `da7d6ce`、PR #77 合并提交 `5136818` 均已确认进入 `origin/develop`。
-- PR #78 合并提交 `a4e53ee` 已确认进入 `origin/develop`，DB-0 合并后证据完成收口。
-- `pending_clothes` RLS、3 条策略、migration、测试申请终态和衣柜写回复查通过；管理员 RPC 保留函数内角色守卫。
-- 最新 `develop` 的 4 项测试、Vite build、Vercel deployment、页面数据加载及浏览器控制台检查通过。
-- DB-1 明确只建立空的贡献 / 积分事实表；不复制积分字段，不混入 view、RPC、既有数据回填或 `clothes` 业务唯一索引。
+- development 预检、回滚预演、单 migration dry-run 和安全 apply 完成；两表共 18 个字段、17 个约束和 11 个索引，约束矩阵回滚后仍为 0 行。
+- 完整 schema dump 仅新增 131 行 DB-1 内容；Security / Performance Advisor 对 DB-1 仅有 4 项预期 INFO，无新增 WARN / ERROR。
+- 生成类型、实时权限与既有 4 个业务函数回读、4 项测试和 Vite build 通过；数据库变更记录与 schema 摘要已更新。
 
 ## 下一步任务
 
-1. 审核并合并 DB-1 设计审定文档 PR；不在文档 PR 中创建或应用 migration。
-2. 文档口径进入 `develop` 且用户明确授权后，从最新 `develop` 创建独立 database PR，仅在 development `tfwejruvdahonacyldrg` 验证。
-3. DB-1 通过结构、角色、约束、Advisor、回归和 rollback 门禁前，不进入只读查询面、RPC 接入、前端展示或历史回填。
+1. 完成 PR #80 的最终只读审核；用户再次明确确认后才可 merge。
+2. 合并后复查 `origin/develop`、migration history、两张空表和 Preview checks，再决定 DB-1 是否正式收口。
+3. DB-1 合并后复查通过前，不进入 DB-2、只读查询面、RPC 接入、前端展示或历史回填。
 
 ## 阻塞与待确认
 
-- DB-1 设计审定文档 PR 待审核 / 合并，database 实现尚未取得单独授权。
-- 两项管理员 `SECURITY DEFINER` RPC 的 authenticated execute WARN 已在 DB-0 审计中接受；函数内管理员守卫继续作为门禁。
-- Advisor 专用接口仍有传输失败；DB-0 catalog、角色矩阵和业务冒烟证据已保留。
+- 当前无 DB-1 技术阻塞；PR #80 merge 仍待用户单独确认。
+- Advisor 中既有 `stages` / `suits` RLS、旧函数和旧 policy 告警不属于 DB-1；不得混入本 PR 修复。
 
 ## 通用边界
 
-- 不操作 `main`、production、Supabase / Vercel 配置或 env；DB-1 migration / development 写入必须独立授权、独立 PR、development 先验证。
+- 不操作 `main`、production、Supabase / Vercel 配置或 env；DB-1 仅限 development 和独立 PR，PR merge 仍需用户再次明确确认。
 
 ## Rollback
 
-- PR #76 通过新的 rollback migration 回退，PR #77 通过独立 revert 回退；不改写已应用 migration 历史。
-- DB-1 设计文档可独立 revert；未来 database PR 如已应用，只能用新的 rollback migration 回退。
-- development 保留 3 个隔离测试账号和全部测试记录；清理需另行授权。
+- DB-1 如需回退且两表为空、无下游依赖，新增 rollback migration，先删除 `points_ledger`，再删除 `clothing_contributions`；若已有数据或依赖则停止，不直接删表。
+- 不改写已应用 migration 历史；development 保留 3 个隔离测试账号和全部测试记录，清理需另行授权。
