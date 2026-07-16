@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 23:34（北京时间）
+> 最后更新：2026-07-16 23:38（北京时间）
 
 ## 业务目标
 
@@ -14,7 +14,7 @@
 
 - PR #79（DB-1 设计审定 docs）已合入 `develop`；独立 DB-1 database 分支已创建并仅写入 development `tfwejruvdahonacyldrg`。
 - migration `20260716132522` 已应用：`clothing_contributions` 与 `points_ledger` 均为空表、RLS 默认拒绝，客户端角色无直接权限，`service_role` 仅可读写新增事实。
-- 独立 database PR #80 的 migration、生成物与验证已完成，可转为 ready；`main`、production、现有 RPC、业务数据和 Vercel 配置均未操作。
+- 独立 database PR #80 的 migration、生成物与验证已完成，已转为 ready 且 Preview checks 通过；`main`、production、现有 RPC、业务数据和 Vercel 配置均未操作。
 
 ## 最近完成
 
