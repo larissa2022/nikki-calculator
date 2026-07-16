@@ -321,6 +321,21 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_existing_clothes_from_pending: {
+        Args: {
+          p_category: string
+          p_existing_id: string
+          p_game_id: string
+          p_name: string
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
@@ -345,6 +360,29 @@ export type Database = {
           p_temp_suit_name?: string
         }
         Returns: Json
+      }
+      update_profile_username: {
+        Args: { p_username: string }
+        Returns: {
+          created_at: string | null
+          current_month_points: number | null
+          email: string | null
+          id: string
+          monthly_action_count: number | null
+          nickname: string | null
+          quota: number | null
+          role: string | null
+          role_level: number
+          total_points: number | null
+          updated_at: string | null
+          username: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
