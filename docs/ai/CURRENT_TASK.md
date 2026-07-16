@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 22:37（北京时间）
+> 最后更新：2026-07-16 23:02（北京时间）
 
 ## 业务目标
 
@@ -26,12 +26,13 @@
 ## 下一步任务
 
 1. 审核独立 DB-1 database 草稿 PR #80；因完整 `supabase/schema.sql` 尚未刷新，暂不转为 ready、暂不合并。
-2. development 远程连接稳定后重新执行 schema dump，确认只反映已应用 migration，再补齐 PR 验证证据。
+2. 按 Supabase 官方建议通过 session pooler 重新执行 schema dump；数据库密码只由用户在本机 shell 安全提供，不在对话、日志或仓库中传递，随后确认 dump 只反映已应用 migration。
 3. DB-1 PR 通过完整生成物门禁并由用户另行确认合并前，不进入 DB-2、只读查询面、RPC 接入、前端展示或历史回填。
 
 ## 阻塞与待确认
 
-- `npm run db:dump` 在 Docker 恢复后仍因远程 `pg_dump SSL SYSCALL error: EOF` 失败；`supabase/schema.sql` 已恢复原文件，未提交空文件或伪造生成结果。
+- 本机代理 / DNS 将 Supabase database 与 pooler 主机解析到 `198.18.0.x` fake-IP；直连 `pg_dump` 被关闭，session pooler 可达但当前 shell 没有数据库密码。继续需要用户在本机安全提供 development 数据库密码，或在本机代理中恢复 Supabase 数据库主机的正常连接。
+- 所有失败尝试仅写入 0 字节系统临时文件；仓库内 `supabase/schema.sql` 未被覆盖，未提交空文件或伪造生成结果。
 - Performance Advisor 与个别回归查询也受同类传输失败影响；已保留 live catalog 外键索引证据和 migration 静态范围，但该缺口需在 PR 审核中明确。
 - 两项既有管理员 `SECURITY DEFINER` RPC 的 authenticated execute WARN 已在 DB-0 审计中接受；DB-1 未修改这些函数。
 
