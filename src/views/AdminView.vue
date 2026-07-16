@@ -11,6 +11,7 @@ const emit = defineEmits(['back-to-main'])
 const activeTab = ref('audit')
 const suitSearchText = ref('')
 const activeAuditFilter = ref('all')
+const isRejecting = ref(false)
 
 // 2. 引入后台仲裁大脑
 const {
@@ -146,6 +147,31 @@ const submitNewClothes = async () => {
     alert(err.message || '提交失败，请刷新后重试。')
   }
 }
+
+const rejectSelectedPendingClothes = async () => {
+  if (isSubmitting.value) return
+
+  const pendingIds = [...new Set(newClothes.pendingIds || [])]
+  if (!pendingIds.length) {
+    alert('请先选择一条待审核服装申请。')
+    return
+  }
+
+  const clothesName = String(newClothes.name || '当前候选').trim()
+  const confirmed = confirm(`确认驳回《${clothesName}》对应的 ${pendingIds.length} 条服装申请吗？驳回后提交人可以重新申请。`)
+  if (!confirmed) return
+
+  isRejecting.value = true
+  try {
+    const rejectedCount = await rejectPendingItem(pendingIds)
+    alert(`已驳回《${clothesName}》对应的 ${rejectedCount} 条服装申请。`)
+    suitSearchText.value = ''
+  } catch (err) {
+    alert(err.message || '驳回失败，请刷新后重试。')
+  } finally {
+    isRejecting.value = false
+  }
+}
 </script>
 
 <template>
@@ -270,6 +296,15 @@ const submitNewClothes = async () => {
                   </div>
                 </div>
               </div>
+              <button
+                v-if="newClothes.pendingIds.length"
+                type="button"
+                :disabled="isSubmitting"
+                class="mt-3 w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-black text-rose-600 transition-colors hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                @click="rejectSelectedPendingClothes"
+              >
+                {{ isRejecting ? '正在驳回...' : `驳回当前服装申请（${newClothes.pendingIds.length} 条）` }}
+              </button>
             </div>
           </template>
         </ClothesEntryForm>

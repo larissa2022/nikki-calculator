@@ -169,11 +169,23 @@ export const adminService = {
         return true
     },
 
-    // 6. 驳回任意申请
-    async rejectPending(tableName, id) {
-        const { error } = await supabase.from(tableName).update({ status: 'rejected' }).eq('id', id);
-        if (error) throw error;
-        return true;
+    // 6. 驳回当前选中的服装申请
+    async rejectPendingClothes(ids) {
+        const pendingIds = [...new Set((Array.isArray(ids) ? ids : [ids]).filter(Boolean))]
+        if (!pendingIds.length) throw new Error('没有可驳回的服装申请')
+
+        const { data, error } = await supabase
+            .from('pending_clothes')
+            .update({ status: 'rejected' })
+            .in('id', pendingIds)
+            .eq('status', 'pending')
+            .select('id')
+
+        if (error) throw new Error('驳回服装申请失败: ' + error.message)
+        if ((data || []).length !== pendingIds.length) {
+            throw new Error('部分服装申请的状态已经变化，请刷新审核页后重试。')
+        }
+        return data.map(item => item.id)
     },
 
     async rejectPendingSuitsByName(name) {
