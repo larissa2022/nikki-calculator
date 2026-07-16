@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 12:56（北京时间）
+> 最后更新：2026-07-16 13:06（北京时间）
 
 ## 业务目标
 
@@ -32,7 +32,7 @@
 
 ## 阻塞与待确认
 
-- PR #75、PR #76、PR #77 merge 均未授权。
+- PR #76、PR #77 merge 均未授权。
 - Security Advisor 仍对两项管理员 `SECURITY DEFINER` RPC 报告 authenticated execute WARN；当前由函数内管理员守卫授权，需在 PR #76 最终审计中明确接受或调整。
 - Performance Advisor 专用接口历史上存在传输失败；DB-0 相关 catalog 等价检查已保留。
 
