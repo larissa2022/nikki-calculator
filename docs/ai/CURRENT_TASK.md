@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-16 23:38（北京时间）
+> 最后更新：2026-07-17 08:06（北京时间）
 
 ## 业务目标
 
@@ -8,34 +8,34 @@
 
 ## 技术目标
 
-- DB-0 已完成；DB-1 两张基础事实表已在 development 落地并验证，不接入现有 RPC、public view、前端或历史回填。
+- DB-0 与 DB-1 已完成；两张基础事实表已合入 `develop` 并通过 development 复查，尚未接入现有 RPC、public view、前端或历史回填。
 
 ## 当前阶段
 
-- PR #79（DB-1 设计审定 docs）已合入 `develop`；独立 DB-1 database 分支已创建并仅写入 development `tfwejruvdahonacyldrg`。
-- migration `20260716132522` 已应用：`clothing_contributions` 与 `points_ledger` 均为空表、RLS 默认拒绝，客户端角色无直接权限，`service_role` 仅可读写新增事实。
-- 独立 database PR #80 的 migration、生成物与验证已完成，已转为 ready 且 Preview checks 通过；`main`、production、现有 RPC、业务数据和 Vercel 配置均未操作。
+- PR #80 已于 2026-07-17 07:52 合入 `develop`，merge commit 为 `4965c1d`；本地、`origin/develop` 与 GitHub 远程一致。
+- development `tfwejruvdahonacyldrg` 中 migration `20260716132522` 已记录，两张事实表仍为空，RLS、grants、约束、索引与既有函数链复查通过。
+- merge commit 对应的 Vercel Preview 因平台 GitHub 集成事件延迟后已于 08:04 `READY`，GitHub 的 Vercel 与 Preview Comments 检查均成功。
 
 ## 最近完成
 
-- development 预检、回滚预演、单 migration dry-run 和安全 apply 完成；两表共 18 个字段、17 个约束和 11 个索引，约束矩阵回滚后仍为 0 行。
-- 完整 schema dump 仅新增 131 行 DB-1 内容；Security / Performance Advisor 对 DB-1 仅有 4 项预期 INFO，无新增 WARN / ERROR。
-- 生成类型、实时权限与既有 4 个业务函数回读、4 项测试和 Vite build 通过；数据库变更记录与 schema 摘要已更新。
+- PR #80 合并后回读确认两表共 18 个字段、17 个约束、11 个索引，0 policy、0 trigger、0 行；客户端角色无直接表权限，`service_role` 仅 `SELECT / INSERT`。
+- Security / Performance Advisor 对 DB-1 仍仅有 4 项预期 INFO，无新增 WARN / ERROR；既有 4 个相关函数保持存在。
+- development 类型重新生成一致，4 / 4 测试和 Vite build 通过；`main`、production、业务数据、Vercel 配置和 env 均未操作。
 
 ## 下一步任务
 
-1. 完成 PR #80 的最终只读审核；用户再次明确确认后才可 merge。
-2. 合并后复查 `origin/develop`、migration history、两张空表和 Preview checks，再决定 DB-1 是否正式收口。
-3. DB-1 合并后复查通过前，不进入 DB-2、只读查询面、RPC 接入、前端展示或历史回填。
+1. 准备独立 DB-2 最小只读面的设计与只读预审：只评审“用户读自己的积分”和“贡献者公开展示候选”两个接口。
+2. 明确 Data API 暴露、`security_invoker`、grants、anon / authenticated / admin / super admin 角色矩阵、失败处理和 rollback；取得数据库写入单独授权后再创建 migration。
+3. DB-2 不修改现有写入 RPC，不接入前端，不做历史回填；上述范围之外另行拆分。
 
 ## 阻塞与待确认
 
-- 当前无 DB-1 技术阻塞；PR #80 merge 仍待用户单独确认。
-- Advisor 中既有 `stages` / `suits` RLS、旧函数和旧 policy 告警不属于 DB-1；不得混入本 PR 修复。
+- DB-1 无技术阻塞，已正式收口；DB-2 尚未取得 database / Supabase 写入授权。
+- Advisor 中既有 `stages` / `suits` RLS、旧函数和旧 policy 告警不属于 DB-1 / DB-2 最小只读面，不得顺手混入。
 
 ## 通用边界
 
-- 不操作 `main`、production、Supabase / Vercel 配置或 env；DB-1 仅限 development 和独立 PR，PR merge 仍需用户再次明确确认。
+- 不操作 `main`、production、Vercel 配置或 env；任何 DB-2 migration / Supabase 写入和 PR merge 均需用户单独明确确认。
 
 ## Rollback
 
