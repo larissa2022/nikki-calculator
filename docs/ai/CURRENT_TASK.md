@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-17 08:06（北京时间）
+> 最后更新：2026-07-17 12:41（北京时间）
 
 ## 业务目标
 
@@ -8,36 +8,36 @@
 
 ## 技术目标
 
-- DB-0 与 DB-1 已完成；两张基础事实表已合入 `develop` 并通过 development 复查，尚未接入现有 RPC、public view、前端或历史回填。
+- DB-0、DB-1 已完成；DB-2 最小只读面的设计与 development 只读预检已完成，尚未创建或应用 migration。
 
 ## 当前阶段
 
-- PR #80 已于 2026-07-17 07:52 合入 `develop`，merge commit 为 `4965c1d`；本地、`origin/develop` 与 GitHub 远程一致。
-- development `tfwejruvdahonacyldrg` 中 migration `20260716132522` 已记录，两张事实表仍为空，RLS、grants、约束、索引与既有函数链复查通过。
-- merge commit 对应的 Vercel Preview 因平台 GitHub 集成事件延迟后已于 08:04 `READY`，GitHub 的 Vercel 与 Preview Comments 检查均成功。
+- PR #81 已于 2026-07-17 12:32 合入 `develop`，merge commit 为 `0d84d23`；DB-1 已正式收口。
+- development `tfwejruvdahonacyldrg` 的 DB-1 两表仍为 0 行、RLS 默认拒绝、客户端无底表权限；14 条 migration 与项目状态正常。
+- DB-2 审定为非 exposed `private_db2` helper + public `security_invoker / security_barrier` 只读 view，不放宽底表 grants 或 policy。
 
 ## 最近完成
 
-- PR #80 合并后回读确认两表共 18 个字段、17 个约束、11 个索引，0 policy、0 trigger、0 行；客户端角色无直接表权限，`service_role` 仅 `SELECT / INSERT`。
-- Security / Performance Advisor 对 DB-1 仍仅有 4 项预期 INFO，无新增 WARN / ERROR；既有 4 个相关函数保持存在。
-- development 类型重新生成一致，4 / 4 测试和 Vite build 通过；`main`、production、业务数据、Vercel 配置和 env 均未操作。
+- 完成 DB-2 同名对象、schema、Data API、默认 ACL、profile 展示前提、Advisor 与角色风险只读预检；未写数据库。
+- 明确 `user_points_summary` 仅返回登录用户自己的总分；`clothing_contributors_public` 仅公开初始入库稳定前 3 的安全字段。
+- 角色矩阵、失败处理、事务 fixture、Advisor 门禁和 rollback 顺序已写入开发、技术与数据库记录文档。
 
 ## 下一步任务
 
-1. 准备独立 DB-2 最小只读面的设计与只读预审：只评审“用户读自己的积分”和“贡献者公开展示候选”两个接口。
-2. 明确 Data API 暴露、`security_invoker`、grants、anon / authenticated / admin / super admin 角色矩阵、失败处理和 rollback；取得数据库写入单独授权后再创建 migration。
-3. DB-2 不修改现有写入 RPC，不接入前端，不做历史回填；上述范围之外另行拆分。
+1. 单独授权 DB-2 database PR 与 development `tfwejruvdahonacyldrg` 写入后，创建且只应用一个 DB-2 migration；不进入 DB-3。
+2. apply 前确认 Dashboard / Management API 的 exposed schemas 不含 `private_db2`；完成 rehearsal、dry-run、角色矩阵、事务 fixture rollback 和 Advisor 复查。
+3. 验证通过后更新 schema / types / 记录并提交独立 database PR；PR merge 仍需再次明确确认。
 
 ## 阻塞与待确认
 
-- DB-1 无技术阻塞，已正式收口；DB-2 尚未取得 database / Supabase 写入授权。
-- Advisor 中既有 `stages` / `suits` RLS、旧函数和旧 policy 告警不属于 DB-1 / DB-2 最小只读面，不得顺手混入。
+- DB-2 尚未取得 database / Supabase 写入授权；`private_db2` 未暴露的 Dashboard 配置也尚未确认。
+- 既有 `stages` / `suits` RLS、旧函数、profiles / user_wardrobes policy 告警不属于 DB-2，不得混入修复。
 
 ## 通用边界
 
-- 不操作 `main`、production、Vercel 配置或 env；任何 DB-2 migration / Supabase 写入和 PR merge 均需用户单独明确确认。
+- 不操作 `main`、production、现有写入 RPC、业务数据、前端、历史回填、Vercel 配置或 env；database apply 与 PR merge 分别授权。
 
 ## Rollback
 
-- DB-1 如需回退且两表为空、无下游依赖，新增 rollback migration，先删除 `points_ledger`，再删除 `clothing_contributions`；若已有数据或依赖则停止，不直接删表。
-- 不改写已应用 migration 历史；development 保留 3 个隔离测试账号和全部测试记录，清理需另行授权。
+- DB-2 未应用时关闭 / revert database PR；已应用后新增 rollback migration，先删 public view，再删 private helper，仅在 schema 为空且无依赖时删 `private_db2`。
+- 不改写已应用 migration 历史，不变更 DB-1 表、数据、RLS 或 grants；发现依赖或 exposed schema 异常即停止。
