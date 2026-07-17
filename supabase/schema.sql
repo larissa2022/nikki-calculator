@@ -826,6 +826,17 @@ CREATE TABLE IF NOT EXISTS "public"."clothing_contributions" (
 ALTER TABLE "public"."clothing_contributions" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."clothing_contributors_public" WITH ("security_invoker"='true', "security_barrier"='true') AS
+ SELECT "clothes_id",
+    "contribution_rank",
+    "display_name",
+    "contributed_at"
+   FROM "private_db2"."public_initial_contributors"() "result"("clothes_id", "contribution_rank", "display_name", "contributed_at");
+
+
+ALTER VIEW "public"."clothing_contributors_public" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."pending_clothes" (
     "id" bigint NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
@@ -921,6 +932,14 @@ CREATE TABLE IF NOT EXISTS "public"."suits" (
 
 
 ALTER TABLE "public"."suits" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."user_points_summary" WITH ("security_invoker"='true', "security_barrier"='true') AS
+ SELECT "total_points"
+   FROM "private_db2"."current_user_points"() "result"("total_points");
+
+
+ALTER VIEW "public"."user_points_summary" OWNER TO "postgres";
 
 
 CREATE TABLE IF NOT EXISTS "public"."user_quotas" (
@@ -1364,6 +1383,11 @@ GRANT SELECT,INSERT ON TABLE "public"."clothing_contributions" TO "service_role"
 
 
 
+GRANT SELECT ON TABLE "public"."clothing_contributors_public" TO "anon";
+GRANT SELECT ON TABLE "public"."clothing_contributors_public" TO "authenticated";
+
+
+
 GRANT ALL ON TABLE "public"."pending_clothes" TO "service_role";
 GRANT SELECT,INSERT ON TABLE "public"."pending_clothes" TO "authenticated";
 
@@ -1406,6 +1430,10 @@ GRANT ALL ON TABLE "public"."suits" TO "service_role";
 
 
 
+GRANT SELECT ON TABLE "public"."user_points_summary" TO "authenticated";
+
+
+
 GRANT ALL ON TABLE "public"."user_quotas" TO "anon";
 GRANT ALL ON TABLE "public"."user_quotas" TO "authenticated";
 GRANT ALL ON TABLE "public"."user_quotas" TO "service_role";
@@ -1442,7 +1470,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TAB
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "anon";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "authenticated";
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "service_role";
-
 
 
 
