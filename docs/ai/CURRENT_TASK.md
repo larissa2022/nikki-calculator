@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-19 12:03（北京时间）
+> 最后更新：2026-07-19 13:01（北京时间）
 
 ## 业务目标
 
@@ -8,37 +8,34 @@
 
 ## 技术目标
 
-- DB-0、DB-1 已完成；DB-2 最小只读面已在 development 应用并通过角色矩阵与合并前审核，尚未合入 `develop`。
+- DB-0、DB-1、DB-2 已在 development 完成；DB-2 最小只读面已合入 `develop` 并通过合并后远程回读。
 
 ## 当前阶段
 
-- development `tfwejruvdahonacyldrg` 已记录 migration `20260717050640_db2_create_read_surfaces`。
-- `private_db2` 未暴露；public 只开放“登录用户读自己积分”和“贡献者安全公开前 3”两个不可写 view。
-- DB-1 底表继续默认拒绝，现有 RPC、前端、历史数据和 production 均未修改。
+- development `tfwejruvdahonacyldrg` 已记录 `20260717050640_db2_create_read_surfaces`，两个 private helper 与两个 public 只读 view 的定义、权限和安全选项均与 migration 一致。
+- anon / authenticated 仅获得设计内的最小读取能力；DB-1 底表继续拒绝客户端直读，public view 不可写。
+- Security / Performance Advisor 均无 DB-2 新增 WARN / ERROR；既有对象告警不混入本次修复。
 
 ## 最近完成
 
-- 完成独立 DB-2 database PR 的 migration、生成物、权限、角色矩阵与 rollback 只读审核，结论为可以合入 `develop`。
-- 普通用户正负流水汇总、管理员仅读自己积分、公开贡献稳定前 3、匿名名与账号删除展示均通过。
-- fixture 已 rollback，两张事实表仍为 0 行；Advisor 无 DB-2 新风险，schema / types 已刷新，本地 build 与 4 / 4 tests 通过。
+- PR #83 已合入 `develop` 并完成 GitHub ancestry 与 development 合并后回读；未操作 `main`、production、Vercel、env 或数据库写入。
+- PR #82 已去除重叠记录，仅保留 DB-2 长期规划文档；当前仍停在单独 merge 确认前。
 
 ## 下一步任务
 
-1. 等待用户单独明确确认后，将独立 DB-2 database PR 合入 `develop`。
-2. 合并后回读 `develop` 与 development migration / grants / Advisor；PR #82 需先刷新重叠看板和数据库记录再决定是否保留。
-3. DB-2 收口前不进入 DB-3，不接入现有写入 RPC、前端或历史回填。
+1. 等待用户单独决定是否 merge PR #82 的长期规划文档。
+2. PR #82 处理完成前不进入 DB-3；新阶段需重新确认范围、development 验证和 rollback。
 
 ## 阻塞与待确认
 
-- DB-2 无新增技术阻塞；development 已 apply，合并前审核已通过，仍需用户单独明确授权 PR merge。
-- CLI dry-run 受连接池 EOF / DNS 失败影响；事务 rehearsal、连接器 apply 和 live catalog 已完成，失败记录保留。
-- Advisor 中既有 `stages` / `suits`、旧函数和旧 policy 告警不属于 DB-2，不得混入修复。
+- PR #82 merge 尚未授权。
+- Advisor 中既有 `stages` / `suits`、旧 public 函数和旧 policy 告警不属于 DB-2，需另立任务处理。
 
 ## 通用边界
 
-- 不操作 `main`、production、Vercel 配置或 env；DB-2 PR merge 仍需用户再次明确确认。
+- 不操作 `main`、production、Vercel 配置或 env；任何 database / Supabase 写入和 PR merge 均需单独明确确认。
 
 ## Rollback
 
-- DB-2 已应用时新增 rollback migration：先删除两个 public view，再删除 private helper；仅在无依赖时删除 `private_db2`。
+- DB-2 如需数据库回退，新增 rollback migration：先删除两个 public view，再删除 private helper；仅在无依赖时删除 `private_db2`。
 - 不改写已应用 migration 历史，不变更 DB-1 表、数据、RLS 或 grants；发现依赖或 exposed schema 异常即停止。
