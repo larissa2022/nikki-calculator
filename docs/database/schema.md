@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 SQL dump 见：`supabase/schema.sql`。2026-07-16 DB-1 已通过 development live catalog、migration、生成类型和完整 schema dump 交叉复核。
+完整 public SQL dump 见：`supabase/schema.sql`。2026-07-17 DB-2 已通过 development live catalog、migration、生成类型、public schema dump、Data API 和事务角色矩阵交叉复核；非 exposed `private_db2` helper 以 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -88,6 +88,17 @@
 | user_wardrobes | user_id | uuid | gen_random_uuid() | YES |
 | user_wardrobes | owned_clothes | jsonb | null | YES |
 
+## DB-2 只读面
+
+| 对象 | 对外字段 | 角色与约束 |
+| --- | --- | --- |
+| `public.user_points_summary` | `total_points bigint` | 仅 `authenticated` SELECT；按 `auth.uid()` 汇总自己的 `awarded` 正负流水 |
+| `public.clothing_contributors_public` | `clothes_id`、`contribution_rank`、`display_name`、`contributed_at` | `anon` / `authenticated` SELECT；每件服装仅公开初始入库稳定前 3 |
+| `private_db2.current_user_points()` | 内部 helper | `SECURITY DEFINER`、`STABLE`、空 `search_path`；仅 authenticated 可执行 |
+| `private_db2.public_initial_contributors()` | 内部 helper | `SECURITY DEFINER`、`STABLE`、空 `search_path`；anon / authenticated 可执行 |
+
+两个 public view 均为 `security_invoker + security_barrier` 且不可写。Data API exposed schemas 实测仅 `public, graphql_public`；`private_db2` 返回 `PGRST106`，不能直接作为 API schema / RPC 面访问。
+
 ## 主要约束与索引
 
 | 对象 | 类型 | 字段 / 说明 |
@@ -169,8 +180,9 @@
 
 当前注意事项：
 
-- DB-1 两张基础事实表当前均为 0 行；anon、authenticated 无任何表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
-- Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；这是 DB-1 默认拒绝设计，不在本阶段开放读取面。
+- DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
+- DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
+- Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
 - 当前 `profiles.role` 为 `text`，并使用 `user`、`admin`、`super_admin` 字符串区分角色；该设计存在非法值、拼写错误和权限判断不一致风险。后续数据库开发应评估迁移为数字角色等级，例如 `0` 普通用户、`1` 普通管理员、`2` 超级管理员，并由前端 option / 常量表做展示映射。

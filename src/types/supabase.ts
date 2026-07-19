@@ -401,7 +401,21 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      clothing_contributors_public: {
+        Row: {
+          clothes_id: string | null
+          contributed_at: string | null
+          contribution_rank: number | null
+          display_name: string | null
+        }
+        Relationships: []
+      }
+      user_points_summary: {
+        Row: {
+          total_points: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_clothes_to_submitter_wardrobes: {
