@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-19 12:30（北京时间）
+> 最后更新：2026-07-19 13:01（北京时间）
 
 ## 业务目标
 
@@ -8,34 +8,32 @@
 
 ## 技术目标
 
-- DB-0、DB-1 已完成；DB-2 最小只读面已在 development 应用并合入 `develop`，正在完成合并后回读与文档收口。
+- DB-0、DB-1、DB-2 已在 development 完成；DB-2 最小只读面已合入 `develop` 并通过合并后远程回读。
 
 ## 当前阶段
 
-- PR #83 已合入 `develop`，merge commit 为 `eec4e7e`；本地、`origin/develop` 与 GitHub 远端一致。
-- development `tfwejruvdahonacyldrg` 已记录 migration `20260717050640_db2_create_read_surfaces`；合并前角色矩阵与 live catalog 已通过。
-- `private_db2` 未暴露；public 仅开放两个不可写 view，DB-1 底表继续默认拒绝。
+- development `tfwejruvdahonacyldrg` 已记录 `20260717050640_db2_create_read_surfaces`，两个 private helper 与两个 public 只读 view 的定义、权限和安全选项均与 migration 一致。
+- anon / authenticated 仅获得设计内的最小读取能力；DB-1 底表继续拒绝客户端直读，public view 不可写。
+- Security / Performance Advisor 均无 DB-2 新增 WARN / ERROR；既有对象告警不混入本次修复。
 
 ## 最近完成
 
-- 完成 PR #83 合并前审核、merge 与远端 ancestry 验证；未操作 `main`、production、Vercel 配置或 env。
-- 普通用户积分隔离、管理员仅读自己积分、公开贡献稳定前 3、匿名名与账号删除展示均已验证。
-- PR #82 的长期 DB-2 设计文档已保留，重叠记录已去重；刷新后仅含 3 个 Markdown 文件，只读审核与检查已通过。
+- PR #83 已合入 `develop` 并完成 GitHub ancestry 与 development 合并后回读；未操作 `main`、production、Vercel、env 或数据库写入。
+- PR #82 已去除重叠记录，仅保留 DB-2 长期规划文档；当前仍停在单独 merge 确认前。
 
 ## 下一步任务
 
-1. Supabase 连接器恢复后，回读 development migration、grants、两个 view / helper 与 Security / Performance Advisor，完成 DB-2 收口。
-2. DB-2 回读收口后，等待用户单独决定是否 merge PR #82 的长期规划文档。
-3. DB-2 收口前不进入 DB-3，不接入现有写入 RPC、前端或历史回填。
+1. 等待用户单独决定是否 merge PR #82 的长期规划文档。
+2. PR #82 处理完成前不进入 DB-3；新阶段需重新确认范围、development 验证和 rollback。
 
 ## 阻塞与待确认
 
-- Supabase 连接器当前为传输层错误；CLI 只读回查仍受已知 TLS EOF 影响，均未产生数据库写入。
-- PR #82 merge 尚未授权；Advisor 中既有 `stages` / `suits`、旧函数和旧 policy 告警不得混入修复。
+- PR #82 merge 尚未授权。
+- Advisor 中既有 `stages` / `suits`、旧 public 函数和旧 policy 告警不属于 DB-2，需另立任务处理。
 
 ## 通用边界
 
-- 不操作 `main`、production、Vercel 配置或 env；任何新增 database / Supabase 写入和 PR merge 均需单独明确确认。
+- 不操作 `main`、production、Vercel 配置或 env；任何 database / Supabase 写入和 PR merge 均需单独明确确认。
 
 ## Rollback
 
