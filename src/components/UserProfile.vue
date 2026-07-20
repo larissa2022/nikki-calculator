@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { supabase } from '../api/supabase'
+import { fetchCurrentUserPoints } from '../api/pointsService.js'
 import { getDisplayUsername, getUserRankAndPrivilege } from '../composables/useUserPrivilege'
 
 // 🌟 1. 严格的代码管理：只接收父组件传来的 profileData
@@ -12,10 +13,16 @@ const emit = defineEmits(['refresh-data', 'profile-updated'])
 
 const localProfile = ref(null)
 const displayProfile = computed(() => localProfile.value || props.profileData)
-const myRank = computed(() => getUserRankAndPrivilege(displayProfile.value?.total_points || 0))
+const totalPoints = ref(null)
+const isPointsLoading = ref(false)
+const pointsLoadError = ref(false)
+const myRank = computed(() => (
+  totalPoints.value === null ? null : getUserRankAndPrivilege(totalPoints.value)
+))
 const newUsername = ref('')
 const isUpdatingName = ref(false)
 const isModalOpen = ref(false)
+let pointsRequestId = 0
 
 watch(
   () => props.profileData,
@@ -23,6 +30,36 @@ watch(
     if (profile) localProfile.value = null
   }
 )
+
+const loadPoints = async () => {
+  const requestId = ++pointsRequestId
+
+  if (!props.profileData?.id) {
+    totalPoints.value = null
+    isPointsLoading.value = false
+    pointsLoadError.value = false
+    return
+  }
+
+  isPointsLoading.value = true
+  pointsLoadError.value = false
+
+  try {
+    const points = await fetchCurrentUserPoints(supabase)
+    if (requestId !== pointsRequestId) return
+    totalPoints.value = points
+  } catch (error) {
+    if (requestId !== pointsRequestId) return
+    console.error('获取当前用户积分汇总失败:', error)
+    totalPoints.value = null
+    pointsLoadError.value = true
+  } finally {
+    if (requestId === pointsRequestId) isPointsLoading.value = false
+  }
+}
+
+watch(() => props.profileData?.id, loadPoints, { immediate: true })
+onBeforeUnmount(() => { pointsRequestId++ })
 
 const updateUsername = async () => {
   const cleanName = newUsername.value.trim()
@@ -87,14 +124,27 @@ const openEditModal = () => {
         
         <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
           <div class="text-xs font-bold text-slate-400 mb-1">社区头衔</div>
-          <div class="text-lg font-black text-slate-700">{{ myRank.title }}</div>
-          <div class="mt-1 text-[11px] font-bold text-slate-500">投票权重: 1 顶 <span class="text-purple-500">{{ myRank.voteWeight }}</span> 票</div>
+          <div v-if="isPointsLoading" class="text-lg font-black text-slate-400">正在计算…</div>
+          <div v-else-if="pointsLoadError" class="text-lg font-black text-slate-400">暂不可用</div>
+          <template v-else>
+            <div class="text-lg font-black text-slate-700">{{ myRank?.title }}</div>
+            <div class="mt-1 text-[11px] font-bold text-slate-500">投票权重: 1 顶 <span class="text-purple-500">{{ myRank?.voteWeight }}</span> 票</div>
+          </template>
         </div>
         
-        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100" aria-live="polite">
           <div class="text-xs font-bold text-slate-400 mb-1">累计积分</div>
-          <div class="text-lg font-black text-purple-600">{{ displayProfile.total_points || 0 }} 分</div>
-          <div class="mt-1 text-[11px] font-bold text-slate-500">本月活跃度: {{ displayProfile.monthly_action_count || 0 }} 次</div>
+          <div v-if="isPointsLoading" class="text-lg font-black text-slate-400">读取中…</div>
+          <template v-else-if="pointsLoadError">
+            <div class="text-sm font-black text-rose-500">积分暂时无法读取</div>
+            <button type="button" class="mt-2 text-[11px] font-bold text-purple-600 hover:text-purple-800 cursor-pointer" @click="loadPoints">
+              重新读取
+            </button>
+          </template>
+          <template v-else>
+            <div class="text-lg font-black text-purple-600">{{ totalPoints }} 分</div>
+            <div class="mt-1 text-[11px] font-bold text-slate-500">来自积分流水汇总</div>
+          </template>
         </div>
       </div>
     </section>
