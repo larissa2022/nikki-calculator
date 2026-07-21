@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test \"tests/*.test.js\"",
+    "verify:local": "npm run test && npm run build",
     "verify": "npm run build",
     "db:dump": "supabase db dump --schema public --file supabase/schema.sql",
     "db:check": "node scripts/check-dev-link.mjs",
