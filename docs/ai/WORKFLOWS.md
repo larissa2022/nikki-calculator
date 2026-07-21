@@ -25,7 +25,7 @@
 - `config`：env、构建、CI、Vercel 或部署配置。
 - `release`：`main`、production、hotfix、发布或 PR merge。
 
-不得为了方便把多种风险类型混入同一 PR。
+每个 PR 只设一种主风险类型。与主变更直接绑定的 `CURRENT_TASK.md`、缺陷状态、验收记录和数据库变更记录属于支持文档，可随主 PR 更新；治理规则、database 实现、config 和 release 仍按风险拆分。
 
 ### 1.2 启动回执
 
@@ -60,6 +60,14 @@
 以下情况必须暂停：进入需单独确认的敏感操作；分支、环境或文件范围与任务单不一致；工具或验证失败；规则冲突；出现未确认的产品语义；rollback 不明确。
 
 PR merge、`main`、production、database / Supabase / Vercel 写入、env、migration、历史改写、分支删除和修改 `RULES.md` 不包含在普通连续批次授权内。
+
+#### PR 预算与主 PR 复用
+
+- 普通 business 或 docs 目标默认只创建一个以 `develop` 为目标的主 PR；在 merge 前发现的问题、验证结果和直接支持文档继续更新同一分支和 PR。
+- 不为设计阶段、任务启动、验证收口、PR 创建或 PR 合并单独建立状态 PR。设计默认在计划或只读审计中完成；只有设计文档本身是负责人确认的独立交付物时才创建 design-only PR。
+- 同一数据库业务目标默认最多创建两个以 `develop` 为目标的 PR：第一条承载 migration、RPC、RLS、权限和 development 验证；第二条承载业务接入、前端和直接支持文档。
+- 主 PR 应在首次创建时包含稳定的目标、范围、验收、风险和 rollback；merge 前的问题在原 PR 修正，merge 后新发现且可独立复现的缺陷才进入新的 fix PR。
+- 大型模块确需超过 PR 预算时，在实施前提交拆分说明，列出每条 PR 的独立验收边界、依赖、风险和合并顺序；负责人确认前不得按超预算方案启动。
 
 ### 1.4 五项执行单
 
@@ -129,6 +137,7 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 - 没有活动任务时不预设新任务或下一条业务主线，只保留“当前无活动任务”、当前进度为完成阶段、通用边界和 Rollback。
 - 只在业务状态、技术阶段或下一步任务发生实质变化时更新看板，不为 PR 从 open 变为 merged 单独创建状态 PR。
 - 若当前 PR 修改看板，提交 merge 审核前必须确认看板描述的是合并后仍成立的稳定状态，不得保留“等待合并本 PR”之类一合并就失效的短时状态。
+- 看板、缺陷状态、验收记录和数据库变更记录应随对应主 PR 更新；除非文档本身是独立交付物，不为这些支持文档另开 PR。
 
 ### 1.7 授权、异常与阶段收口
 
@@ -329,15 +338,22 @@ git diff
 
 修改 `RULES.md` 的 docs-only 任务仍属于 Strict Lane，必须有用户单独授权。
 
+治理规则、需求说明或设计文档本身是独立交付物时，才建立纯文档 PR。看板、缺陷状态、验收记录和数据库变更记录等支持文档应随对应 business 或 database 主 PR，不因文档更新另开 PR。
+
 ## 9. develop 到 main 发布
 
-1. 确认 `main = production`、`develop = development / preview`。
-2. 执行 `develop -> main` 只读差异审计。
-3. 将变更按风险分类；混入无关高风险内容时停止并拆分。
-4. 确认 Vercel 和 Supabase 环境绑定。
-5. 涉及数据库时确认 development 验证、备份、project ref 和 rollback。
-6. production merge 前再次获得用户明确确认。
-7. 合并后只观察和回传；不得自动执行 rollback。
+非紧急 production 发布按需求里程碑触发，不按固定周次、两三天内的开发密度或累计 PR 数量触发。触发条件是一个大功能模块或完整需求已经完成验收；已验收的非紧急小修复和优化可留在 `develop`，随下一里程碑统一发布。
+
+1. 确认 `main = production`、`develop = development / preview`，并确认本次里程碑已完成验收。
+2. 确认未完成或未验收功能仍在任务分支。若此类内容已进入 `develop`，停止发布并先完成隔离。
+3. 执行 `develop -> main` 全量只读差异审计，将内容按 docs、business、database、config 分类，并列出随本次里程碑带出的已验收小变更。
+4. 向负责人提交发布决策卡，至少包含：本次需求里程碑、随带小变更、完整差异分类、验证结果、production 影响和 rollback。
+5. 只有负责人确认本次发布后，才创建一个 `develop -> main` release PR；不得因日历到期或 PR 数量累积自动创建。
+6. 确认 Vercel 和 Supabase 环境绑定；涉及数据库时确认 development 验证、备份、project ref 和 rollback。
+7. production merge 前再次获得用户明确确认。创建 release PR 的授权不等于 merge 授权。
+8. 合并后只观察和回传；不得自动执行 rollback。
+
+紧急 production 缺陷使用单独批准的 hotfix 流程，不等待需求里程碑，也不得借 hotfix 携带非紧急改动。
 
 ## 10. 数据库与 Supabase
 
@@ -356,6 +372,8 @@ git diff
 3. 已应用 migration 的修正新增 patch migration。
 4. production 操作前确认备份、前值、预计行数、事务方案、后检和 rollback。
 5. apply 后回读关键数据并更新数据库变更记录。
+
+同一数据库业务目标默认最多使用两个以 `develop` 为目标的 PR：数据库实现与 development 验证一条，业务接入、前端和直接支持文档一条。数据库变更记录随数据库 PR 更新，不另建收口 PR；超预算拆分必须在实施前取得负责人确认。
 
 `psql` 即使只计划执行查询，也按高风险数据库入口处理，必须明确连接环境和 SQL 范围。
 

@@ -20,6 +20,9 @@
 - 默认从 `develop` 创建窄范围任务分支，并以 `develop` 为 PR 目标。
 - 不允许从普通 `feature/*`、`fix/*`、`docs/*` 分支直接合入 `main`；明确批准的紧急 hotfix 除外。
 - `develop -> main` 前必须做只读差异审计，并按 docs、business、database、config 分类。
+- 非紧急 production 发布由已完成并验收的大功能模块或完整需求触发，不以固定周次、经过天数或累计 PR 数量作为发布门槛。
+- 创建 `develop -> main` 发布 PR 前，必须先向负责人提交发布决策卡并取得本次发布确认；发布 PR 的 production merge 仍需再次单独确认。
+- 未完成或未验收功能必须保留在任务分支；若已进入 `develop`，必须先停止发布并完成隔离。已验收的非紧急小修复和优化可留在 `develop`，随下一次需求里程碑统一发布；紧急 production 缺陷走明确批准的 hotfix。
 - Vercel production 只能对应 `main`；preview / development 只能对应 `develop` 或短期任务分支。
 - production 操作前必须重新确认 GitHub 分支、Vercel project、Supabase project ref、影响范围和 rollback。
 - 分支与环境映射以 [`../governance/BRANCH_ENVIRONMENT_POLICY.md`](../governance/BRANCH_ENVIRONMENT_POLICY.md) 为准。
@@ -39,9 +42,13 @@
 
 ## 4. 任务隔离
 
-- docs、business、database、config、release 应按风险拆分，不在同一 PR 混合。
+- 每个 PR 只能有一个主风险类型和一个可独立验收的业务结果；与主变更直接绑定的 `CURRENT_TASK.md`、缺陷状态、验收记录和数据库变更记录属于支持文档，可随主 PR 更新，不视为新增风险类型。
+- 治理规则文档、database 实现、config 和 release 默认按风险拆分。业务任务不得顺手修改治理规则，支持文档不得成为混入无关变更的理由。
+- 普通 business 或 docs 目标默认最多创建一个以 `develop` 为目标的 PR；同一目标的设计修正、验证结果和收口状态继续更新该 PR。
+- 同一数据库业务目标默认最多创建两个以 `develop` 为目标的 PR：一个用于 migration、RPC、RLS、权限和 development 验证，一个用于业务接入、前端和直接支持文档。
+- 不得为设计阶段、任务启动、验证收口、PR 创建或 PR 合并单独建立纯状态 PR。设计默认在计划或只读审计中完成；只有设计文档本身是负责人确认的独立交付物时，才可建立 design-only PR。
+- 大型模块确需超过 PR 预算时，必须在实施前说明各 PR 的独立验收边界、依赖、风险和合并顺序，并取得负责人确认。
 - docs-only 任务不得顺手修改代码、构建配置、脚本、数据库、Supabase、Vercel、env 或 migration。
-- 业务任务不得顺手修改治理规则。
 - database migration 必须先在 development 验证；已执行 migration 的修正必须新增 patch migration。
 - production 写库脚本不得放入可提交路径。
 - 数据库任务必须先确认 dev / prod 环境和 Supabase project ref，并读取数据库安全文档和变更记录。
