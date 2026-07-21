@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-21 12:56（北京时间）
+> 最后更新：2026-07-21 13:07（北京时间）
 
 ## 当前任务
 
@@ -20,7 +20,7 @@
 
 ## 当前进度
 
-- 待发布阶段：实现与自动验证已完成，正在发布窄范围分支和 PR；业务状态保持待负责人通过 development / Preview 完成人工验收。
+- 验证阶段：实现、development 自动验证和 Draft [PR #87](https://github.com/larissa2022/nikki-calculator/pull/87) 已发布，Preview 检查通过；业务状态保持待负责人通过 development / Preview 完成人工验收。
 
 ## 下一步
 
