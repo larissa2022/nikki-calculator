@@ -3,6 +3,7 @@ import { ref, reactive, computed } from 'vue'
 import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
 import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { buildClothingScoresFromForm } from '../utils/clothingScores'
 import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { GRADE_OPTIONS, SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
@@ -375,12 +376,7 @@ export function useAudit() {
 
         isSubmitting.value = true
         try {
-            const calculatedScores = {}
-            // 🌟 修复：将数组单独提取为一个变量，彻底避开 JS 引擎的换行解析陷阱
-            const pairs = [['pair1', 'grade1'], ['pair2', 'grade2'], ['pair3', 'grade3'], ['pair4', 'grade4'], ['pair5', 'grade5']]
-            pairs.forEach(([p, g]) => {
-                calculatedScores[newClothes[p]] = matrix[newClothes[g]] || 0
-            })
+            const calculatedScores = buildClothingScoresFromForm(newClothes.category, newClothes)
 
             const payload = {
                 id: `custom_${Date.now()}`, game_id: gameId, name: clothesName,

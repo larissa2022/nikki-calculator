@@ -1,8 +1,8 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { supabase, logErrorToCloud } from '../api/supabase'
-import { calculateItemScores } from '../composables/useScoreEngine'
 import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
+import { buildClothingScoresFromForm } from '../utils/clothingScores'
 import { createScopedDraftKey, readFreshDraft, removeDraft, writeDraft } from '../utils/draftStorage'
 import ClothesEntryForm from './ClothesEntryForm.vue'
 
@@ -241,14 +241,7 @@ const submitContribution = async (name) => {
       const { error: authErr } = await supabase.auth.getUser();
       if (authErr) throw new Error('登录校验失败: ' + authErr.message);
       
-      const pairs = [
-        { attr: contribForm.pair1, grade: contribForm.grade1 },
-        { attr: contribForm.pair2, grade: contribForm.grade2 },
-        { attr: contribForm.pair3, grade: contribForm.grade3 },
-        { attr: contribForm.pair4, grade: contribForm.grade4 },
-        { attr: contribForm.pair5, grade: contribForm.grade5 }
-      ];
-      const calculatedScores = calculateItemScores(contribForm.category, pairs);
+      const calculatedScores = buildClothingScoresFromForm(contribForm.category, contribForm);
 
       // ... 准备 payload ... (保留原有的 payload 定义)
       // ... 前面生成 payload 的代码保持不变 ...
