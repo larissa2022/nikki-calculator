@@ -18,5 +18,7 @@
 | --- | --- | --- |
 | [Codex 历史执行报告](CODEX_REPORT.md) | `docs/ai/CODEX_REPORT.md` | 早期项目状态、文档收口和执行结果的历史汇总 |
 | [Token 使用审计](TOKEN_USAGE_AUDIT.md) | `docs/ai/TOKEN_USAGE_AUDIT.md` | 2026-07-12 一次性上下文与 Token 成本审计 |
+| [数据库变更历史卷](database/) | `docs/database/数据库变更记录.md` 的历史详情 | 先从常驻完整索引定位，再读取一个目标卷和章节 |
+| [缺陷记录历史卷](defects/) | `docs/planning/缺陷文档.md` 的历史详情 | 先从常驻完整索引定位，再读取一个目标卷和章节 |
 
 需要追溯完整历史时，以 Git commit、PR 和原文件 blob 为证据，不从归档内容推断当前状态。

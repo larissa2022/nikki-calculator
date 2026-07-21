@@ -32,7 +32,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [需求文档](requirements/需求文档.md) | 需求背景、业务规则、风险、待确认事项 | 未确认事项的直接实现 |
 | [开发文档](planning/开发文档.md) | 将已确认需求拆成阶段、暂停点和验收标准 | Final 决策、具体 SQL / RPC 实现 |
 | [技术实现文档](planning/技术实现文档.md) | 跨模块、RPC、RLS、schema、前端模块和测试方案 | 需求源头、未经确认的产品规则 |
-| [缺陷文档](planning/缺陷文档.md) | 已复现缺陷、影响、状态和修复方向 | 新需求设计、当前任务事实源 |
+| [缺陷文档](planning/缺陷文档.md) | 全量缺陷索引、未结束事项和常驻详情；历史详情按索引定位到归档卷 | 新需求设计、当前任务事实源 |
 | [测试清单](ai/TEST_CHECKLIST.md) | Preview / production 人工回归或专项验证 | 自动生效的发布许可 |
 
 需求文档不等于执行单；未确认事项不得直接进入实现。大型业务任务通常按“Final 决策 → 需求 → 开发计划 → 技术实现 → 代码”的顺序核对，但实际读取范围仍由 `AGENTS.md` 根据任务路由。
@@ -44,7 +44,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [分支与环境治理](governance/BRANCH_ENVIRONMENT_POLICY.md) | `main`、production、release、hotfix | 具体 git / gh 命令 |
 | [数据库环境信息](database/环境信息.md) | Supabase project ref 和非敏感环境事实 | 密钥、token、真实用户隐私数据 |
 | [数据库开发安全方案](database/数据库开发安全方案.md) | 数据库备份、development 验证、上线与 rollback | 当前业务任务状态 |
-| [数据库变更记录](database/数据库变更记录.md) | migration、RPC、RLS、数据修复执行记录 | 未执行规划、未经确认设计 |
+| [数据库变更记录](database/数据库变更记录.md) | 全量变更索引、未结束事项和常驻详情；历史详情按索引定位到归档卷 | 未执行规划、未经确认设计 |
 | [schema 摘要](database/schema.md) | development 数据库结构相关任务 | production 实时事实 |
 | [Supabase Review](database/SUPABASE_REVIEW.md) | 专项 Supabase 审查背景和命令 | 默认数据库执行入口 |
 
@@ -56,6 +56,8 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | --- | --- |
 | [协作复盘](ai/LESSONS.md) | Lesson、Pattern Candidate、Rule Candidate 和未采纳方案；不是执行规则 |
 | [历史归档](archive/README.md) | 已结束报告和一次性审计；仅供追溯，不参与当前任务 |
+
+记录型归档仅在常驻索引命中具体 BUG、migration 或 change name 时读取：数据库历史卷位于 [`archive/database/`](archive/database/)，缺陷历史卷位于 [`archive/defects/`](archive/defects/)。默认只打开索引指向的一个卷和一个目标章节。
 
 历史材料不会因为存在于仓库中而自动生效。`docs/archive/**` 中的“当前”“下一步”“待确认”只代表记录当时，不得直接交给 Codex 执行。
 
