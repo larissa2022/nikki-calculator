@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL dump 见：`supabase/schema.sql`。2026-07-17 DB-2 已通过 development live catalog、migration、生成类型、public schema dump、Data API 和事务角色矩阵交叉复核；非 exposed `private_db2` helper 以 migration 为权威定义。
+完整 public SQL dump 见：`supabase/schema.sql`。2026-07-21 DB-3 已通过 development migration、live catalog、public schema dump、生成类型和事务角色矩阵交叉复核；非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -99,6 +99,16 @@
 
 两个 public view 均为 `security_invoker + security_barrier` 且不可写。Data API exposed schemas 实测仅 `public, graphql_public`；`private_db2` 返回 `PGRST106`，不能直接作为 API schema / RPC 面访问。
 
+## DB-3 正式库补全写入闭环
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `complete_existing_clothes_from_pending(...)` | `SECURITY DEFINER`、空 `search_path`、全限定对象；只授予 authenticated / service_role，函数内继续校验 admin / super_admin |
+| 有效贡献者 | 与最终补全数据一致且有真实用户；按来源时间、pending ID、用户 ID 稳定排序，同一用户取最早一条，最多 5 人 |
+| 原子写入 | 同一事务补全正式库、写贡献、每人 `+5`、写回同一批用户衣柜，并将选中 pending 保留为 `approved` |
+| 幂等 | 事件 ID 由正式服装 ID 与排序后的 pending IDs 稳定派生；重试必须复用既有事实且不新增贡献、积分或衣柜项 |
+| 默认拒绝 | `clothing_contributions`、`points_ledger` 仍无客户端底表权限和 RLS policy；只允许受控 RPC 写入 |
+
 ## 主要约束与索引
 
 | 对象 | 类型 | 字段 / 说明 |
@@ -146,7 +156,7 @@
 | auto_link_shadow_suits() | trigger function | 新套装入库后自动关联临时套装名匹配的 clothes / pending_clothes |
 | add_clothes_to_submitter_wardrobes(uuid[], text) | internal function | 审核入库后同步提交人衣柜，仅 `service_role` 可直接执行 |
 | approve_pending_clothes_arbitration(...) | RPC | 管理员审核新服装入库；登录用户可调用，函数内继续校验管理员身份 |
-| complete_existing_clothes_from_pending(...) | RPC | 管理员用待审核记录补全正式库空字段；登录用户可调用，函数内继续校验管理员身份 |
+| complete_existing_clothes_from_pending(...) | RPC | DB-3 正式库空字段补全；函数内校验管理员，原子写贡献、每人 5 分、衣柜和 pending，并支持重试幂等 |
 | deduct_user_quota(uuid) | function | 扣减用户 quota |
 | handle_new_user() | trigger function | auth.users 新用户初始化 profiles |
 | handle_new_user_quota() | trigger function | auth.users 新用户初始化 user_quotas |
@@ -182,6 +192,7 @@
 
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
+- DB-3 只接入正式库空字段补全写路径；development 事务 fixture 已回滚为 0 行，尚未产生持久贡献或积分数据。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
