@@ -27,14 +27,16 @@ This file defines branch and environment mapping. Detailed operating procedures 
 
 ## Standard Release Flow
 
-1. Start feature, fix, and docs work from `develop`.
-2. Merge completed work back into `develop`.
-3. Validate `develop` in the development / preview environment.
-4. Before any `develop -> main` release, run a read-only diff audit and classify changes as documentation, business code, database / Supabase, or configuration / build.
-5. Split high-risk changes into separate PRs instead of mixing them with low-risk documentation.
-6. Apply database migrations to development first; if an already-applied migration needs correction, create a new patch migration.
-7. Before merging to `main`, confirm rollback steps for the frontend deployment, database migration, and affected data.
-8. Merge to `main` only after production environment bindings and rollback notes are confirmed.
+1. Start feature, fix, and docs work from `develop`; keep incomplete or unaccepted features on their task branches.
+2. Merge completed and accepted work back into `develop`, then validate `develop` in the development / preview environment.
+3. Trigger a non-urgent production release when a major module or complete requirement has been accepted, not on a fixed weekly schedule, elapsed-day threshold, or accumulated PR count.
+4. Before creating a `develop -> main` release PR, run a full read-only diff audit and classify changes as documentation, business code, database / Supabase, or configuration / build. List accepted small fixes and optimizations that will ride with the milestone.
+5. Present the requirement milestone, bundled small changes, validation evidence, production impact, and rollback in a release decision card. Create one release PR only after the owner confirms this release.
+6. If incomplete or unaccepted work is already present in `develop`, stop the release and isolate it before proceeding.
+7. Keep high-risk implementation types separated according to `RULES.md`; directly supporting task, defect, acceptance, and database records may travel with their primary PR.
+8. Apply database migrations to development first; if an already-applied migration needs correction, create a new patch migration.
+9. Before merging to `main`, confirm production environment bindings and rollback steps for the frontend deployment, database migration, and affected data, then obtain separate explicit merge approval.
+10. Use an explicitly approved `hotfix/*` flow for urgent production defects; do not bundle non-urgent changes into the hotfix.
 
 ## GitHub CLI Checks
 
