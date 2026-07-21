@@ -64,6 +64,7 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 #### PR 预算与主 PR 复用
 
 - 普通 business 或 docs 目标默认只创建一个以 `develop` 为目标的主 PR；在 merge 前发现的问题、验证结果和直接支持文档继续更新同一分支和 PR。
+- commit、push 或创建 PR 前必须核对变更文件；如果唯一变更为 `docs/ai/CURRENT_TASK.md`，且当前分支不存在对应的 business / database 主变更，立即停止发布链路，不得 commit、push 或创建 PR。`CURRENT_TASK.md` 永远不能作为独立文档交付物或 design-only 交付物。
 - 不为设计阶段、任务启动、验证收口、PR 创建或 PR 合并单独建立状态 PR。设计默认在计划或只读审计中完成；只有设计文档本身是负责人确认的独立交付物时才创建 design-only PR。
 - 同一数据库业务目标默认最多创建两个以 `develop` 为目标的 PR：第一条承载 migration、RPC、RLS、权限和 development 验证；第二条承载业务接入、前端和直接支持文档。
 - 主 PR 应在首次创建时包含稳定的目标、范围、验收、风险和 rollback；merge 前的问题在原 PR 修正，merge 后新发现且可独立复现的缺陷才进入新的 fix PR。

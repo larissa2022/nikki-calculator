@@ -43,6 +43,7 @@
 ## 4. 任务隔离
 
 - 每个 PR 只能有一个主风险类型和一个可独立验收的业务结果；与主变更直接绑定的 `CURRENT_TASK.md`、缺陷状态、验收记录和数据库变更记录属于支持文档，可随主 PR 更新，不视为新增风险类型。
+- 当工作区或拟议 PR 的唯一变更为 `docs/ai/CURRENT_TASK.md`，且当前分支不存在对应的 business / database 主变更时，必须停在 commit 前；禁止 commit、push 和创建 PR。`CURRENT_TASK.md` 永远不能被认定为独立文档交付物。
 - 治理规则文档、database 实现、config 和 release 默认按风险拆分。业务任务不得顺手修改治理规则，支持文档不得成为混入无关变更的理由。
 - 普通 business 或 docs 目标默认最多创建一个以 `develop` 为目标的 PR；同一目标的设计修正、验证结果和收口状态继续更新该 PR。
 - 同一数据库业务目标默认最多创建两个以 `develop` 为目标的 PR：一个用于 migration、RPC、RLS、权限和 development 验证，一个用于业务接入、前端和直接支持文档。
