@@ -1,38 +1,38 @@
 # 当前任务看板
 
-> 最后更新：2026-07-21 16:59（北京时间）
+> 最后更新：2026-07-21 17:14（北京时间）
 
 ## 当前任务
 
-- 减少形式化和碎片化 PR，让一个业务结果在一个主 PR 内完成，并按已验收的需求里程碑决定 production 发布。
+- 补齐管理员仲裁入库的贡献与积分链路：仲裁通过后只奖励与最终数据一致的前 5 名有效提交者，并让贡献、每人 +10 分、pending 状态和衣柜写回保持同一事务、可追溯且可重试。
 
 ## 为什么做
 
-- 历史 PR 中存在设计、实现、验证和收口分拆，以及看板和状态文档单独建 PR 的情况；固定周更或仅按累计量发布也无法适配开发密度和大版本节奏。
+- 贡献 / 积分基础事实、只读查询和正式库空字段补全链路已经落地，但管理员仲裁仍未写入贡献与积分，也缺少服务端候选一致性校验；完成这一项后，才能继续自动入库接入和重审池。
 
 ## 已经完成
 
-- 已确定普通 business / docs 目标最多一个 `develop` PR，数据库业务目标最多两个，并禁止为设计阶段、验证收口或合并状态单独建 PR。
-- 已允许看板、缺陷状态、验收记录和数据库变更记录随对应主 PR 更新，同时保留治理、数据库实现、配置和发布风险隔离。
-- 已将非紧急 production 发布改为需求里程碑触发：先提交发布决策卡，再分别确认 release PR 创建和 production merge。
+- 已建立 `clothing_contributions`、`points_ledger` 及默认拒绝权限，并提供用户本人积分与公开前 3 贡献者只读面。
+- 用户中心已读取权威积分汇总，不再把历史 profile 字段当作当前积分事实。
+- 正式库空字段补全已在 development 实现前 5 有效提交者、每人 +5 分、pending 保留、衣柜写回和重试幂等闭环。
 
 ## 当前进度
 
-- 完成阶段：PR 数量治理和按需求发布规则已生效，后续任务按新预算和发布门禁执行。
+- 调查阶段：已对齐需求、Final 决策、开发顺序和 `origin/develop` 实现，唯一下一需求确定为 DB-4 管理员仲裁接入；尚未创建或应用 migration。
 
 ## 下一步
 
-- 负责人提出下一项业务目标，按新 PR 预算执行并纳入后续 10 个非发布任务观察。
+- 负责人确认是否授权在 development 项目 `tfwejruvdahonacyldrg` 启动 DB-4，并在一个 database 主 PR 内完成 migration、角色矩阵、事务幂等、Advisor、回归和 rollback 验证。
 
 ## 需要负责人决定
 
-- 不需要决定。
+- 是否批准上述 development-only DB-4：只调整 `approve_pending_clothes_arbitration`，不包含自动入库、重审池、历史回填、前端改动、production 或 PR merge。
 
 ## 通用边界
 
-- 不修改业务代码、数据库、配置、GitHub Actions、`main` 或 production，不改写历史 PR。
-- PR merge、release PR 创建、production merge、数据库写入和分支删除仍需各自的单独确认；本阶段不引入自动合并或 CI 门禁。
+- 数据库与 Supabase 写入、migration apply 必须在确认 development project ref、影响、验证和 rollback 后单独授权；production 保持不动。
+- 后续数据库实现与直接支持文档使用同一个 database 主 PR；自动入库 DB-5 和重审池不提前混入。
 
 ## Rollback
 
-- 如治理规则不符合预期，revert 本次 docs-only governance commit；不改动历史 PR、业务实现或 production 数据。
+- 如 DB-4 已在 development 应用，新增 patch migration 恢复旧函数定义与最小 grant；已产生的贡献事实不删除，错误积分追加等额负数流水，任一步证据不完整即停止。
