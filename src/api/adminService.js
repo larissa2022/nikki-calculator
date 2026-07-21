@@ -44,7 +44,8 @@ const createFriendlyCompleteExistingError = (error) => {
         if (rawMessage.includes('套装关联已有非空值')) return '套装关联冲突'
         if (rawMessage.includes('临时套装名已有非空值')) return '临时套装名冲突'
         if (rawMessage.includes('标签已有非空值')) return '标签冲突'
-        if (rawMessage.includes('不属于本次正式库补全范围')) return '待审核记录不匹配'
+        if (rawMessage.includes('不属于本次正式库补全范围')
+            || rawMessage.includes('与本次正式库补全最终数据不一致')) return '待审核记录不匹配'
         if (rawMessage.includes('通过数量异常')) return '待审核状态已变化'
         if (rawMessage.includes('没有补全正式库权限')) return '权限不足'
         if (rawMessage.includes('正式库服装不存在')) return '正式库记录不匹配'

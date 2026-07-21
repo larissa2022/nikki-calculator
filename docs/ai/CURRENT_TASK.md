@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-21 13:07（北京时间）
+> 最后更新：2026-07-21 14:47（北京时间）
 
 ## 当前任务
 
@@ -17,18 +17,21 @@
 - DB-3 两个 migration 已应用到 development：正式库补全、贡献、每人 5 分、衣柜写回和 pending 通过保持同一事务；重试 patch 未改写已应用 migration 历史。
 - development 完整事务矩阵已通过：普通用户拒绝、admin / super_admin、前 5 去重、反序重试幂等、DB-2 汇总和故障回滚均符合契约；合成 fixture 全部 rollback，贡献与积分事实表恢复为 0 行。
 - schema / types、Security / Performance Advisor、7 项 Node tests 与生产构建已复核；已准备一条不含积分的 development 人工验收夹具。
+- 负责人已在 Preview 触发真实补全，但页面返回未分类的“补全正式库失败”；失败后 development 回读仍为 pending、正式服装空字段、贡献 0、积分 0、衣柜未写入，事务未留下半完成数据。
+- 已定位为审核端只生成 5 个非零属性键，而原 pending 使用 10 个标准属性键（含反向属性 0 分）；数据库严格 JSON 核对将语义相同的数据拒绝。提交端与审核端现已统一标准分值构造，数据库门禁未放宽。
+- 本地测试 8 项与生产构建通过；同一真实验收夹具的 development 事务 rehearsal 成功生成 1 条贡献、`+5` 积分和衣柜写回，并在验证后整体 rollback，验收数据仍保持初始状态。
 
 ## 当前进度
 
-- 验证阶段：实现、development 自动验证和 Draft [PR #87](https://github.com/larissa2022/nikki-calculator/pull/87) 已发布，Preview 检查通过；业务状态保持待负责人通过 development / Preview 完成人工验收。
+- 验证阶段：根因与最小修复已由真实数据事务验证，正在更新 Draft PR #87 并等待新 Preview 检查。
 
 ## 下一步
 
-- 负责人使用验收夹具完成一次正式库空字段补全，并回传结果或异常。
+- 发布修复后的 Preview，通知负责人用同一夹具重新验收。
 
 ## 需要负责人决定
 
-- 当前只需反馈人工验收结果；是否 merge、是否清理验收数据均在结果确认后单独决定。
+- 暂不需要负责人重复尝试；修复后的 Preview 就绪后再通知复验，PR merge 和数据清理仍需单独决定。
 
 ## 通用边界
 
