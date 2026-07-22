@@ -122,9 +122,9 @@ onMounted(() => {
 
 // 点击仲裁按钮：调用大脑处理数据，并处理界面的滚动和搜索框更新
 const handleClusteredItem = (group) => {
-  const matchedSuitId = processClusteredItem(group)
-  const matchedSuit = suitList.value.find(s => s.id === matchedSuitId)
-  suitSearchText.value = matchedSuit ? `《${matchedSuit.name}》` : ''
+  const pendingSuitState = processClusteredItem(group)
+  const matchedSuit = suitList.value.find(s => s.id === pendingSuitState.suitId)
+  suitSearchText.value = matchedSuit ? `《${matchedSuit.name}》` : pendingSuitState.searchText
   window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
 }
 
