@@ -4,6 +4,7 @@ import { adminService } from '../api/adminService'
 import { suitService } from '../api/suitService'
 import { ATTRIBUTE_PAIRS, createClothesEntryFormState, normalizeClothingTags } from '../utils/gameConstants'
 import { buildClothingScoresFromForm } from '../utils/clothingScores'
+import { restorePendingSuitState } from '../utils/pendingSuitState'
 import { isAdminRole } from '../utils/roles'
 // 🌟 引入全局数值大脑
 import { GRADE_OPTIONS, SCORE_MATRIX, getBroadCategory } from './useScoreEngine'
@@ -283,8 +284,9 @@ export function useAudit() {
         newClothes.game_id = bestItem.game_id || ''
         newClothes.category = bestItem.category
         newClothes.stars = Number(getMostFrequent(items.map(i => i.stars)))
-        newClothes.suit_id = bestItem.suit_id || ''
-        newClothes.suit_status = bestItem.suit_id ? 'existing' : ''
+        const pendingSuitState = restorePendingSuitState(bestItem)
+        newClothes.suit_id = pendingSuitState.suitId
+        newClothes.suit_status = pendingSuitState.status
         newClothes.existingClothesId = existingClothes?.id || ''
         newClothes.requiresManualReview = requiresManualReview
 
@@ -322,8 +324,8 @@ export function useAudit() {
                 newClothes[ap.gKey] = getMostFrequent(votes.map(v => v.g))
             })
         }
-        // 返回匹配到的套装 ID，供 UI 层处理显示逻辑
-        return newClothes.suit_id
+        // 返回完整套装状态，供 UI 层同步已有套装、临时套装和纯散件显示。
+        return pendingSuitState
     }
 
     // 6. 最终执行入库

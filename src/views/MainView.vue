@@ -6,6 +6,7 @@ import ImportZone from '../components/ImportZone.vue'
 import WardrobeGrid from '../components/WardrobeGrid.vue'
 import SuitGallery from '../components/SuitGallery.vue'
 import UserProfile from '../components/UserProfile.vue'
+import { readMainTab, writeMainTab } from '../utils/navigationState'
 
 const props = defineProps({
   currentUser: Object, 
@@ -20,11 +21,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
-const currentTab = ref('calculator')
+const currentTab = ref(readMainTab())
 
 const switchTab = (tab) => {
-  currentTab.value = tab
-  if (tab === 'suits') emit('refresh-catalog')
+  const nextTab = writeMainTab(tab)
+  currentTab.value = nextTab
+  if (nextTab === 'suits') emit('refresh-catalog')
 }
 </script>
 
@@ -34,7 +36,7 @@ const switchTab = (tab) => {
       :user="currentUser" 
       :profile="userProfile" 
       @open-login="emit('open-login')" 
-      @open-profile="currentTab = 'profile'" 
+      @open-profile="switchTab('profile')"
     />
 
     <header>

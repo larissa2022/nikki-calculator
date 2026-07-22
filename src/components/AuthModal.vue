@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, onUnmounted } from 'vue'
 import { supabase } from '@/api/supabase'
+import { getAuthTimeoutRecovery } from '@/utils/authTimeout'
 
 const emit = defineEmits(['close'])
 const currentMode = ref('login')
@@ -107,6 +108,7 @@ const resendOtp = async () => {
 // 🌟 4. 核心鉴权逻辑 (登录/注册/重置)
 // ==========================================
 const submitAuth = async () => {
+  const submittedMode = currentMode.value
   const cleanEmail = authForm.email?.trim() || ''
   const cleanOtp = authForm.otpCode?.replace(/\s+/g, '') || ''
   const cleanPassword = authForm.password?.trim() || ''
@@ -185,7 +187,18 @@ const submitAuth = async () => {
   } catch (err) {
     isAuthLoading.value = false
     handleAuthErrorState(err)
-    showMessage(err.message.includes('超时') ? err.message : getErrorMessage(err), 'error')
+    if (err.message.includes('超时')) {
+      const recovery = getAuthTimeoutRecovery(submittedMode)
+      currentMode.value = recovery.nextMode
+      if (recovery.clearSensitiveFields) {
+        authForm.password = ''
+        authForm.confirmPassword = ''
+        authForm.otpCode = ''
+      }
+      showMessage(recovery.message, recovery.type)
+      return
+    }
+    showMessage(getErrorMessage(err), 'error')
   }
 }
 </script>
@@ -277,6 +290,7 @@ const submitAuth = async () => {
 .feedback-banner { padding: 10px; border-radius: 8px; font-size: 13px; font-weight: bold; margin-bottom: 15px; text-align: center; animation: slideDown 0.2s ease-out; }
 .feedback-banner.error { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
 .feedback-banner.success { background: #ecfdf5; color: #10b981; border: 1px solid #a7f3d0; }
+.feedback-banner.warning { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 
 .modal-content input { width: 100%; padding: 12px; margin-bottom: 15px; border: 2px solid #f1f5f9; border-radius: 12px; box-sizing: border-box; font-size: 14px; font-weight: bold; outline: none; transition: border-color 0.2s; color: #1e293b; background: #f8fafc; }
 .modal-content input:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
