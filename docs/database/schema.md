@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`。2026-07-22 DB-5 已在 development 应用，目标 RPC definition、owner、空 `search_path` 与 grants 已回读；TypeScript 类型重新生成后与现文件一致。CLI 全量 dump 因数据库 TLS 连接中断未完成，因此 SQL 快照只定向同步本次目标 RPC，其他对象仍沿用 DB-4 后快照。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`。2026-07-22 DB-5 已在 development 应用，目标 RPC definition、owner、空 `search_path` 与 grants 已回读；22:23（北京时间）通过 development `tfwejruvdahonacyldrg` 的 IPv4 pooler 完成全量 public schema dump，原始输出 SHA-256 为 `F85C5DFC8F115F26450EE4BDBD6701381D802C4E878D859D771E32A0195D7243`。仓库快照只移除末尾多余空行，SQL 语义不变；TypeScript 类型重新生成后与现文件一致。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
