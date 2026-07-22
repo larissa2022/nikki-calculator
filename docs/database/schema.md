@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL dump 见：`supabase/schema.sql`。2026-07-21 DB-4 已通过 development migration、live catalog 和事务角色矩阵复核；RPC 签名未变化，类型生成与 CLI dump 因连接器传输失败未刷新，函数快照由已应用 migration 与 live definition 交叉核对。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`。2026-07-22 DB-5 已在 development 应用，目标 RPC definition、owner、空 `search_path` 与 grants 已回读；TypeScript 类型重新生成后与现文件一致。CLI 全量 dump 因数据库 TLS 连接中断未完成，因此 SQL 快照只定向同步本次目标 RPC，其他对象仍沿用 DB-4 后快照。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -174,7 +174,7 @@
 | is_admin_or_super_admin() | function | 判断当前用户是否为管理员或最高站长 |
 | is_super_admin() | function | 判断当前用户是否为 super_admin |
 | normalize_known_clothing_tags(text) | function | 清洗已知服装标签 |
-| submit_clothing_contribution(...) | RPC | 缺失项提交与 5 次一致自动入库 |
+| submit_clothing_contribution(...) | RPC | DB-5 缺失项提交与 5 位不同用户一致后自动入库；保留来源 pending，原子写前 5 位贡献、每人 10 分和衣柜 |
 | update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
 
