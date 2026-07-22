@@ -12,7 +12,7 @@
 
 ## 已经完成
 
-- 已生成并向 development 应用窄范围 DB-5 migration，同时准备事务测试；RPC 参数与前端调用保持不变，未新增表、RLS 或前端功能。
+- 已生成并向 development 应用窄范围 DB-5 migration，同时准备事务测试并创建 Draft PR #97；RPC 参数与前端调用保持不变，未新增表、RLS 或前端功能。
 
 ## 当前进度
 
