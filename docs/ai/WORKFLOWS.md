@@ -82,6 +82,13 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 
 停止点必须写成可验证的具体边界，例如“完成合并前审计，停在 PR merge 前”或“在已获合并授权后完成远端回读，停在下一业务任务前”，不得只写“继续处理”或“执行下一步”。当用户只说“继续”或“下一步”且存在多个候选阶段时，先按 `CURRENT_TASK.md` 的第一条下一步执行，并在启动回执中声明本轮选择的停止点；不得默认跨过新的敏感操作授权门禁。
 
+涉及验收数据或任务收尾时，五项执行单还必须在“允许修改 / 禁止事项”中精确列出生命周期和清理对象：
+
+- 数据：环境、project ref、账号角色、固定 ID / 名称、允许状态、依赖停止条件，以及验收后保留还是条件式清理。
+- 文件：绝对路径或仓库内精确路径、是否可再生成、恢复方式。
+- 分支：完整分支名、本地 / 远端范围、删除前的合并与恢复 commit 条件。
+- 保留项：审计事实、rollback 快照、`.env*`、项目链接、依赖和无关历史分支。
+
 旧对话只保留仍然有效的事实和授权，不复制完整历史流水。
 
 ### 1.5 低 Token 原则
@@ -143,6 +150,33 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 - 若当前 PR 修改看板，提交 merge 审核前必须确认看板描述的是合并后仍成立的稳定状态，不得保留“等待合并本 PR”之类一合并就失效的短时状态。
 - 看板、缺陷状态、验收记录和数据库变更记录应随对应主 PR 更新；除非文档本身是独立交付物，不为这些支持文档另开 PR。
 
+修改看板的分支在 commit、push、PR 创建和 merge 审核前运行以下机械门禁；命中短时 PR 状态或任一栏目超过 3 条时失败：
+
+```powershell
+$taskFile = 'docs/ai/CURRENT_TASK.md'
+$changedFiles = @(
+  git diff --name-only origin/develop...HEAD
+  git diff --name-only
+  git diff --cached --name-only
+) | Sort-Object -Unique
+if ($changedFiles -contains $taskFile) {
+  $taskText = Get-Content -LiteralPath $taskFile -Raw -Encoding utf8
+  $transientPattern = '(?im)^.*(?:等待.*合并|授权.*合并|是否.*合并|PR\s*#\d+).*$'
+  if ([regex]::IsMatch($taskText, $transientPattern)) {
+    throw 'CURRENT_TASK 包含合并后会失效的 PR 短时状态'
+  }
+
+  foreach ($section in [regex]::Matches($taskText, '(?ms)^##\s+([^\r\n]+)\r?\n(.*?)(?=^##\s+|\z)')) {
+    $bulletCount = [regex]::Matches($section.Groups[2].Value, '(?m)^-\s+').Count
+    if ($bulletCount -gt 3) {
+      throw "CURRENT_TASK 栏目超出 3 条：$($section.Groups[1].Value)"
+    }
+  }
+}
+```
+
+该门禁只检查可机械识别的下限；执行者仍需确认看板的业务语义在合并后成立。
+
 ### 1.7 授权、异常与阶段收口
 
 - PR merge 等敏感操作只在完成一次最新只读审计后请求用户单独确认；等待确认期间不重复轮询未变化的远端状态。
@@ -173,6 +207,16 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 
 最终回传分别说明数据库、分支和文件的清理结果；保留内容必须说明其不是废弃数据或受何种门禁保护。
 
+当用户同时要求清理多类对象时，先把自然语言改写成精确清单再执行，例如：
+
+```text
+数据库：development pending 55 / 56 / 57；仅在固定身份、pending 状态且无审计链时删除。
+文件：删除可再生成的 dist/；保留 tmp/ 中的备份与 rollback 快照。
+分支：删除已合并的 fix/example（本地和远端）；其他历史分支不动。
+```
+
+“删除废弃数据文件分支”之类未分隔对象的表述不能直接作为删除清单。
+
 ### 1.10 人工验收收口包
 
 负责人完成人工验收后，将同一业务结果的收口动作合并为一个批次，避免反复修改看板和 PR 描述：
@@ -182,6 +226,13 @@ PR merge、`main`、production、database / Supabase / Vercel 写入、env、mig
 3. 同步更新 PR 描述中的验收、风险和 rollback，并立即核对 changed files、最终 diff、checks 和远端分支 SHA。
 4. 远端回读与仓库提交属于同一收口批次，但 PR 描述不是 Git 文件，不得虚构为已包含在 commit 中。
 5. 若收口后唯一剩余差异是 `CURRENT_TASK.md`，且没有对应 business / database 主变更，停止发布链路，不得 commit、push 或创建 PR。
+
+准备人工验收数据时同步确定完整生命周期：
+
+1. 造数前记录 environment、project ref、测试账号角色、精确行身份、预计数量和 rollback。
+2. 如负责人同时授权条件式清理，把允许状态、依赖 / 审计链停止条件、事务数量断言和删除后回读写入同一任务单。
+3. 验收后仍必须重新读取当前状态；条件完全匹配才执行清理，已审核、身份变化或形成审计链时保留并报告。
+4. 提前授权只减少重复对话，不减少前值检查、事务数量检查、后检或 rollback 依据。
 
 ## 2. 三档任务流
 
@@ -320,7 +371,8 @@ ChatGPT 在执行前完成任务级预审批：
 3. 按 docs、business、database、config 分类。
 4. 检查是否包含 `src/**`、`supabase/**`、migration、`package*.json`、构建配置、`.env*` 或 production 脚本。
 5. 核对 PR base、head、状态、mergeable、commits 和 checks。
-6. 回传风险、rollback 和未确认事项。
+6. PR 修改 `CURRENT_TASK.md` 时，运行 1.6 节机械门禁并人工确认其为合并后稳定状态。
+7. 回传风险、rollback 和未确认事项。
 
 只读工具可使用 GitHub 连接器或：
 
@@ -392,6 +444,16 @@ git diff
 同一数据库业务目标默认最多使用两个以 `develop` 为目标的 PR：数据库实现与 development 验证一条，业务接入、前端和直接支持文档一条。数据库变更记录随数据库 PR 更新，不另建收口 PR；超预算拆分必须在实施前取得负责人确认。
 
 `psql` 即使只计划执行查询，也按高风险数据库入口处理，必须明确连接环境和 SQL 范围。
+
+### Dashboard 浏览器降级
+
+优先使用已授权的 Supabase API / MCP 或 CLI。只有这些入口出现工具能力或传输故障、且目标操作已经授权时，才按 1.7 节最多切换一次到已登录 Dashboard；不得为了绕过权限或门禁改用浏览器。
+
+- 打开 Dashboard 前确认 project ref 与目标环境，并确保页面未启用 Chrome 自动翻译；翻译扩展可能改变 SQL 编辑器 DOM 并导致页面崩溃。
+- 每个查询使用新的空白 snippet；填入后核对行数、首行和末行，禁止在存在历史 SQL 残留的编辑器中执行。
+- 只读预检优先合并成一次聚合查询，只返回计数、分类和最多 10 条异常样本，不把完整 DOM 带入对话。
+- 写操作提交后若页面崩溃、超时或结果不确定，不得重复执行写入；重新打开干净页面，只用独立只读查询确认当前事实，再决定下一步。
+- 完成后关闭任务创建的 Dashboard 页签，不修改或关闭用户原有页签。
 
 ## 11. 敏感命令分类
 
