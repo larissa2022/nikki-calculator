@@ -80,23 +80,10 @@ $$;
 ALTER FUNCTION "public"."add_clothes_to_submitter_wardrobes"("p_user_ids" "uuid"[], "p_clothes_id" "text") OWNER TO "postgres";
 
 
-create or replace function public.approve_pending_clothes_arbitration(
-  p_id text,
-  p_name text,
-  p_game_id text,
-  p_category text,
-  p_stars integer,
-  p_scores jsonb,
-  p_suit_id uuid default null,
-  p_temp_suit_name text default null,
-  p_tags text default null,
-  p_pending_ids bigint[] default '{}'
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
+CREATE OR REPLACE FUNCTION "public"."approve_pending_clothes_arbitration"("p_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid" DEFAULT NULL::"uuid", "p_temp_suit_name" "text" DEFAULT NULL::"text", "p_tags" "text" DEFAULT NULL::"text", "p_pending_ids" bigint[] DEFAULT '{}'::bigint[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
 declare
   v_pending_ids bigint[] := coalesce(p_pending_ids, '{}');
   v_sorted_pending_ids bigint[] := '{}';
@@ -124,32 +111,32 @@ declare
   v_index integer;
 begin
   if not public.is_admin_or_super_admin() then
-    raise exception '娌℃湁浠茶鍏ュ簱鏉冮檺';
+    raise exception '没有仲裁入库权限';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_id, '')), '') is null then
-    raise exception '鏈嶈 ID 涓嶈兘涓虹┖';
+    raise exception '服装 ID 不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_name, '')), '') is null then
-    raise exception '鏈嶈鍚嶇О涓嶈兘涓虹┖';
+    raise exception '服装名称不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_category, '')), '') is null then
-    raise exception '鍒嗙被閮ㄤ綅涓嶈兘涓虹┖';
+    raise exception '分类部位不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_game_id, '')), '') is null
     or pg_catalog.btrim(p_game_id) !~ '^[0-9]+$' then
-    raise exception '鐭紪鍙峰繀椤讳负鏁板瓧';
+    raise exception '短编号必须为数字';
   end if;
 
   if p_stars is null then
-    raise exception '鏄熺骇涓嶈兘涓虹┖';
+    raise exception '星级不能为空';
   end if;
 
   if p_scores is null then
-    raise exception '灞炴€у垎鍊间笉鑳戒负绌?;
+    raise exception '属性分值不能为空';
   end if;
 
   select coalesce(pg_catalog.array_agg(requested.pending_id order by requested.pending_id), '{}'::bigint[])
@@ -163,11 +150,11 @@ begin
   v_requested_pending_count := pg_catalog.cardinality(v_sorted_pending_ids);
 
   if v_requested_pending_count = 0 then
-    raise exception '寰呭鏍歌褰曚笉鑳戒负绌?;
+    raise exception '待审核记录不能为空';
   end if;
 
   if v_requested_pending_count <> pg_catalog.cardinality(v_pending_ids) then
-    raise exception '寰呭鏍歌褰曞寘鍚┖鍊兼垨閲嶅 ID';
+    raise exception '待审核记录包含空值或重复 ID';
   end if;
 
   v_event_hash := pg_catalog.md5(
@@ -216,11 +203,11 @@ begin
   where pending.id = any(v_sorted_pending_ids);
 
   if v_requested_pending_count <> pg_catalog.cardinality(v_sorted_pending_ids) then
-    raise exception '瀛樺湪鎵句笉鍒扮殑寰呭鏍歌褰?;
+    raise exception '存在找不到的待审核记录';
   end if;
 
   if v_matched_pending_count <> v_requested_pending_count then
-    raise exception '瀛樺湪涓庢湰娆＄鐞嗗憳浠茶鏈€缁堟暟鎹笉涓€鑷寸殑寰呭鏍歌褰曪紝宸叉嫆缁濆叆搴?;
+    raise exception '存在与本次管理员仲裁最终数据不一致的待审核记录，已拒绝入库';
   end if;
 
   with earliest_per_user as (
@@ -274,7 +261,7 @@ begin
         is distinct from nullif(pg_catalog.btrim(coalesce(p_temp_suit_name, '')), '')
       or nullif(pg_catalog.btrim(coalesce(v_existing_clothes.tags, '')), '')
         is distinct from nullif(pg_catalog.btrim(coalesce(p_tags, '')), '') then
-      raise exception '寰呭鏍歌褰曞凡閫氳繃锛屼絾姝ｅ紡鏈嶈浜嬪疄涓庢湰娆′徊瑁佷笉涓€鑷达紱绂佹鑷姩鍥炲～';
+      raise exception '待审核记录已通过，但正式服装事实与本次仲裁不一致；禁止自动回填';
     end if;
 
     select pg_catalog.count(*)::integer
@@ -318,7 +305,7 @@ begin
       or v_matching_contribution_count <> v_effective_contributor_count
       or v_matching_points_count <> v_effective_contributor_count
       or v_matching_wardrobe_count <> v_effective_contributor_count then
-      raise exception '寰呭鏍歌褰曞凡閫氳繃锛屼絾璐＄尞銆佺Н鍒嗘垨琛ｆ煖浜嬪疄涓嶅畬鏁达紱绂佹鑷姩鍥炲～锛岃浜哄伐鏍稿';
+      raise exception '待审核记录已通过，但贡献、积分或衣柜事实不完整；禁止自动回填，请人工核对';
     end if;
 
     return pg_catalog.jsonb_build_object(
@@ -336,11 +323,11 @@ begin
   end if;
 
   if v_pending_status_count <> v_requested_pending_count or v_approved_status_count <> 0 then
-    raise exception '寰呭鏍歌褰曠姸鎬佷笉涓€鑷达紝璇峰埛鏂板鏍搁〉鍚庨噸璇?;
+    raise exception '待审核记录状态不一致，请刷新审核页后重试';
   end if;
 
   if v_clothes_exists then
-    raise exception '姝ｅ紡搴撳凡瀛樺湪璇ユ湇瑁咃紝璇峰埛鏂板悗鍙板悗浣跨敤姝ｅ紡搴撹ˉ鍏ㄦ垨閲嶅娴佺▼';
+    raise exception '正式库已存在该服装，请刷新后台后使用正式库补全或重审流程';
   end if;
 
   if exists (
@@ -349,7 +336,7 @@ begin
     where contribution.event_id = v_event_id
       or contribution.source_pending_id = any(v_sorted_pending_ids)
   ) then
-    raise exception '鏈鏉ユ簮宸插瓨鍦ㄨ础鐚簨瀹烇紝浣嗗緟瀹℃牳鐘舵€佹湭瀹屾垚锛涜浜哄伐鏍稿';
+    raise exception '本次来源已存在贡献事实，但待审核状态未完成；请人工核对';
   end if;
 
   insert into public.clothes (
@@ -426,7 +413,7 @@ begin
   if v_contribution_count <> v_effective_contributor_count
     or v_points_count <> v_effective_contributor_count
     or v_wardrobe_count <> v_effective_contributor_count then
-    raise exception '璐＄尞銆佺Н鍒嗘垨琛ｆ煖鍐欏洖鏁伴噺寮傚父锛屽凡鍥炴粴鏈浠茶';
+    raise exception '贡献、积分或衣柜写回数量异常，已回滚本次仲裁';
   end if;
 
   update public.pending_clothes
@@ -437,7 +424,7 @@ begin
   get diagnostics v_approved_pending_count = row_count;
 
   if v_approved_pending_count <> v_requested_pending_count then
-    raise exception '寰呭鏍歌褰曢€氳繃鏁伴噺寮傚父锛屽凡鍥炴粴鏈浠茶';
+    raise exception '待审核记录通过数量异常，已回滚本次仲裁';
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -453,11 +440,14 @@ begin
     'wardrobe_updated_count', v_wardrobe_count
   );
 end;
-$$;
+$_$;
 
-alter function public.approve_pending_clothes_arbitration(text, text, text, text, integer, jsonb, uuid, text, text, bigint[]) owner to postgres;
 
-comment on function public.approve_pending_clothes_arbitration(text, text, text, text, integer, jsonb, uuid, text, text, bigint[]) is 'DB-4：管理员仲裁入库，同事务记录前 5 位有效贡献者、每人 10 分、衣柜写回和 pending 通过；服务端核对候选且重复请求幂等。';
+ALTER FUNCTION "public"."approve_pending_clothes_arbitration"("p_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text", "p_pending_ids" bigint[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."approve_pending_clothes_arbitration"("p_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text", "p_pending_ids" bigint[]) IS 'DB-4：管理员仲裁入库，同事务记录前 5 位有效贡献者、每人 10 分、衣柜写回和 pending 通过；服务端核对候选且重复请求幂等。';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."auto_link_shadow_suits"() RETURNS "trigger"
@@ -511,32 +501,32 @@ declare
   v_has_effective_completion boolean := false;
 begin
   if not public.is_admin_or_super_admin() then
-    raise exception '娌℃湁琛ュ叏姝ｅ紡搴撴潈闄?;
+    raise exception '没有补全正式库权限';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_existing_id, '')), '') is null then
-    raise exception '姝ｅ紡搴撴湇瑁?ID 涓嶈兘涓虹┖';
+    raise exception '正式库服装 ID 不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_name, '')), '') is null then
-    raise exception '鏈嶈鍚嶇О涓嶈兘涓虹┖';
+    raise exception '服装名称不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_category, '')), '') is null then
-    raise exception '鍒嗙被閮ㄤ綅涓嶈兘涓虹┖';
+    raise exception '分类部位不能为空';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(p_game_id, '')), '') is null
     or pg_catalog.btrim(p_game_id) !~ '^[0-9]+$' then
-    raise exception '鐭紪鍙峰繀椤讳负鏁板瓧';
+    raise exception '短编号必须为数字';
   end if;
 
   if p_stars is null then
-    raise exception '鏄熺骇涓嶈兘涓虹┖';
+    raise exception '星级不能为空';
   end if;
 
   if p_scores is null then
-    raise exception '灞炴€у垎鍊间笉鑳戒负绌?;
+    raise exception '属性分值不能为空';
   end if;
 
   select coalesce(pg_catalog.array_agg(requested.pending_id order by requested.pending_id), '{}'::bigint[])
@@ -550,11 +540,11 @@ begin
   v_requested_pending_count := pg_catalog.cardinality(v_sorted_pending_ids);
 
   if v_requested_pending_count = 0 then
-    raise exception '寰呭鏍歌褰曚笉鑳戒负绌?;
+    raise exception '待审核记录不能为空';
   end if;
 
   if v_requested_pending_count <> pg_catalog.cardinality(v_pending_ids) then
-    raise exception '寰呭鏍歌褰曞寘鍚┖鍊兼垨閲嶅 ID';
+    raise exception '待审核记录包含空值或重复 ID';
   end if;
 
   v_event_hash := pg_catalog.md5(
@@ -580,40 +570,40 @@ begin
   for update;
 
   if not found then
-    raise exception '姝ｅ紡搴撴湇瑁呬笉瀛樺湪锛屾垨鍚嶇О鍒嗙被涓庡緟瀹℃牳璁板綍涓嶄竴鑷?;
+    raise exception '正式库服装不存在，或名称分类与待审核记录不一致';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(v_existing_clothes.game_id, '')), '') is not null
     and pg_catalog.btrim(v_existing_clothes.game_id) is distinct from pg_catalog.btrim(p_game_id) then
-    raise exception '姝ｅ紡搴撶煭缂栧彿宸叉湁闈炵┖鍊间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库短编号已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(v_existing_clothes.stars, '')), '') is not null
     and pg_catalog.btrim(v_existing_clothes.stars) is distinct from p_stars::text then
-    raise exception '姝ｅ紡搴撴槦绾у凡鏈夐潪绌哄€间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库星级已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   if v_existing_clothes.scores is not null
     and v_existing_clothes.scores is distinct from p_scores then
-    raise exception '姝ｅ紡搴撳睘鎬у垎鍊煎凡鏈夐潪绌哄€间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库属性分值已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   if v_existing_clothes.suit_id is not null
     and p_suit_id is not null
     and v_existing_clothes.suit_id is distinct from p_suit_id then
-    raise exception '姝ｅ紡搴撳瑁呭叧鑱斿凡鏈夐潪绌哄€间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库套装关联已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(v_existing_clothes.temp_suit_name, '')), '') is not null
     and nullif(pg_catalog.btrim(coalesce(p_temp_suit_name, '')), '') is not null
     and pg_catalog.btrim(v_existing_clothes.temp_suit_name) is distinct from pg_catalog.btrim(p_temp_suit_name) then
-    raise exception '姝ｅ紡搴撲复鏃跺瑁呭悕宸叉湁闈炵┖鍊间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库临时套装名已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   if nullif(pg_catalog.btrim(coalesce(v_existing_clothes.tags, '')), '') is not null
     and nullif(pg_catalog.btrim(coalesce(p_tags, '')), '') is not null
     and pg_catalog.btrim(v_existing_clothes.tags) is distinct from pg_catalog.btrim(p_tags) then
-    raise exception '姝ｅ紡搴撴爣绛惧凡鏈夐潪绌哄€间笖涓庡緟琛ュ叏鍐呭涓嶄竴鑷达紝闇€杩涘叆閲嶅 / 闄鍥㈣矾寰?;
+    raise exception '正式库标签已有非空值且与待补全内容不一致，需进入重审 / 陪审团路径';
   end if;
 
   perform pending.id
@@ -648,11 +638,11 @@ begin
   where pending.id = any(v_sorted_pending_ids);
 
   if v_requested_pending_count <> pg_catalog.cardinality(v_sorted_pending_ids) then
-    raise exception '瀛樺湪鎵句笉鍒扮殑寰呭鏍歌褰?;
+    raise exception '存在找不到的待审核记录';
   end if;
 
   if v_matched_pending_count <> v_requested_pending_count then
-    raise exception '瀛樺湪涓庢湰娆℃寮忓簱琛ュ叏鏈€缁堟暟鎹笉涓€鑷寸殑寰呭鏍歌褰曪紝宸叉嫆缁濊嚜鍔ㄩ€氳繃';
+    raise exception '存在与本次正式库补全最终数据不一致的待审核记录，已拒绝自动通过';
   end if;
 
   with earliest_per_user as (
@@ -728,7 +718,7 @@ begin
       or v_matching_contribution_count <> v_effective_contributor_count
       or v_matching_points_count <> v_effective_contributor_count
       or v_matching_wardrobe_count <> v_effective_contributor_count then
-      raise exception '寰呭鏍歌褰曞凡閫氳繃锛屼絾璐＄尞銆佺Н鍒嗘垨琛ｆ煖浜嬪疄涓嶅畬鏁达紱绂佹鑷姩鍥炲～锛岃浜哄伐鏍稿';
+      raise exception '待审核记录已通过，但贡献、积分或衣柜事实不完整；禁止自动回填，请人工核对';
     end if;
 
     return pg_catalog.jsonb_build_object(
@@ -746,7 +736,7 @@ begin
   end if;
 
   if v_pending_status_count <> v_requested_pending_count or v_approved_status_count <> 0 then
-    raise exception '寰呭鏍歌褰曠姸鎬佷笉涓€鑷达紝璇峰埛鏂板鏍搁〉鍚庨噸璇?;
+    raise exception '待审核记录状态不一致，请刷新审核页后重试';
   end if;
 
   v_has_effective_completion :=
@@ -764,7 +754,7 @@ begin
     );
 
   if not v_has_effective_completion then
-    raise exception '姝ｅ紡搴撴病鏈夊彲鐢辨湰娆¤姹傝ˉ鍏ㄧ殑绌哄瓧娈碉紝绂佹閲嶅濂栧姳';
+    raise exception '正式库没有可由本次请求补全的空字段，禁止重复奖励';
   end if;
 
   if exists (
@@ -773,7 +763,7 @@ begin
     where contribution.event_id = v_event_id
       or contribution.source_pending_id = any(v_sorted_pending_ids)
   ) then
-    raise exception '鏈鏉ユ簮宸插瓨鍦ㄨ础鐚簨瀹烇紝浣嗗緟瀹℃牳鐘舵€佹湭瀹屾垚锛涜浜哄伐鏍稿';
+    raise exception '本次来源已存在贡献事实，但待审核状态未完成；请人工核对';
   end if;
 
   update public.clothes
@@ -853,7 +843,7 @@ begin
   if v_contribution_count <> v_effective_contributor_count
     or v_points_count <> v_effective_contributor_count
     or v_wardrobe_count <> v_effective_contributor_count then
-    raise exception '璐＄尞銆佺Н鍒嗘垨琛ｆ煖鍐欏洖鏁伴噺寮傚父锛屽凡鍥炴粴鏈琛ュ叏';
+    raise exception '贡献、积分或衣柜写回数量异常，已回滚本次补全';
   end if;
 
   update public.pending_clothes
@@ -864,7 +854,7 @@ begin
   get diagnostics v_approved_pending_count = row_count;
 
   if v_approved_pending_count <> v_requested_pending_count then
-    raise exception '寰呭鏍歌褰曢€氳繃鏁伴噺寮傚父锛屽凡鍥炴粴鏈琛ュ叏';
+    raise exception '待审核记录通过数量异常，已回滚本次补全';
   end if;
 
   return pg_catalog.jsonb_build_object(
@@ -886,7 +876,7 @@ $_$;
 ALTER FUNCTION "public"."complete_existing_clothes_from_pending"("p_existing_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text", "p_pending_ids" bigint[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "public"."complete_existing_clothes_from_pending"("p_existing_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text", "p_pending_ids" bigint[]) IS 'DB-3锛氭寮忓簱绌哄瓧娈佃ˉ鍏紝鍚屼簨鍔¤褰曞墠 5 浣嶆湁鏁堣础鐚€呫€佹瘡浜?5 鍒嗐€佽。鏌滃啓鍥炲拰 pending 閫氳繃锛涢噸澶嶈姹傚箓绛夈€?;
+COMMENT ON FUNCTION "public"."complete_existing_clothes_from_pending"("p_existing_id" "text", "p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text", "p_pending_ids" bigint[]) IS 'DB-3：正式库空字段补全，同事务记录前 5 位有效贡献者、每人 5 分、衣柜写回和 pending 通过；重复请求幂等。';
 
 
 
@@ -933,7 +923,8 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user_quota"() RETURNS "trigger"
     AS $$
 BEGIN
   INSERT INTO public.user_quotas (user_id, free_count)
-  VALUES (new.id, 30); -- 鏂扮敤鎴烽粯璁ょ粰 20 娆?  RETURN new;
+  VALUES (new.id, 30); -- 新用户默认给 20 次
+  RETURN new;
 END;
 $$;
 
@@ -981,23 +972,23 @@ CREATE OR REPLACE FUNCTION "public"."normalize_known_clothing_tags"("p_tags" "te
     AS $$
 declare
   known_tags text[] := array[
-    '鐜颁唬娴佽', '娆у紡鍙ゅ吀', '涓紡鍙ゅ吀', '涓紡鐜颁唬', '娉㈣タ绫充簹', '妫コ绯诲垪',
-    '娲涗附濉?, '鍝ョ壒椋?, '濂充粏瑁?, '绔ヨ瘽绯?, '鏈潵绯?, '渚犲鑱旂洘',
-    '姘戝浗鏈嶉グ', '姘戞棌椋?, '鑻变鸡', '瀛﹂櫌绯?, '杩愬姩绯?, '灞呭鏈?,
-    '鏅氱ぜ鏈?, '濠氱罕', '鏃楄', '鍐涜', '宸ヨ椋?, '鑸捣椋?,
-    '涔愰槦椋?, '鑸炶€?, '濂崇绯?, '澶у皬濮?, '鍏斿コ閮?, '鍖诲姟浣胯€?,
-    '闆ㄥ瑁呭', '鍐', '娉宠', '娌愭荡', '鍥磋', '纰庤姳',
-    '闃叉檼', '鐫¤。', '鍔ㄧ墿绯?, '娼叿椋?, '杞荤啛椋?, '寮傚煙椋?,
-    '涓€ч',
-    '绠€绾?200', '绠€绾?500', '绠€绾?800', '绠€绾?1200', '绠€绾?1500',
-    '鍗庝附+200', '鍗庝附+500', '鍗庝附+800', '鍗庝附+1200', '鍗庝附+1500',
-    '娲绘臣+200', '娲绘臣+500', '娲绘臣+800', '娲绘臣+1200', '娲绘臣+1500',
-    '浼橀泤+200', '浼橀泤+500', '浼橀泤+800', '浼橀泤+1200', '浼橀泤+1500',
-    '鍙埍+200', '鍙埍+500', '鍙埍+800', '鍙埍+1200', '鍙埍+1500',
-    '鎴愮啛+200', '鎴愮啛+500', '鎴愮啛+800', '鎴愮啛+1200', '鎴愮啛+1500',
-    '娓呯函+200', '娓呯函+500', '娓呯函+800', '娓呯函+1200', '娓呯函+1500',
-    '鎬ф劅+200', '鎬ф劅+500', '鎬ф劅+800', '鎬ф劅+1200', '鎬ф劅+1500',
-    '娓呭噳+200', '娓呭噳+500', '娓呭噳+800', '娓呭噳+1200'
+    '现代流行', '欧式古典', '中式古典', '中式现代', '波西米亚', '森女系列',
+    '洛丽塔', '哥特风', '女仆装', '童话系', '未来系', '侠客联盟',
+    '民国服饰', '民族风', '英伦', '学院系', '运动系', '居家服',
+    '晚礼服', '婚纱', '旗袍', '军装', '工装风', '航海风',
+    '乐队风', '舞者', '女神系', '大小姐', '兔女郎', '医务使者',
+    '雨季装备', '冬装', '泳装', '沐浴', '围裙', '碎花',
+    '防晒', '睡衣', '动物系', '潮酷风', '轻熟风', '异域风',
+    '中性风',
+    '简约+200', '简约+500', '简约+800', '简约+1200', '简约+1500',
+    '华丽+200', '华丽+500', '华丽+800', '华丽+1200', '华丽+1500',
+    '活泼+200', '活泼+500', '活泼+800', '活泼+1200', '活泼+1500',
+    '优雅+200', '优雅+500', '优雅+800', '优雅+1200', '优雅+1500',
+    '可爱+200', '可爱+500', '可爱+800', '可爱+1200', '可爱+1500',
+    '成熟+200', '成熟+500', '成熟+800', '成熟+1200', '成熟+1500',
+    '清纯+200', '清纯+500', '清纯+800', '清纯+1200', '清纯+1500',
+    '性感+200', '性感+500', '性感+800', '性感+1200', '性感+1500',
+    '清凉+200', '清凉+500', '清凉+800', '清凉+1200'
   ];
   parts text[];
   part text;
@@ -1010,7 +1001,7 @@ begin
     return null;
   end if;
 
-  parts := regexp_split_to_array(p_tags, '[,锛屻€?锛沒+');
+  parts := regexp_split_to_array(p_tags, '[,，、;；]+');
 
   foreach part in array parts loop
     part := trim(part);
@@ -1078,142 +1069,15 @@ ALTER FUNCTION "public"."profile_role_to_level"("p_role" "text") OWNER TO "postg
 
 CREATE OR REPLACE FUNCTION "public"."submit_clothing_contribution"("p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid" DEFAULT NULL::"uuid", "p_temp_suit_name" "text" DEFAULT NULL::"text", "p_tags" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public'
-    AS $_$
-declare
-  v_user_id uuid := auth.uid();
-  v_game_id text := trim(coalesce(p_game_id, ''));
-  v_clothes_id text;
-  v_pending_id bigint;
-  v_matching_pending_ids bigint[];
-  v_matching_count integer := 0;
-  v_can_auto_approve boolean;
-  v_submitter_ids uuid[];
-  v_wardrobe_count integer := 0;
-begin
-  if v_user_id is null then
-    raise exception '闇€瑕佺櫥褰曞悗鎵嶈兘鎻愪氦鍥鹃壌鐢宠';
-  end if;
-
-  if nullif(trim(coalesce(p_name, '')), '') is null then
-    raise exception '鏈嶈鍚嶇О涓嶈兘涓虹┖';
-  end if;
-
-  if nullif(v_game_id, '') is null then
-    raise exception '鐭紪鍙蜂笉鑳戒负绌?;
-  end if;
-
-  if v_game_id !~ '^[0-9]+$' then
-    raise exception '鐭紪鍙峰彧鍏佽濉啓鏁板瓧';
-  end if;
-
-  v_can_auto_approve := p_suit_id is not null or nullif(trim(coalesce(p_temp_suit_name, '')), '') is not null;
-
-  if v_can_auto_approve then
-    select coalesce(array_agg(id order by created_at asc), '{}')::bigint[], count(*)::integer
-      into v_matching_pending_ids, v_matching_count
-    from public.pending_clothes
-    where status = 'pending'
-      and name is not distinct from p_name
-      and game_id is not distinct from v_game_id
-      and category is not distinct from p_category
-      and stars is not distinct from p_stars
-      and tags is not distinct from p_tags
-      and suit_id is not distinct from p_suit_id
-      and temp_suit_name is not distinct from p_temp_suit_name
-      and scores = p_scores;
-
-    if v_matching_count >= 4 then
-      v_clothes_id := 'custom_' || replace(gen_random_uuid()::text, '-', '');
-
-      select coalesce(array_agg(distinct submitted_by), '{}')::uuid[] || array[v_user_id]
-        into v_submitter_ids
-      from public.pending_clothes
-      where id = any(v_matching_pending_ids)
-        and submitted_by is not null;
-
-      insert into public.clothes (
-        id,
-        name,
-        game_id,
-        category,
-        stars,
-        scores,
-        suit_id,
-        temp_suit_name,
-        tags
-      )
-      values (
-        v_clothes_id,
-        p_name,
-        v_game_id,
-        p_category,
-        p_stars::text,
-        p_scores,
-        p_suit_id,
-        p_temp_suit_name,
-        p_tags
-      );
-
-      v_wardrobe_count := public.add_clothes_to_submitter_wardrobes(v_submitter_ids, v_clothes_id);
-
-      delete from public.pending_clothes
-      where id = any(v_matching_pending_ids);
-
-      if p_suit_id is null and nullif(trim(coalesce(p_temp_suit_name, '')), '') is not null then
-        insert into public.pending_suits (name, submitted_by, status)
-        values (p_temp_suit_name, v_user_id, 'pending');
-      end if;
-
-      return jsonb_build_object(
-        'auto_approved', true,
-        'clothes_id', v_clothes_id,
-        'matched_pending_count', v_matching_count,
-        'wardrobe_updated_count', v_wardrobe_count
-      );
-    end if;
-  end if;
-
-  insert into public.pending_clothes (
-    name,
-    game_id,
-    category,
-    stars,
-    scores,
-    suit_id,
-    temp_suit_name,
-    tags,
-    submitted_by,
-    status
-  )
-  values (
-    p_name,
-    v_game_id,
-    p_category,
-    p_stars,
-    p_scores,
-    p_suit_id,
-    p_temp_suit_name,
-    p_tags,
-    v_user_id,
-    'pending'
-  )
-  returning id into v_pending_id;
-
-  if p_suit_id is null and nullif(trim(coalesce(p_temp_suit_name, '')), '') is not null then
-    insert into public.pending_suits (name, submitted_by, status)
-    values (p_temp_suit_name, v_user_id, 'pending');
-  end if;
-
-  return jsonb_build_object(
-    'auto_approved', false,
-    'pending_id', v_pending_id
-  );
-end;
-$_$;
+    SET "search_path" TO ''
+    AS $_$ declare v_user_id uuid:=(select auth.uid());v_game_id text:=pg_catalog.btrim(coalesce(p_game_id,''));v_normalized_temp_suit_name text:=nullif(pg_catalog.btrim(coalesce(p_temp_suit_name,'')),'');v_normalized_tags text:=nullif(pg_catalog.btrim(coalesce(p_tags,'')),'');v_can_auto_approve boolean;v_pending_id bigint;v_matching_pending_ids bigint[]:='{}';v_matching_count integer:=0;v_effective_user_ids uuid[]:='{}';v_effective_pending_ids bigint[]:='{}';v_effective_created_ats timestamptz[]:='{}';v_effective_contributor_count integer:=0;v_clothes_id text;v_existing_clothes public.clothes%rowtype;v_clothes_exists boolean:=false;v_event_hash text;v_event_id uuid;v_contribution_id uuid;v_contribution_count integer:=0;v_points_count integer:=0;v_wardrobe_count integer:=0;v_approved_pending_count integer:=0;v_existing_event_count integer:=0;v_matching_contribution_count integer:=0;v_matching_points_count integer:=0;v_matching_wardrobe_count integer:=0;v_index integer;begin if v_user_id is null then raise exception '需要登录后才能提交图鉴申请';end if;if nullif(pg_catalog.btrim(coalesce(p_name,'')),'')is null then raise exception '服装名称不能为空';end if;if nullif(pg_catalog.btrim(coalesce(p_category,'')),'')is null then raise exception '分类部位不能为空';end if;if nullif(v_game_id,'')is null then raise exception '短编号不能为空';end if;if v_game_id!~'^[0-9]+$' then raise exception '短编号只允许填写数字';end if;if p_stars is null then raise exception '星级不能为空';end if;if p_scores is null then raise exception '属性分值不能为空';end if;v_can_auto_approve:=p_suit_id is not null or v_normalized_temp_suit_name is not null;perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('db5|category_game|'||p_category||'|'||v_game_id,0));perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('db5|name_category|'||p_name||'|'||p_category,0));select clothes.*into v_existing_clothes from public.clothes as clothes where clothes.category is not distinct from p_category and pg_catalog.btrim(coalesce(clothes.game_id,''))=v_game_id order by clothes.id limit 1 for update;v_clothes_exists:=found;if not v_clothes_exists then select clothes.*into v_existing_clothes from public.clothes as clothes where clothes.name is not distinct from p_name and clothes.category is not distinct from p_category order by clothes.id limit 1 for update;v_clothes_exists:=found;end if;if v_clothes_exists then if v_existing_clothes.name is distinct from p_name or v_existing_clothes.category is distinct from p_category or pg_catalog.btrim(coalesce(v_existing_clothes.game_id,''))is distinct from v_game_id or pg_catalog.btrim(coalesce(v_existing_clothes.stars,''))is distinct from p_stars::text or v_existing_clothes.scores is distinct from p_scores or v_existing_clothes.suit_id is distinct from p_suit_id or nullif(pg_catalog.btrim(coalesce(v_existing_clothes.temp_suit_name,'')),'')is distinct from v_normalized_temp_suit_name or nullif(pg_catalog.btrim(coalesce(v_existing_clothes.tags,'')),'')is distinct from v_normalized_tags then raise exception '正式库已存在同分类短编号或同名记录，但数据与本次提交不一致';end if;perform pending.id from public.pending_clothes as pending where pending.status='approved' and pending.name is not distinct from p_name and pending.category is not distinct from p_category and pg_catalog.btrim(coalesce(pending.game_id,''))=v_game_id and pending.stars is not distinct from p_stars and pending.scores is not distinct from p_scores and pending.suit_id is not distinct from p_suit_id and nullif(pg_catalog.btrim(coalesce(pending.temp_suit_name,'')),'')is not distinct from v_normalized_temp_suit_name and nullif(pg_catalog.btrim(coalesce(pending.tags,'')),'')is not distinct from v_normalized_tags order by pending.id for update;select coalesce(pg_catalog.array_agg(pending.id order by pending.id),'{}'::bigint[]),pg_catalog.count(*)::integer into v_matching_pending_ids,v_matching_count from public.pending_clothes as pending where pending.status='approved' and pending.name is not distinct from p_name and pending.category is not distinct from p_category and pg_catalog.btrim(coalesce(pending.game_id,''))=v_game_id and pending.stars is not distinct from p_stars and pending.scores is not distinct from p_scores and pending.suit_id is not distinct from p_suit_id and nullif(pg_catalog.btrim(coalesce(pending.temp_suit_name,'')),'')is not distinct from v_normalized_temp_suit_name and nullif(pg_catalog.btrim(coalesce(pending.tags,'')),'')is not distinct from v_normalized_tags;with earliest_per_user as(select distinct on(pending.submitted_by)pending.submitted_by as user_id,pending.id as source_pending_id,pending.created_at as source_created_at from public.pending_clothes as pending where pending.id=any(v_matching_pending_ids)and pending.submitted_by is not null order by pending.submitted_by,pending.created_at,pending.id),effective_contributors as(select earliest.user_id,earliest.source_pending_id,earliest.source_created_at,pg_catalog.row_number()over(order by earliest.source_created_at,earliest.source_pending_id,earliest.user_id)::smallint as contribution_rank from earliest_per_user as earliest order by earliest.source_created_at,earliest.source_pending_id,earliest.user_id limit 5)select coalesce(pg_catalog.array_agg(effective.user_id order by effective.contribution_rank),'{}'::uuid[]),coalesce(pg_catalog.array_agg(effective.source_pending_id order by effective.contribution_rank),'{}'::bigint[]),coalesce(pg_catalog.array_agg(effective.source_created_at order by effective.contribution_rank),'{}'::timestamptz[])into v_effective_user_ids,v_effective_pending_ids,v_effective_created_ats from effective_contributors as effective;v_effective_contributor_count:=pg_catalog.cardinality(v_effective_user_ids);if v_effective_contributor_count=5 then v_event_hash:=pg_catalog.md5('auto_entry|'||v_existing_clothes.id||'|'||pg_catalog.array_to_string(v_matching_pending_ids,','));v_event_id:=(pg_catalog.substr(v_event_hash,1,8)||'-'||pg_catalog.substr(v_event_hash,9,4)||'-'||pg_catalog.substr(v_event_hash,13,4)||'-'||pg_catalog.substr(v_event_hash,17,4)||'-'||pg_catalog.substr(v_event_hash,21,12))::uuid;select pg_catalog.count(*)::integer into v_existing_event_count from public.clothing_contributions as contribution where contribution.event_id=v_event_id;select pg_catalog.count(*)::integer into v_matching_contribution_count from pg_catalog.generate_subscripts(v_effective_user_ids,1)as expected(array_index)join public.clothing_contributions as contribution on contribution.event_id=v_event_id and contribution.clothes_id=v_existing_clothes.id and contribution.user_id=v_effective_user_ids[expected.array_index]and contribution.source_pending_id=v_effective_pending_ids[expected.array_index]and contribution.source_created_at=v_effective_created_ats[expected.array_index]and contribution.contribution_rank=expected.array_index::smallint and contribution.contribution_type='auto_entry';select pg_catalog.count(*)::integer into v_matching_points_count from public.clothing_contributions as contribution join public.points_ledger as ledger on ledger.source_id=contribution.id and ledger.user_id=contribution.user_id and ledger.delta=10 and ledger.status='awarded' and ledger.source_type='clothing_contribution' and ledger.reversal_of is null where contribution.event_id=v_event_id;select pg_catalog.count(*)::integer into v_matching_wardrobe_count from pg_catalog.unnest(v_effective_user_ids)as expected(user_id)join public.user_wardrobes as wardrobe on wardrobe.user_id=expected.user_id and coalesce(wardrobe.owned_clothes,'[]'::jsonb)@>pg_catalog.jsonb_build_array(v_existing_clothes.id);if v_existing_event_count=v_effective_contributor_count and v_matching_contribution_count=v_effective_contributor_count and v_matching_points_count=v_effective_contributor_count and v_matching_wardrobe_count=v_effective_contributor_count then return pg_catalog.jsonb_build_object('auto_approved',true,'clothes_id',v_existing_clothes.id,'matched_pending_count',v_matching_count,'wardrobe_updated_count',v_matching_wardrobe_count);end if;end if;if exists(select 1 from public.clothing_contributions as contribution where contribution.clothes_id=v_existing_clothes.id and contribution.contribution_type='auto_entry')then raise exception '自动入库正式服装已存在，但来源、贡献、积分或衣柜事实不完整；禁止静默补写';end if;raise exception '正式库已存在该服装，请刷新页面后使用现有图鉴条目';end if;select pending.id into v_pending_id from public.pending_clothes as pending where pending.status='pending' and pending.submitted_by=v_user_id and pending.name is not distinct from p_name and pending.category is not distinct from p_category and pg_catalog.btrim(coalesce(pending.game_id,''))=v_game_id and pending.stars is not distinct from p_stars and pending.scores is not distinct from p_scores and pending.suit_id is not distinct from p_suit_id and nullif(pg_catalog.btrim(coalesce(pending.temp_suit_name,'')),'')is not distinct from v_normalized_temp_suit_name and nullif(pg_catalog.btrim(coalesce(pending.tags,'')),'')is not distinct from v_normalized_tags order by pending.created_at,pending.id limit 1 for update;if found then return pg_catalog.jsonb_build_object('auto_approved',false,'pending_id',v_pending_id);end if;insert into public.pending_clothes(name,game_id,category,stars,scores,suit_id,temp_suit_name,tags,submitted_by,status)values(p_name,v_game_id,p_category,p_stars,p_scores,p_suit_id,p_temp_suit_name,p_tags,v_user_id,'pending')returning id into v_pending_id;if p_suit_id is null and v_normalized_temp_suit_name is not null then insert into public.pending_suits(name,submitted_by,status)values(p_temp_suit_name,v_user_id,'pending');end if;if not v_can_auto_approve then return pg_catalog.jsonb_build_object('auto_approved',false,'pending_id',v_pending_id);end if;perform pending.id from public.pending_clothes as pending where pending.status='pending' and pending.name is not distinct from p_name and pending.category is not distinct from p_category and pg_catalog.btrim(coalesce(pending.game_id,''))=v_game_id and pending.stars is not distinct from p_stars and pending.scores is not distinct from p_scores and pending.suit_id is not distinct from p_suit_id and nullif(pg_catalog.btrim(coalesce(pending.temp_suit_name,'')),'')is not distinct from v_normalized_temp_suit_name and nullif(pg_catalog.btrim(coalesce(pending.tags,'')),'')is not distinct from v_normalized_tags order by pending.id for update;select coalesce(pg_catalog.array_agg(pending.id order by pending.id),'{}'::bigint[]),pg_catalog.count(*)::integer into v_matching_pending_ids,v_matching_count from public.pending_clothes as pending where pending.status='pending' and pending.name is not distinct from p_name and pending.category is not distinct from p_category and pg_catalog.btrim(coalesce(pending.game_id,''))=v_game_id and pending.stars is not distinct from p_stars and pending.scores is not distinct from p_scores and pending.suit_id is not distinct from p_suit_id and nullif(pg_catalog.btrim(coalesce(pending.temp_suit_name,'')),'')is not distinct from v_normalized_temp_suit_name and nullif(pg_catalog.btrim(coalesce(pending.tags,'')),'')is not distinct from v_normalized_tags;with earliest_per_user as(select distinct on(pending.submitted_by)pending.submitted_by as user_id,pending.id as source_pending_id,pending.created_at as source_created_at from public.pending_clothes as pending where pending.id=any(v_matching_pending_ids)and pending.submitted_by is not null order by pending.submitted_by,pending.created_at,pending.id),effective_contributors as(select earliest.user_id,earliest.source_pending_id,earliest.source_created_at,pg_catalog.row_number()over(order by earliest.source_created_at,earliest.source_pending_id,earliest.user_id)::smallint as contribution_rank from earliest_per_user as earliest order by earliest.source_created_at,earliest.source_pending_id,earliest.user_id limit 5)select coalesce(pg_catalog.array_agg(effective.user_id order by effective.contribution_rank),'{}'::uuid[]),coalesce(pg_catalog.array_agg(effective.source_pending_id order by effective.contribution_rank),'{}'::bigint[]),coalesce(pg_catalog.array_agg(effective.source_created_at order by effective.contribution_rank),'{}'::timestamptz[])into v_effective_user_ids,v_effective_pending_ids,v_effective_created_ats from effective_contributors as effective;v_effective_contributor_count:=pg_catalog.cardinality(v_effective_user_ids);if v_effective_contributor_count<5 then return pg_catalog.jsonb_build_object('auto_approved',false,'pending_id',v_pending_id);end if;v_clothes_id:='custom_'||pg_catalog.replace(pg_catalog.gen_random_uuid()::text,'-','');v_event_hash:=pg_catalog.md5('auto_entry|'||v_clothes_id||'|'||pg_catalog.array_to_string(v_matching_pending_ids,','));v_event_id:=(pg_catalog.substr(v_event_hash,1,8)||'-'||pg_catalog.substr(v_event_hash,9,4)||'-'||pg_catalog.substr(v_event_hash,13,4)||'-'||pg_catalog.substr(v_event_hash,17,4)||'-'||pg_catalog.substr(v_event_hash,21,12))::uuid;if exists(select 1 from public.clothing_contributions as contribution where contribution.event_id=v_event_id or contribution.source_pending_id=any(v_matching_pending_ids))then raise exception '本次自动入库来源已存在贡献事实，但 pending 尚未完成；请人工核对';end if;insert into public.clothes(id,name,game_id,category,stars,scores,suit_id,temp_suit_name,tags)values(v_clothes_id,p_name,v_game_id,p_category,p_stars::text,p_scores,p_suit_id,p_temp_suit_name,p_tags);for v_index in 1..v_effective_contributor_count loop insert into public.clothing_contributions(event_id,clothes_id,user_id,source_pending_id,contribution_type,contribution_rank,source_created_at)values(v_event_id,v_clothes_id,v_effective_user_ids[v_index],v_effective_pending_ids[v_index],'auto_entry',v_index::smallint,v_effective_created_ats[v_index])returning id into v_contribution_id;v_contribution_count:=v_contribution_count+1;insert into public.points_ledger(user_id,delta,status,source_type,source_id)values(v_effective_user_ids[v_index],10,'awarded','clothing_contribution',v_contribution_id);v_points_count:=v_points_count+1;end loop;v_wardrobe_count:=public.add_clothes_to_submitter_wardrobes(v_effective_user_ids,v_clothes_id);if v_contribution_count<>v_effective_contributor_count or v_points_count<>v_effective_contributor_count or v_wardrobe_count<>v_effective_contributor_count then raise exception '贡献、积分或衣柜写回数量异常，已回滚本次自动入库';end if;update public.pending_clothes set status='approved' where id=any(v_matching_pending_ids)and status='pending';get diagnostics v_approved_pending_count=row_count;if v_approved_pending_count<>v_matching_count then raise exception 'pending 通过数量异常，已回滚本次自动入库';end if;return pg_catalog.jsonb_build_object('auto_approved',true,'clothes_id',v_clothes_id,'matched_pending_count',v_approved_pending_count,'wardrobe_updated_count',v_wardrobe_count);end;$_$;
 
 
 ALTER FUNCTION "public"."submit_clothing_contribution"("p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "public"."submit_clothing_contribution"("p_name" "text", "p_game_id" "text", "p_category" "text", "p_stars" integer, "p_scores" "jsonb", "p_suit_id" "uuid", "p_temp_suit_name" "text", "p_tags" "text") IS 'DB-5：五位不同有效用户资料一致后自动入库；同事务保留并批准来源 pending、记录前 5 位贡献者、每人 10 分和衣柜写回，并支持重复请求幂等。';
+
 
 
 CREATE OR REPLACE FUNCTION "public"."sync_profile_role_fields"() RETURNS "trigger"
@@ -1280,19 +1144,19 @@ declare
   v_profile public.profiles;
 begin
   if v_user_id is null then
-    raise exception '璇峰厛鐧诲綍鍚庡啀淇敼浠ｅ彿';
+    raise exception '请先登录后再修改代号';
   end if;
 
   if v_username = '' then
-    raise exception '鐢ㄦ埛鍚嶄笉鑳戒负绌?;
+    raise exception '用户名不能为空';
   end if;
 
   if char_length(v_username) > 24 then
-    raise exception '鐢ㄦ埛鍚嶆渶澶?24 涓瓧绗?;
+    raise exception '用户名最多 24 个字符';
   end if;
 
-  if v_username like '鍖垮悕鎼厤甯圽_%' escape '\' then
-    raise exception '涓嶈兘浣跨敤绯荤粺淇濈暀鐨勫尶鍚嶆牸寮?;
+  if v_username like '匿名搭配师\_%' escape '\' then
+    raise exception '不能使用系统保留的匿名格式';
   end if;
 
   update public.profiles
@@ -1302,7 +1166,7 @@ begin
   returning * into v_profile;
 
   if not found then
-    raise exception '鏈壘鍒板綋鍓嶇敤鎴锋。妗?;
+    raise exception '未找到当前用户档案';
   end if;
 
   return v_profile;
@@ -1753,53 +1617,53 @@ ALTER TABLE "public"."user_quotas" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."user_wardrobes" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "浠呯鐞嗗憳鍙搷浣滃浘閴? ON "public"."clothes" TO "authenticated" USING ((EXISTS ( SELECT 1
+CREATE POLICY "仅管理员可操作图鉴" ON "public"."clothes" TO "authenticated" USING ((EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"text")))));
 
 
 
-CREATE POLICY "鍏佽浠讳綍浜轰笂鎶ラ敊璇? ON "public"."app_errors" FOR INSERT WITH CHECK (true);
+CREATE POLICY "允许任何人上报错误" ON "public"."app_errors" FOR INSERT WITH CHECK (true);
 
 
 
-CREATE POLICY "鍏佽宸茬櫥褰曠敤鎴疯鍙栨。妗? ON "public"."profiles" FOR SELECT TO "authenticated" USING (true);
+CREATE POLICY "允许已登录用户读取档案" ON "public"."profiles" FOR SELECT TO "authenticated" USING (true);
 
 
 
-CREATE POLICY "鍏佽鐢ㄦ埛鎿嶄綔鑷繁鐨勮。鏌? ON "public"."user_wardrobes" TO "authenticated" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+CREATE POLICY "允许用户操作自己的衣柜" ON "public"."user_wardrobes" TO "authenticated" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
-CREATE POLICY "鍏佽鐢ㄦ埛鏌ョ湅鑷繁鐨勯搴? ON "public"."user_quotas" FOR SELECT USING (("auth"."uid"() = "user_id"));
+CREATE POLICY "允许用户查看自己的额度" ON "public"."user_quotas" FOR SELECT USING (("auth"."uid"() = "user_id"));
 
 
 
-CREATE POLICY "鍏佽瓒呯淇敼妗ｆ" ON "public"."profiles" FOR UPDATE TO "authenticated" USING ("public"."is_super_admin"());
+CREATE POLICY "允许超管修改档案" ON "public"."profiles" FOR UPDATE TO "authenticated" USING ("public"."is_super_admin"());
 
 
 
-CREATE POLICY "鐢ㄦ埛鍙兘鎿嶄綔鑷繁鐨勮。鏌? ON "public"."user_wardrobes" TO "authenticated" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
+CREATE POLICY "用户只能操作自己的衣柜" ON "public"."user_wardrobes" TO "authenticated" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
-CREATE POLICY "鐢ㄦ埛鍙互鏌ョ湅鑷繁鐨勭敾鍍? ON "public"."profiles" FOR SELECT USING (("auth"."uid"() = "id"));
+CREATE POLICY "用户可以查看自己的画像" ON "public"."profiles" FOR SELECT USING (("auth"."uid"() = "id"));
 
 
 
-CREATE POLICY "绠＄悊鍛樺彲鏇存柊鐢宠鐘舵€? ON "public"."pending_clothes" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin")) WITH CHECK (( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin"));
+CREATE POLICY "管理员可更新申请状态" ON "public"."pending_clothes" FOR UPDATE TO "authenticated" USING (( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin")) WITH CHECK (( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin"));
 
 
 
-CREATE POLICY "绠＄悊鍛樻潈闄? ON "public"."clothes" TO "authenticated" USING (("auth"."email"() = '2230909994@qq.com'::"text")) WITH CHECK (("auth"."email"() = '2230909994@qq.com'::"text"));
+CREATE POLICY "管理员权限" ON "public"."clothes" TO "authenticated" USING (("auth"."email"() = '2230909994@qq.com'::"text")) WITH CHECK (("auth"."email"() = '2230909994@qq.com'::"text"));
 
 
 
-CREATE POLICY "璁よ瘉鐢ㄦ埛鍙兘鎻愪氦鑷繁鐨勫緟瀹℃牳鐢宠" ON "public"."pending_clothes" FOR INSERT TO "authenticated" WITH CHECK (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND ("submitted_by" = ( SELECT "auth"."uid"() AS "uid")) AND ("status" = 'pending'::"text")));
+CREATE POLICY "认证用户只能提交自己的待审核申请" ON "public"."pending_clothes" FOR INSERT TO "authenticated" WITH CHECK (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND ("submitted_by" = ( SELECT "auth"."uid"() AS "uid")) AND ("status" = 'pending'::"text")));
 
 
 
-CREATE POLICY "璁よ瘉鐢ㄦ埛鍙煡鐪嬭嚜宸辩殑鐢宠鍙婄鐞嗗憳鍙煡鐪嬪叏閮? ON "public"."pending_clothes" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (("submitted_by" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin"))));
+CREATE POLICY "认证用户可查看自己的申请及管理员可查看全部" ON "public"."pending_clothes" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (("submitted_by" = ( SELECT "auth"."uid"() AS "uid")) OR ( SELECT "public"."is_admin_or_super_admin"() AS "is_admin_or_super_admin"))));
 
 
 
