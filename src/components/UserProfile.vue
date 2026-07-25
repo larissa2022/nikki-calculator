@@ -128,7 +128,7 @@ const openEditModal = () => {
           <div v-else-if="pointsLoadError" class="text-lg font-black text-slate-400">暂不可用</div>
           <template v-else>
             <div class="text-lg font-black text-slate-700">{{ myRank?.title }}</div>
-            <div class="mt-1 text-[11px] font-bold text-slate-500">投票权重: 1 顶 <span class="text-purple-500">{{ myRank?.voteWeight }}</span> 票</div>
+            <div class="mt-1 text-[11px] font-bold text-slate-500">陪审团计票：每人 1 票；等级仅用于展示</div>
           </template>
         </div>
         

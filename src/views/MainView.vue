@@ -5,6 +5,7 @@ import Calculator from '../components/Calculator.vue'
 import ImportZone from '../components/ImportZone.vue'
 import WardrobeGrid from '../components/WardrobeGrid.vue'
 import SuitGallery from '../components/SuitGallery.vue'
+import ContributorGallery from '../components/ContributorGallery.vue'
 import UserProfile from '../components/UserProfile.vue'
 import { readMainTab, writeMainTab } from '../utils/navigationState'
 
@@ -46,6 +47,7 @@ const switchTab = (tab) => {
         <button :class="{ active: currentTab === 'import' }" @click="switchTab('import')">录入衣柜</button>
         <button :class="{ active: currentTab === 'wardrobe' }" @click="switchTab('wardrobe')">我的衣柜</button>
         <button :class="{ active: currentTab === 'suits' }" @click="switchTab('suits')">套装图鉴</button>
+        <button :class="{ active: currentTab === 'contributors' }" @click="switchTab('contributors')">贡献名录</button>
         <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="emit('go-admin')" class="admin-tab-btn">图鉴管理</button>
       </nav>
     </header>
@@ -60,6 +62,7 @@ const switchTab = (tab) => {
       <ImportZone v-if="currentTab === 'import'" :key="currentUser?.id || 'guest'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" :userId="currentUser?.id || ''" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
       <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-catalog="emit('refresh-catalog')" />
+      <ContributorGallery v-if="currentTab === 'contributors'" :wardrobe="fullWardrobeData" />
       
       <UserProfile 
         v-if="currentTab === 'profile'" 
