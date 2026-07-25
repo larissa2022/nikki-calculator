@@ -12,11 +12,11 @@ export const getUserRankAndPrivilege = (totalPoints, isMonthlyFirst = false) => 
   let rank = { level: 0, title: '初级搭配师', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
 
   if (totalPoints >= 10000 || isMonthlyFirst) {
-    rank = { level: 4, title: '奇迹编年史官', pointMultiplier: 2.0, voteWeight: 3, adFree: true };
+    rank = { level: 4, title: '奇迹编年史官', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
   } else if (totalPoints >= 5000) {
-    rank = { level: 3, title: '图鉴守护者', pointMultiplier: 1.5, voteWeight: 3, adFree: false };
+    rank = { level: 3, title: '图鉴守护者', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
   } else if (totalPoints >= 2000) {
-    rank = { level: 2, title: '资深收集者', pointMultiplier: 1.2, voteWeight: 2, adFree: false };
+    rank = { level: 2, title: '资深收集者', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
   } else if (totalPoints >= 500) {
     rank = { level: 1, title: '见习搭配师', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
   }
