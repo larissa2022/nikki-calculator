@@ -25,7 +25,7 @@ const cleanSuitSearchText = computed(() => props.suitSearchText.replace(/[《》
 const hasSuitData = computed(() => props.availableSuits.length > 0)
 const suitInputValue = computed(() => {
   if (explicitNoSuit.value) return '-- 无关联套装（纯散件）--'
-  if (explicitPendingReview.value) return '-- 所属套装待确认（稍后由社区补充）--'
+  if (explicitPendingReview.value) return '-- 所属套装待确认 --'
   return props.suitSearchText
 })
 const gameIdText = computed(() => String(props.form.game_id || '').trim())
@@ -171,7 +171,7 @@ const handleSubmit = () => {
           <Transition name="slide">
             <div v-if="isSuitDropdownOpen" class="select-dropdown">
               <div class="option no-suit-option" @pointerdown.prevent="selectNoSuit">-- 无关联套装（纯散件）--</div>
-              <div class="option pending-review-option" @pointerdown.prevent="selectPendingReview">-- 所属套装待确认（稍后由社区补充）--</div>
+              <div class="option pending-review-option" @pointerdown.prevent="selectPendingReview">-- 所属套装待确认 --</div>
               <div v-for="s in filteredSuits" :key="s.id" class="option" @pointerdown.prevent="selectSuit(s)">《{{ s.name }}》</div>
               
               <div v-if="!hasSuitData && !cleanSuitSearchText" class="option empty-option">
