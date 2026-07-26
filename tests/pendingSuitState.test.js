@@ -26,3 +26,18 @@ test('审核表单将空套装事实还原为纯散件', () => {
     searchText: ''
   })
 })
+
+test('审核表单将待补套装事实还原为所属套装待确认', () => {
+  assert.deepEqual(
+    restorePendingSuitState({
+      suit_id: null,
+      temp_suit_name: null,
+      needs_suit_review: true
+    }),
+    {
+      suitId: '',
+      status: 'pending_review',
+      searchText: ''
+    }
+  )
+})

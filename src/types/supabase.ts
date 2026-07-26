@@ -149,6 +149,7 @@ export type Database = {
           game_id: string | null
           id: number
           name: string | null
+          needs_suit_review: boolean
           scores: Json | null
           stars: number | null
           status: string | null
@@ -164,6 +165,7 @@ export type Database = {
           game_id?: string | null
           id?: number
           name?: string | null
+          needs_suit_review?: boolean
           scores?: Json | null
           stars?: number | null
           status?: string | null
@@ -179,6 +181,7 @@ export type Database = {
           game_id?: string | null
           id?: number
           name?: string | null
+          needs_suit_review?: boolean
           scores?: Json | null
           stars?: number | null
           status?: string | null
@@ -553,6 +556,22 @@ export type Database = {
           p_game_id: string
           p_id: string
           p_name: string
+          p_needs_suit_review?: boolean
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
+      approve_pending_clothes_arbitration_db4_core: {
+        Args: {
+          p_category: string
+          p_game_id: string
+          p_id: string
+          p_name: string
           p_pending_ids?: number[]
           p_scores: Json
           p_stars: number
@@ -577,7 +596,30 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_existing_clothes_from_pending_db3_core: {
+        Args: {
+          p_category: string
+          p_existing_id: string
+          p_game_id: string
+          p_name: string
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
+      ensure_missing_suit_re_review_item: {
+        Args: {
+          p_allow_create?: boolean
+          p_clothes_id: string
+          p_pending_ids: number[]
+        }
+        Returns: string
+      }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       normalize_known_clothing_tags: {
@@ -594,6 +636,7 @@ export type Database = {
           p_category: string
           p_game_id: string
           p_name: string
+          p_needs_suit_review?: boolean
           p_scores: Json
           p_stars: number
           p_suit_id?: string

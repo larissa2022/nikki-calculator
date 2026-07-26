@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`。2026-07-26 已从零重放仓库全部 migrations 至 DB-6 权限修复并完成本地验证；当前快照保留 2026-07-22 development DB-5 全量基线，依次嵌入与 `20260725151136_db6_create_re_review_items`、`20260726022216_db6_restrict_candidate_insert_columns` 一致且已由 development live catalog 与本地重放验证的 DB-6 段，SHA-256 为 `E8EBB40D289E513B1658196F283A0A4F936A01FD5347A9D71FBE4CD382FD69CF`。本次已取得 development 全量 public dump（113,550 字节，SHA-256 `E1E12A8319FDC8121013B6BCC60C7A9011766818D405FAFA5BC470A445CF479D`）并确认三个候选业务列的 ACL；因该输出启用了保留 pg_dump 注释，会对旧对象产生大范围纯格式差异，未用它机械覆盖当前快照。DB-6 三张表、RLS、4 条 policy、最小列权限、类型和零持久数据均已回读。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `304BF5146FE7A74438BD96D5AFECD1779CEA28BAF40E1CA8DCD87AD716C8C03F`。2026-07-26 已从零重放仓库全部 migrations 至 `20260726024734_db6_integrate_missing_suit_review`；DB-6 基础与权限修复已在 development 验证，新接入段目前只完成本地全量重放、事务 fixture 和生成物验证，尚未应用 development。当前快照继续保留 development DB-5 全量基线，并按 migration 原文嵌入 DB-6 各段，避免用本地 / development dump 的大量纯格式差异覆盖旧对象。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -47,6 +47,7 @@
 | pending_clothes | submitted_by | uuid | null | YES |
 | pending_clothes | suit_id | uuid | null | YES |
 | pending_clothes | temp_suit_name | text | null | YES |
+| pending_clothes | needs_suit_review | boolean | false | NO |
 | pending_suits | id | uuid | gen_random_uuid() | NO |
 | pending_suits | name | text | null | NO |
 | pending_suits | submitted_by | uuid | null | YES |
@@ -149,7 +150,8 @@
 | `re_review_candidates` | 未参与原始提交的登录用户可提交候选修正版；每个重审项最多一份，客户端不能修改或删除 |
 | 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
 | 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 只读开放项 / 自己的来源标记，候选 INSERT 仅开放 `re_review_item_id`、`payload`、`submitted_by`，不能伪造 `id` / `created_at`；service_role 只保留必要读写列 |
-| 当前边界 | DB-6 只建立基础和权限，不自动创建重审项、不接投票 / 最终处理，也不直接修改正式库 |
+| 缺套装接入（本地待 development） | “所属套装待确认”以 `pending_clothes.needs_suit_review = true` 显式保存；自动入库、管理员仲裁与正式库已有补全同事务创建唯一 `missing_suit` 项及全部来源，绑定正式套装后自动关闭 |
+| 当前边界 | 纯散件和历史空套装事实不进入重审池；字段冲突 / 缺失、投票、最终处理和报错入口仍未接入 |
 
 ## 主要约束与索引
 

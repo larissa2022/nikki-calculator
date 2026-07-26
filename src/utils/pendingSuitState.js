@@ -20,6 +20,14 @@ export const restorePendingSuitState = (pendingItem = {}) => {
     }
   }
 
+  if (pendingItem.needs_suit_review === true) {
+    return {
+      suitId: '',
+      status: 'pending_review',
+      searchText: ''
+    }
+  }
+
   return {
     suitId: '',
     status: 'none',
