@@ -318,6 +318,131 @@ export type Database = {
         }
         Relationships: []
       }
+      re_review_candidates: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json
+          re_review_item_id: string
+          submitted_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload: Json
+          re_review_item_id: string
+          submitted_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          re_review_item_id?: string
+          submitted_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_candidates_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      re_review_item_sources: {
+        Row: {
+          created_at: string
+          re_review_item_id: string
+          source_pending_id: number
+          source_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          re_review_item_id: string
+          source_pending_id: number
+          source_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          re_review_item_id?: string
+          source_pending_id?: number
+          source_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_item_sources_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "re_review_item_sources_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      re_review_items: {
+        Row: {
+          clothes_id: string | null
+          created_at: string
+          id: string
+          payload: Json
+          reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          source_pending_id: number | null
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          clothes_id?: string | null
+          created_at?: string
+          id?: string
+          payload: Json
+          reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_pending_id?: number | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          clothes_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_pending_id?: number | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_items_clothes_id_fkey"
+            columns: ["clothes_id"]
+            isOneToOne: false
+            referencedRelation: "clothes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "re_review_items_source_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           created_at: string

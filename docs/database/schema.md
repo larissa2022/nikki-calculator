@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`。2026-07-22 DB-5 已在 development 应用，目标 RPC definition、owner、空 `search_path` 与 grants 已回读；22:23（北京时间）通过 development `tfwejruvdahonacyldrg` 的 IPv4 pooler 完成全量 public schema dump，原始输出 SHA-256 为 `F85C5DFC8F115F26450EE4BDBD6701381D802C4E878D859D771E32A0195D7243`。仓库快照只移除末尾多余空行，SQL 语义不变；TypeScript 类型重新生成后与现文件一致。2026-07-23 DB-5 事务 fixture 与第五 / 第六位真实登录用户并发验证通过，测试数据清理后持久基线恢复。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`。2026-07-26 已从零重放仓库全部 migrations 至 DB-6 并完成本地 public dump；本地服务默认权限与 development 既有对象存在版本差异，因此没有用本地全量输出覆盖旧对象。当前快照保留 2026-07-22 development DB-5 全量基线，只嵌入与 `20260725151136_db6_create_re_review_items` 字节一致、且已由 development live catalog 与本地重放双重验证的 DB-6 段，SHA-256 为 `F049DE845119A9035FE04749F76C3E7B26A35A8CD4D2E6AEC3CE5219DEEE281C`。远程全量 dump 仍因连接 EOF 未取得，不记为通过；DB-6 三张表、RLS、4 条 policy、权限、类型和零持久数据均已回读。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -72,6 +72,26 @@
 | profiles | total_points | integer | 0 | YES |
 | profiles | current_month_points | integer | 0 | YES |
 | profiles | monthly_action_count | integer | 0 | YES |
+| re_review_candidates | id | uuid | gen_random_uuid() | NO |
+| re_review_candidates | re_review_item_id | uuid | null | NO |
+| re_review_candidates | payload | jsonb | null | NO |
+| re_review_candidates | submitted_by | uuid | null | YES |
+| re_review_candidates | created_at | timestamp with time zone | now() | NO |
+| re_review_item_sources | re_review_item_id | uuid | null | NO |
+| re_review_item_sources | source_pending_id | bigint | null | NO |
+| re_review_item_sources | source_user_id | uuid | null | YES |
+| re_review_item_sources | created_at | timestamp with time zone | now() | NO |
+| re_review_items | id | uuid | gen_random_uuid() | NO |
+| re_review_items | reason | text | null | NO |
+| re_review_items | status | text | 'pending' | NO |
+| re_review_items | source_pending_id | bigint | null | YES |
+| re_review_items | clothes_id | character varying | null | YES |
+| re_review_items | payload | jsonb | null | NO |
+| re_review_items | submitted_by | uuid | null | YES |
+| re_review_items | resolved_by | uuid | null | YES |
+| re_review_items | created_at | timestamp with time zone | now() | NO |
+| re_review_items | updated_at | timestamp with time zone | now() | NO |
+| re_review_items | resolved_at | timestamp with time zone | null | YES |
 | stages | id | bigint | identity | NO |
 | stages | created_at | timestamp with time zone | now() | NO |
 | stages | name | text | null | YES |
@@ -120,6 +140,17 @@
 | 幂等 | 事件 ID 由正式服装 ID 与排序后的 pending IDs 稳定派生；只有正式服装、贡献、积分、衣柜和 pending 事实完整一致时，重试才返回既有成功 |
 | 默认拒绝 | 普通用户调用被函数内角色校验拒绝；`clothing_contributions`、`points_ledger` 的客户端底表权限和 RLS policy 均未放宽 |
 
+## DB-6 社区重审池基础
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `re_review_items` | 追踪 `missing_suit`、`field_conflict`、`field_missing`、`correction`；状态限定为 `pending / voting / approved / rejected / failed` |
+| `re_review_item_sources` | 保留全部 pending 来源及来源用户；普通用户只能读取自己的来源标记，供 RLS 防自审使用 |
+| `re_review_candidates` | 未参与原始提交的登录用户可提交候选修正版；每个重审项最多一份，客户端不能修改或删除 |
+| 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
+| 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 只读开放项 / 自己的来源标记，并可插入候选；service_role 只保留必要读写列 |
+| 当前边界 | DB-6 只建立基础和权限，不自动创建重审项、不接投票 / 最终处理，也不直接修改正式库 |
+
 ## 主要约束与索引
 
 | 对象 | 类型 | 字段 / 说明 |
@@ -151,6 +182,17 @@
 | points_ledger_user_occurred_at_idx | index | points_ledger.user_id, occurred_at desc |
 | profiles_pkey | primary key | profiles.id |
 | profiles_username_key | unique | profiles.username |
+| re_review_items_pkey | primary key | re_review_items.id |
+| re_review_items_source_pending_id_fkey | foreign key | re_review_items.source_pending_id -> pending_clothes.id，删除受限 |
+| re_review_items_clothes_id_fkey | foreign key | re_review_items.clothes_id -> clothes.id，删除受限 |
+| re_review_items_active_missing_suit_key | partial unique index | 同一正式服装最多一个活跃待补套装项 |
+| re_review_items_active_pending_reason_key | partial unique index | 同一主 pending + reason 最多一个活跃重审项 |
+| re_review_item_sources_pkey | primary key | re_review_item_sources.re_review_item_id, source_pending_id |
+| re_review_item_sources_item_id_fkey | foreign key | re_review_item_sources.re_review_item_id -> re_review_items.id，删除受限 |
+| re_review_item_sources_pending_id_fkey | foreign key | re_review_item_sources.source_pending_id -> pending_clothes.id，删除受限 |
+| re_review_candidates_pkey | primary key | re_review_candidates.id |
+| re_review_candidates_item_id_fkey | foreign key | re_review_candidates.re_review_item_id -> re_review_items.id，删除受限 |
+| re_review_candidates_item_key | unique | 每个重审项最多一份候选修正版 |
 | suits_pkey | primary key | suits.id |
 | suits_name_key | unique | suits.name |
 | idx_clothes_suit_id | index | clothes.suit_id |
@@ -189,6 +231,9 @@
 - pending_suits
 - points_ledger（DB-1 默认拒绝，无 policy）
 - profiles
+- re_review_candidates
+- re_review_item_sources
+- re_review_items
 - user_quotas
 - user_wardrobes
 
@@ -204,6 +249,7 @@
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
+- DB-6 三张表当前均为 0 行；社区读取、候选提交、防自审、匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
