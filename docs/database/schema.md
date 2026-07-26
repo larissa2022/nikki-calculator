@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`。2026-07-26 已从零重放仓库全部 migrations 至 DB-6 并完成本地 public dump；本地服务默认权限与 development 既有对象存在版本差异，因此没有用本地全量输出覆盖旧对象。当前快照保留 2026-07-22 development DB-5 全量基线，只嵌入与 `20260725151136_db6_create_re_review_items` 字节一致、且已由 development live catalog 与本地重放双重验证的 DB-6 段，SHA-256 为 `F049DE845119A9035FE04749F76C3E7B26A35A8CD4D2E6AEC3CE5219DEEE281C`。远程全量 dump 仍因连接 EOF 未取得，不记为通过；DB-6 三张表、RLS、4 条 policy、权限、类型和零持久数据均已回读。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`。2026-07-26 已从零重放仓库全部 migrations 至 DB-6 权限修复并完成本地验证；当前快照保留 2026-07-22 development DB-5 全量基线，依次嵌入与 `20260725151136_db6_create_re_review_items`、`20260726022216_db6_restrict_candidate_insert_columns` 一致且已由 development live catalog 与本地重放验证的 DB-6 段，SHA-256 为 `E8EBB40D289E513B1658196F283A0A4F936A01FD5347A9D71FBE4CD382FD69CF`。本次已取得 development 全量 public dump（113,550 字节，SHA-256 `E1E12A8319FDC8121013B6BCC60C7A9011766818D405FAFA5BC470A445CF479D`）并确认三个候选业务列的 ACL；因该输出启用了保留 pg_dump 注释，会对旧对象产生大范围纯格式差异，未用它机械覆盖当前快照。DB-6 三张表、RLS、4 条 policy、最小列权限、类型和零持久数据均已回读。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -148,7 +148,7 @@
 | `re_review_item_sources` | 保留全部 pending 来源及来源用户；普通用户只能读取自己的来源标记，供 RLS 防自审使用 |
 | `re_review_candidates` | 未参与原始提交的登录用户可提交候选修正版；每个重审项最多一份，客户端不能修改或删除 |
 | 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
-| 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 只读开放项 / 自己的来源标记，并可插入候选；service_role 只保留必要读写列 |
+| 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 只读开放项 / 自己的来源标记，候选 INSERT 仅开放 `re_review_item_id`、`payload`、`submitted_by`，不能伪造 `id` / `created_at`；service_role 只保留必要读写列 |
 | 当前边界 | DB-6 只建立基础和权限，不自动创建重审项、不接投票 / 最终处理，也不直接修改正式库 |
 
 ## 主要约束与索引
@@ -249,7 +249,7 @@
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
-- DB-6 三张表当前均为 0 行；社区读取、候选提交、防自审、匿名拒绝已在事务内验证，回滚后无测试数据残留。
+- DB-6 三张表当前均为 0 行；社区读取、候选提交、审计字段防伪、防自审、匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
