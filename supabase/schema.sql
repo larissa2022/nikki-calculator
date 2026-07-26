@@ -2124,7 +2124,7 @@ comment on table public.re_review_candidates is
 
 commit;
 
--- DB-6 integration: 20260726024734_db6_integrate_missing_suit_review (local replay verified; development pending)
+-- DB-6 integration: 20260726024734_db6_integrate_missing_suit_review (development verified)
 begin;
 
 alter table public.pending_clothes
