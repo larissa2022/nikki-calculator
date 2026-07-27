@@ -24,8 +24,8 @@
 - 来源任务：对近期 DB-5、DB-6 开发耗时、长任务日志和现行治理规则进行只读诊断后实施流程改造
 - 现象：业务实现完成后，重复审计、过程 push、PR 状态回读、Supabase 重连 / 重复前检和多份状态文档收口继续占用大量时间；旧规则仍假设 ChatGPT 规划、Codex 机械执行。
 - 原因：原流程为多工具交接和环境恢复设计；合体后仍把 GitHub 当开发过程日志，把普通 `develop` merge 和同一 migration 的每个步骤拆成独立授权点，并在长对话里重复加载完整上下文。
-- 处理方式：本地工作区作为开发中事实，GitHub 只承担共享 / PR / 合并 / 发布事实；Codex 对一个目标端到端负责；一次最终验证、一次远端交付；普通 `develop` PR 检查通过后按任务授权合并；固定 development migration 可一次授权完整闭环并复用现有 link。
-- 后续影响：保留 `main` / production、破坏性数据、env / 凭据、数据库环境与 rollback 门禁；取消旧 ChatGPT 预审批、逐命令确认、重复审计和纯状态提交。
+- 处理方式：本地工作区作为开发中事实，GitHub 只承担共享 / PR / 合并 / 发布事实；Codex 对一个目标端到端负责；一次最终验证、一次远端交付；普通 `develop` PR 检查通过后按任务授权合并；固定 development migration 可一次授权完整闭环并复用现有 link；任务看板退出 Git，只保留可选的本机极简指针。
+- 后续影响：保留 `main` / production、破坏性数据、env / 凭据、数据库环境与 rollback 门禁；取消旧 ChatGPT 预审批、逐命令确认、重复审计、Git 跟踪任务看板和纯状态提交。
 - Pattern Candidate：采用“本地连续实现 → 一次相称验证 → 一次 GitHub 交付 → 普通 develop 自动收口”的单人开发闭环。
 - Rule Candidate：负责人已于 2026-07-27 批准，已同步到 `RULES.md` 和 `WORKFLOWS.md`。
 - 状态：可复用
