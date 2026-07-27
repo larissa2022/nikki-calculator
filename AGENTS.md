@@ -1,89 +1,80 @@
-# Nikki Calculator AI 执行入口
+# Nikki Calculator Codex 执行入口
 
-本文件是仓库中唯一的 AI / Codex 自动启动入口。其他 Markdown 文档不会仅因存在于仓库中而自动生效，必须由本文件或用户任务明确路由读取。
+本文件是仓库中唯一自动生效的 Codex 入口。项目采用 Codex 单人开发模式：负责人给出业务目标和边界，Codex 负责调查、实现、验证、GitHub 交付和 development 收口。
 
 ## 1. 固定约定
 
-- 使用北京时间（UTC+8）记录时间。
-- 使用中文 commit 信息和中文回传。
-- GitHub 是远程事实源；未 push 的内容不算已发布。
+- 使用北京时间（UTC+8）记录时间，使用中文 commit 信息和中文回传。
+- 本地工作区是开发过程的当前事实；GitHub 是已共享、已推送和已合并状态的远程事实。未 push 的内容不算已发布，但不要求在开发中反复 push。
 - `main` 对应 production，`develop` 对应 development / preview。
-- 默认从 `develop` 创建窄范围的 `docs/*`、`feature/*`、`fix/*` 或 `codex/*` 分支，并以 `develop` 为 PR 目标。
-- 不自动 merge PR，不直接操作 `main`、production、Supabase、Vercel、env 或 migration。
+- 默认从最新 `develop` 创建一个窄范围 `codex/*`、`feature/*`、`fix/*` 或 `docs/*` 分支；一个业务结果默认只使用一个 PR。
+- 普通任务在本地连续完成，最终验证后集中 commit、push 和创建 PR。不要为了同步过程状态单独提交或推送。
+- 负责人负责产品取舍、production 和破坏性操作；Codex 负责已确认目标内的技术实现与相称验证。
 
-## 2. 任务启动与读取路由
+## 2. 最小读取路由
 
-开始任务时先分类：`read-only`、`docs`、`business`、`database`、`config`、`release`。
-
-所有任务先读取：
+所有任务只读取：
 
 - 本文件。
 - 用户明确指定的文件。
 - 当前任务直接相关的代码或文档。
 
-按任务条件补读：
+按任务补读：
 
-| 条件 | 必须补读 |
+| 条件 | 补读内容 |
 | --- | --- |
-| 用户说“继续”“下一步”、询问进度或开始项目任务 | `docs/ai/CURRENT_TASK.md` |
-| 任何文件修改、commit、push 或 PR 创建 | `docs/ai/RULES.md`，以及 `docs/ai/WORKFLOWS.md` 中对应任务章节 |
-| 产品规则、用户行为或技术口径变化 | `docs/ai/DECISIONS.md`；按需读取 `docs/requirements/**`、`docs/planning/**` |
-| 缺陷修复 | `docs/planning/缺陷文档.md` 和相关代码；涉及产品语义时追加 `DECISIONS.md` |
-| `main`、production、release、hotfix | `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` |
-| database、Supabase、SQL、RPC、RLS、migration | `docs/database/环境信息.md`、`docs/database/数据库开发安全方案.md`、`docs/database/数据库变更记录.md`；按需读取 `schema.md` |
-| 文档职责冲突或文档收口 | `docs/README.md` |
-| 复盘、Pattern Candidate、Rule Candidate 或未采纳方案复查 | `docs/ai/LESSONS.md` |
+| 用户说“继续”“下一步”或询问项目进度 | `docs/ai/CURRENT_TASK.md` |
+| 需要修改文件或发布到 GitHub | `docs/ai/RULES.md` 和 `docs/ai/WORKFLOWS.md` 的对应章节 |
+| 改变产品规则、用户行为或技术口径 | `docs/ai/DECISIONS.md`，再按需读取相关需求或规划章节 |
+| 修复缺陷 | 缺陷索引中的目标条目和相关代码；涉及产品语义时追加 `DECISIONS.md` |
+| database、Supabase、SQL、RPC、RLS 或 migration | `docs/database/环境信息.md`、数据库安全方案的相关章节、数据库变更索引中的目标条目和目标 migration |
+| `main`、production、release 或 hotfix | `docs/governance/BRANCH_ENVIRONMENT_POLICY.md` |
+| 修改治理规则或复盘流程 | `docs/ai/LESSONS.md` 的相关条目和 `docs/README.md` |
 
-`CURRENT_TASK.md` 是业务看板，重点记录当前任务、为什么做、已经完成、当前进度、唯一下一步和需要负责人决定的事项；分支创建、命令顺序和新任务启动规则放在本文件或 `WORKFLOWS.md`，不得占据看板主体。
+不要全文读取无关历史、归档、变更记录或长规划。记录型文档先查索引，只打开命中的目标章节；`docs/archive/**` 不参与当前任务执行。
 
-不要因为旧对话、历史报告、历史计划或文件存在而自动扩大读取和执行范围。`docs/archive/**` 仅用于历史审计，不参与当前任务路由。
+## 3. 启动与连续执行
 
-`docs/database/数据库变更记录.md` 与 `docs/planning/缺陷文档.md` 是记录型文档的常驻索引。默认只读取常驻索引和常驻详情；只有索引中的“详情位置”命中特定 BUG、migration 或 change name 时，才额外读取该索引指向的一个历史卷和一个目标章节，不得顺序展开或全文读取全部归档。
+普通修改开始前，用一条简短回执说明：业务目标、允许范围、验证方式和停止点。database、production、权限、数据删除或规则修改再补充目标环境与 rollback。回执不需要等待重复确认。
 
-## 3. 启动回执
+用户说“实现”“修改”“修复”“继续执行”等明确动作时，默认授权同一目标内连续完成：
 
-任何修改开始前，必须先输出一次紧凑启动回执：
+1. 一次本地与远端基线确认。
+2. 创建或复用一个任务分支。
+3. 连续完成代码和文档修改，开发中只运行针对性测试。
+4. 在最终边界运行一次完整的相称验证。
+5. 集中 commit、push、创建或更新一个目标 PR。
+6. PR 检查通过后，普通 `develop` PR 可直接合并并回读；用户明确要求停在合并前时除外。
 
-```text
-当前分支：
-任务类型：
-自动入口：AGENTS.md
-本任务额外读取：文件 + 原因
-允许修改：
-禁止事项：
-验收：
-停止点：
-```
+不要在分支创建、单文件修改、测试、commit、push 或 PR 创建之间逐步询问。不要在同一远端状态未变化时重复审计或轮询。
 
-只读任务不需要单独等待确认，但最终回传仍应说明实际读取范围。
+以下情况必须暂停：
 
-## 4. 连续批次执行
+- 出现未确认的产品语义或互斥业务选择。
+- 文件范围、目标分支、数据库环境或 migration 集合发生变化。
+- 验证失败且修复会扩大范围，或 rollback 不明确。
+- 即将操作 `main`、production、真实数据删除 / 回填、env / 凭据、历史改写或分支删除。
+- 工具返回不确定结果且只读回查仍无法确定实际状态。
 
-- 用户已经确认目标和任务级范围后，默认一次连续执行到当前授权的停止点：只读盘点 → 创建分支 → 修改 → 验证 → commit / push → 创建 PR。
-- 当产品语义、实际运行效果或负责人选择仍不确定时，把停止点设在最小可验证结果之后：先完成一小步并验证，再根据反馈扩展范围；这不等于在低层命令之间逐步等待。
-- 不在分支创建、单个文件修改、单次 commit、push 或 PR 创建之间逐步等待确认。
-- 对话进度只在发现关键结论、触发风险门禁或完成一个有意义的里程碑时更新，不逐条播报低层工具动作。
-- 只有以下情况暂停：进入需单独确认的敏感操作、范围或环境变化、工具失败、规则冲突、出现未确认产品语义、验证失败或 rollback 不明确。
-- PR merge、`main`、production、database / Supabase 写入、Vercel 写入、migration、历史改写和分支删除仍需单独明确确认。
+development 数据库写入不由普通代码修改自动授权；但负责人可以在任务开始时一次性授权固定 project ref 和固定 migration 集合。目标与文件哈希未变化时，不为前检、apply、事务验证和后检重复索要授权。
 
-PR 预算、主 PR 复用、纯状态 PR 禁止和看板稳定性门禁只以 `RULES.md` 为强规则源，以 `WORKFLOWS.md` 为执行步骤源；本入口不再复制完整条款。
+## 4. 效率原则
 
-## 5. 强制边界摘要
+- GitHub 只在任务开始刷新一次、最终交付一次、远端写入结果不确定时回读一次；不把远端当作开发过程日志。
+- Supabase 工作区已链接到正确 development project 时直接复用，并在实际远端操作前运行固定 project-ref 检查；不要重复 link。
+- 同一变更只做一次最终全量验证。编码阶段运行受影响测试，文档变更不触发无关构建或浏览器回归。
+- `CURRENT_TASK.md`、数据库变更记录、需求和技术文档只在对应事实真正变化时于最终收口批次更新一次。
+- 一个独立目标完成后结束任务；新的业务目标使用新任务，避免长期对话反复携带完整历史。
 
-- 用户本人是最终决策者，完整强规则只以 `docs/ai/RULES.md` 为准。
-- `main`、production、database、Supabase、Vercel、migration、env、PR merge、历史改写、分支删除、修改 `RULES.md`，必须单独确认目标、影响、验证和 rollback。
-- `gh pr merge` 永远需要用户再次明确确认。
-- 不提交 `tmp/**`、`.env*`、`supabase/.temp/**`、token、验证码、授权链接、keyring 信息或 production 写库脚本。
-- 发现实际范围超出任务单、出现规则冲突或会改变未确认的用户行为时，立即停止。
+## 5. 安全边界
 
-完整强规则见 `docs/ai/RULES.md`，具体执行步骤见 `docs/ai/WORKFLOWS.md`。
+- 完整强规则以 `docs/ai/RULES.md` 为准，执行步骤以 `docs/ai/WORKFLOWS.md` 为准。
+- 不提交 `tmp/**`、`.env*`、`supabase/.temp/**`、token、验证码、授权链接、keyring 信息、真实用户隐私数据或 production 写库脚本。
+- database migration 先在 development 验证；已应用 migration 只能用新的 patch migration 修正。
+- `main`、production、破坏性数据操作、env / 凭据、历史改写、分支删除和修改 `RULES.md` 必须针对本次目标明确授权。
 
-## 6. 回传格式
+## 6. 回传
 
-最终回传以负责人决策为中心，按以下顺序只说明业务结果：当前任务、为什么做、已经完成、当前进度、下一步、需要负责人决定。当前进度统一使用“调查阶段 / 修改阶段 / 验证阶段 / 待发布阶段 / 完成阶段”。
+最终回传只说明：业务结果、验证结论、当前阶段、唯一下一步，以及真正需要负责人决定的事项。默认隐藏命令流水和重复技术证据；数据库、权限、production、异常和 rollback 信息按需说明。
 
-默认隐藏命令、文件清单和内部技术过程。只有技术信息会影响负责人选择，或涉及 production、数据库、权限、安全、异常追踪，或用户主动询问时，才追加“技术备注（可跳过）”；风险、rollback、commit / PR 和未确认事项按此原则放入对应业务栏目或技术备注。
-
-每次项目任务完成后必须附上当前任务看板链接。在本地 Codex App 中优先使用当前工作区的绝对文件链接；只有执行环境无法提供本地链接时才使用远程链接。
-
-回传中的“下一步任务”必须与看板一致且只写下一件最重要的事。不要粘贴无关日志、完整大 JSON、SQL 全量结果或重复历史背景；默认最多提供 10 条异常样本。完整格式和判断规则见 `docs/ai/WORKFLOWS.md`。
+项目任务完成后附上本地 `docs/ai/CURRENT_TASK.md` 链接。只有业务状态或下一步确实变化时才更新看板，不为 PR 状态变化单独修改看板。

@@ -9,7 +9,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | 文档 | 唯一职责 | 不承担 |
 | --- | --- | --- |
 | [`AGENTS.md`](../AGENTS.md) | 自动入口、任务分类、读取路由、启动回执和最短连续批次摘要 | 完整强规则、PR 预算细则、长篇流程、产品决策、历史流水 |
-| [项目强规则](ai/RULES.md) | 角色边界、强门禁、安全约束 | 具体命令、读取清单、临时任务状态 |
+| [项目强规则](ai/RULES.md) | 决策边界、强门禁、安全约束 | 具体命令、读取清单、临时任务状态 |
 | [AI / Codex 工作流程](ai/WORKFLOWS.md) | 执行步骤、检查清单、执行单、验证、rollback、回传模板 | 正式 Rule、产品实现细节 |
 | [当前业务看板](ai/CURRENT_TASK.md) | 业务目标、技术目标、当前阶段、最近完成、下一步任务、阻塞与待确认 | Git 操作步骤、PR 状态流水、新任务启动教程、长期历史 |
 | [Final 决策记录](ai/DECISIONS.md) | 已确认的产品和技术口径 | 待确认事项、临时推测、执行步骤 |
@@ -48,7 +48,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [schema 摘要](database/schema.md) | development 数据库结构相关任务 | production 实时事实 |
 | [Supabase Review](database/SUPABASE_REVIEW.md) | 专项 Supabase 审查背景和命令 | 默认数据库执行入口 |
 
-所有 database / Supabase 任务都进入 Strict Lane；不能只凭本目录索引直接执行 SQL 或 migration。
+所有 database / Supabase 远端操作都必须遵守固定环境、一次任务授权、development 先验证和 rollback 门禁；不能只凭本目录索引直接执行 SQL 或 migration。
 
 ## 4. 复盘与历史材料
 
@@ -65,7 +65,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 
 以下职责已合并，不再保留独立文件：
 
-- ChatGPT → Codex 执行单：并入 `docs/ai/WORKFLOWS.md`。
+- 旧 ChatGPT → Codex 执行单：已由 Codex 单人开发工作流替代，不再作为当前入口。
 - 文档职责地图：并入本文件。
 - Rejected Ideas：并入 `docs/ai/LESSONS.md`。
 - Codex 历史报告与 Token 使用审计：迁入 `docs/archive/**`。

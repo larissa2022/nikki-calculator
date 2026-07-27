@@ -1,82 +1,63 @@
 # 项目强规则
 
-用途：只记录已经生效的角色边界、强门禁和安全约束。任务读取路由由仓库根目录 `AGENTS.md` 统一管理；具体操作步骤、命令和回传模板放在 [`WORKFLOWS.md`](WORKFLOWS.md)。如流程与本文件冲突，以本文件为准。
+本文件只保存稳定的决策边界、安全门禁和环境规则。操作步骤放在 [`WORKFLOWS.md`](WORKFLOWS.md)，产品口径放在 [`DECISIONS.md`](DECISIONS.md)。冲突时以本文件为准。
 
-正式 Rule 只能由用户本人批准。ChatGPT、Codex、Gemini 均不得自行创建或升级正式 Rule。
+正式 Rule 只能由用户本人批准。用户已于 2026-07-27 批准项目切换为 Codex 单人开发模式。
 
-## 1. 事实源与角色边界
+## 1. 责任与事实源
 
-- 用户本人是最终决策者，负责产品判断、功能审核、流程把控和最终确认。
-- GitHub 是唯一远程事实源；未 push 的内容不算已发布。
-- ChatGPT 负责任务收敛、风险判断、执行单生成、只读复核，以及已授权的纯文档 GitHub 操作。
-- Codex 负责代码、本地命令、测试、构建、commit、push 和 PR 创建，并严格按任务单执行。
-- Gemini 可用于 challenge、发现反例和风险，不批准规则。
-- 纯文档任务优先由 ChatGPT 通过 GitHub 连接器执行；ChatGPT 受限时，Codex 只作为固定 patch 的机械执行 fallback。
+- 用户本人是最终决策者，负责产品取舍、production 发布、破坏性数据操作和最终业务验收。
+- Codex 对已确认目标端到端负责，包括调查、实现、测试、构建、文档收口、commit、push、PR 和允许范围内的 development 验证。
+- 本地工作区是开发中状态的事实源；GitHub 是已共享、已推送、PR、合并和发布状态的远程事实源。未 push 的内容不算已发布，但开发过程不要求持续上传。
+- 旧的 ChatGPT 预审批、执行单转交和 Codex 机械执行分工不再适用。
 
-## 2. 分支与环境门禁
+## 2. 分支与环境
 
-- `main` 只对应 production。
-- `develop` 只对应 development / preview。
-- 默认从 `develop` 创建窄范围任务分支，并以 `develop` 为 PR 目标。
-- 不允许从普通 `feature/*`、`fix/*`、`docs/*` 分支直接合入 `main`；明确批准的紧急 hotfix 除外。
-- `develop -> main` 前必须做只读差异审计，并按 docs、business、database、config 分类。
-- 非紧急 production 发布由已完成并验收的大功能模块或完整需求触发，不以固定周次、经过天数或累计 PR 数量作为发布门槛。
-- 创建 `develop -> main` 发布 PR 前，必须先向负责人提交发布决策卡并取得本次发布确认；发布 PR 的 production merge 仍需再次单独确认。
-- 未完成或未验收功能必须保留在任务分支；若已进入 `develop`，必须先停止发布并完成隔离。已验收的非紧急小修复和优化可留在 `develop`，随下一次需求里程碑统一发布；紧急 production 缺陷走明确批准的 hotfix。
+- `main` 只对应 production；`develop` 只对应 development / preview。
+- 默认从最新 `develop` 创建一个窄范围任务分支，以一个 PR 交付一个可独立验收的业务结果。
+- 普通开发只在最终验证后集中 push。修复最终检查发现的问题时可继续更新同一 PR，不为过程状态另建 PR。
+- 用户明确要求实现、修改或修复且未要求停在合并前时，授权包含：本地修改、相称验证、commit、push、创建或更新 PR，以及检查通过后合并普通 `develop` PR。
+- `develop` 合并不等于 production 授权。任何 `develop -> main`、production 或 hotfix 发布仍按独立发布门禁执行。
 - Vercel production 只能对应 `main`；preview / development 只能对应 `develop` 或短期任务分支。
-- production 操作前必须重新确认 GitHub 分支、Vercel project、Supabase project ref、影响范围和 rollback。
-- 分支与环境映射以 [`../governance/BRANCH_ENVIRONMENT_POLICY.md`](../governance/BRANCH_ENVIRONMENT_POLICY.md) 为准。
 
 ## 3. 必须单独确认的操作
 
-以下操作必须由用户针对本次目标明确确认，不能从旧对话、历史授权或一般性同意中继承：
+以下操作必须由用户针对本次目标明确确认，不能从一般性开发指令推断：
 
-- PR merge，包括 `gh pr merge`。
-- 任何 `main` 或 production 操作。
-- database、Supabase、SQL、psql、RPC、RLS、migration apply。
-- Vercel 写操作、env 修改、production deployment 或 rollback。
-- `force push`、`reset --hard`、`git clean`、rebase、删除分支或其他历史改写。
+- 任何 `main`、production、production deployment 或 production rollback。
+- production 数据库操作，以及真实业务数据的删除、批量回填、批量改写或身份数据清理。
+- development database / Supabase / SQL / RPC / RLS / migration apply。可以在任务开始时一次授权固定 project ref、固定 migration 集合、验证和 rollback；目标与文件未变化时不重复确认同一批次的前检、apply、事务验证和后检。
+- env、凭据、Vercel 写配置或环境绑定变更。
+- force push、`reset --hard`、`git clean`、rebase、分支删除或其他历史改写。
 - 修改本文件。
 
-授权必须明确目标、环境、允许范围、验证、失败处理和 rollback。范围变化、环境变化或门禁失败时必须重新确认。
+范围、环境、project ref、migration 集合或 rollback 发生变化时，原授权失效并重新确认。普通 `develop` PR merge 不再作为独立确认点；用户明确要求停在合并前时必须遵守。
 
-同一 development 人工验收任务可以在启动时一次明确授权“测试数据创建 + 条件式清理”，但必须分别写清 project ref、精确数据身份、允许状态、依赖 / 审计链停止条件、前后读回、失败处理和 rollback。任一条件变化即停止清理，不得把一次造数授权泛化为任意删除权限。
+## 4. 任务与 PR 隔离
 
-## 4. 任务隔离
+- 一个业务结果默认使用一个任务分支和一个 `develop` PR。数据库结构、同一功能的业务接入、前端和直接支持文档默认在同一 PR 内交付。
+- 只有当数据库变更需要独立部署 / rollback、数据迁移风险明显高于业务代码，或用户明确要求时，才拆成数据库 PR 与业务 PR。
+- 治理规则、无关 config、release 和当前业务实现不得混入同一个 PR。
+- `CURRENT_TASK.md`、缺陷状态、验收记录和数据库变更记录是支持文档，只在最终收口批次更新一次；不得为任务启动、等待、审计、PR 创建或合并状态建立纯状态提交或 PR。
+- 修改 `CURRENT_TASK.md` 时必须描述合并后仍成立的业务状态，不得写当前 PR 编号、“等待合并”或授权提示。
+- 已应用 migration 的修正必须新增 patch migration，不得改写 migration history。
 
-- 每个 PR 只能有一个主风险类型和一个可独立验收的业务结果；与主变更直接绑定的 `CURRENT_TASK.md`、缺陷状态、验收记录和数据库变更记录属于支持文档，可随主 PR 更新，不视为新增风险类型。
-- 当工作区或拟议 PR 的唯一变更为 `docs/ai/CURRENT_TASK.md`，且当前分支不存在对应的 business / database 主变更时，必须停在 commit 前；禁止 commit、push 和创建 PR。`CURRENT_TASK.md` 永远不能被认定为独立文档交付物。
-- 治理规则文档、database 实现、config 和 release 默认按风险拆分。业务任务不得顺手修改治理规则，支持文档不得成为混入无关变更的理由。
-- 普通 business 或 docs 目标默认最多创建一个以 `develop` 为目标的 PR；同一目标的设计修正、验证结果和收口状态继续更新该 PR。
-- 同一数据库业务目标默认最多创建两个以 `develop` 为目标的 PR：一个用于 migration、RPC、RLS、权限和 development 验证，一个用于业务接入、前端和直接支持文档。
-- 不得为设计阶段、任务启动、验证收口、PR 创建或 PR 合并单独建立纯状态 PR。设计默认在计划或只读审计中完成；只有设计文档本身是负责人确认的独立交付物时，才可建立 design-only PR。
-- 修改 `CURRENT_TASK.md` 的 PR 在请求 merge 前必须证明看板描述在合并后仍成立；不得保留当前 PR 编号、等待 / 授权合并等短时状态。稳定性门禁失败时必须停在 merge 前。
-- 大型模块确需超过 PR 预算时，必须在实施前说明各 PR 的独立验收边界、依赖、风险和合并顺序，并取得负责人确认。
-- docs-only 任务不得顺手修改代码、构建配置、脚本、数据库、Supabase、Vercel、env 或 migration。
-- database migration 必须先在 development 验证；已执行 migration 的修正必须新增 patch migration。
-- production 写库脚本不得放入可提交路径。
-- 数据库任务必须先确认 dev / prod 环境和 Supabase project ref，并读取数据库安全文档和变更记录。
+## 5. 产品与需求门禁
 
-## 5. 指令冲突与需求门禁
+- 涉及产品规则、用户行为、数据库结构、权限边界或既有功能语义变化时，先核对 `DECISIONS.md` 和相关需求事实。
+- 用户已经明确给出的产品选择可直接进入实现，不需要再转换成另一份审批单。
+- 只有存在互斥选择、信息不足会显著改变用户行为或实现会越出目标时才暂停；可由代码和仓库事实确定的问题由 Codex自行判断。
+- 未确认的历史规划、临时推测和复盘建议不得当作 Final 决策实现。
 
-- 用户即时指令与本文件、分支环境治理、数据库安全边界或当前任务范围冲突时，不得直接执行。
-- 冲突出现时，必须列出：用户指令、冲突依据、冲突点、处理方案、风险和 rollback。
-- 涉及产品规则、用户行为、数据库结构、权限边界或既有功能语义变化时，必须先确认事实源和决策层级。
-- 仓库已有需求、决策、规划或技术实现文档时，应优先对齐；用户口头描述是补充上下文，不自动替代已确认决策。
-- 未确认事项、历史规划和临时推测不得直接写入 `DECISIONS.md`、任务单或实现。
-- 新增字段、枚举值、状态值或权限边界前，必须标记为待审核并取得用户确认。
+## 6. 数据、权限与凭据安全
 
-## 6. 数据与凭据安全
-
-- 不提交或传播 `.env*`、token、验证码、授权链接、keyring 信息、真实用户隐私数据或 production 凭据。
-- 不提交 `tmp/**`、`supabase/.temp/**` 或 production 写库脚本。
-- production、database 和批量数据任务不得因节省 token 而删除前值检查、事务数量检查、提交后回读、备份或 rollback 依据。
-- 核心业务事实应可追溯、可重算；具体产品与技术口径以 `DECISIONS.md` 为准，不在本文件展开实现细节。
+- 不提交或传播 `.env*`、token、验证码、授权链接、keyring 信息、真实用户隐私数据、`tmp/**`、`supabase/.temp/**` 或 production 写库脚本。
+- migration 必须先在 development 验证；production 前必须确认环境、备份、前值、预计影响、事务方案、后检和 rollback。
+- database 和批量数据任务不得删除事务数量断言、提交后回读或 rollback 依据，但不得重复执行同一份无变化前检来制造证据。
+- 核心业务事实必须可追溯、可重算；错误积分等审计事实使用追加式反向记录，不删除历史。
 
 ## 7. 规则治理
 
-- Candidate Rule、Verified Pattern 和 Rule 必须分层处理。
-- Candidate Rule 与复盘经验不能直接作为执行依据。
-- Rule 只能由已验证事实、GitHub 证据和用户明确确认形成。
-- 操作步骤写入 `WORKFLOWS.md`；复盘和候选线索写入 `LESSONS.md`；产品和技术 Final 决策写入 `DECISIONS.md`。
-- 禁止为一次任务临时扩张本文件；普通流程优化优先修改 `WORKFLOWS.md`。
+- `RULES.md` 只保留必须长期稳定的强边界；工具命令、检查顺序和报告模板只放 `WORKFLOWS.md`。
+- `LESSONS.md` 中的经验和 Candidate Rule 不自动生效。
+- 普通流程优化优先修改 `WORKFLOWS.md`；只有改变授权、安全或环境边界时才修改本文件。
