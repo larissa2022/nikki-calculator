@@ -54,3 +54,6 @@ docs/database/local-only/
 
 # Local audit reports, database backups, rollback files, and generated payloads.
 tmp/
+
+# Local Codex task pointer. This is workspace state, not repository history.
+docs/ai/CURRENT_TASK.md
