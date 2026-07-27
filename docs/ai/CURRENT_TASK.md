@@ -1,6 +1,6 @@
 # 当前任务看板
 
-> 最后更新：2026-07-27 18:58（北京时间）
+> 最后更新：2026-07-25 22:39（北京时间）
 
 ## 当前任务
 
@@ -25,11 +25,11 @@
 
 ## 需要负责人决定
 
-- 启动下一项数据库任务时，一次确认固定 development project、migration 集合、验证和 rollback；同一批次不再逐步骤重复确认。
+- 启动下一项数据库任务时，需要负责人单独授权 development migration 的本地创建与远端应用；production 和 `main` 继续不在范围内。
 
 ## 通用边界
 
-- `main`、production、真实数据删除 / 回填、env / 凭据、历史改写、分支删除和 `RULES.md` 修改仍需分别明确确认；普通 `develop` PR 的发布与合入由任务级执行范围覆盖。
+- `main`、production、database / Supabase / Vercel 写入、migration、env、PR merge、历史改写、分支删除和 `RULES.md` 修改仍需分别明确确认。
 
 ## Rollback
 
