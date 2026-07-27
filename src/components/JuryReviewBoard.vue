@@ -1,14 +1,28 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { supabase } from '../api/supabase'
 import {
   castJuryVote,
+  createJuryRequestGate,
   fetchJuryReviewQueue,
+  isJuryResultUncertain,
   rejectJuryCandidateAsAdmin,
-  submitJuryCandidate
+  submitJuryCandidate,
+  withJuryRequestTimeout
 } from '../api/juryService'
 import { suitService } from '../api/suitService'
+import ClothesEntryForm from './ClothesEntryForm.vue'
 import { getJuryStatusText, JURY_VOTE } from '../utils/juryRules'
+import {
+  buildJuryVoteUpdate,
+  buildJuryCandidatePayload,
+  createJuryCandidateForm,
+  describeJuryIssues,
+  formatJuryFieldValue,
+  getCandidateSummary,
+  getReadonlyJuryFields,
+  JURY_FIELD_LABELS
+} from '../utils/juryReview'
 
 const props = defineProps({
   isLoggedIn: Boolean,
@@ -17,94 +31,353 @@ const props = defineProps({
 
 const items = ref([])
 const suits = ref([])
-const selectedSuitIds = ref({})
+const candidateForms = ref({})
+const suitSearchTexts = ref({})
 const adminReasons = ref({})
+const formErrors = ref({})
+const activeActions = ref({})
 const isLoading = ref(false)
+const isRefreshing = ref(false)
+const isSuitsLoading = ref(false)
 const loadError = ref('')
-const activeActionKey = ref('')
+const notice = ref(null)
+const confirmation = ref(null)
+
+const queueRequests = createJuryRequestGate()
+const suitRequests = createJuryRequestGate()
+let loadController = null
+let suitController = null
+const actionControllers = new Set()
 
 const suitsById = computed(() => new Map(
   suits.value.map(suit => [String(suit.id), suit])
 ))
 
-const loadQueue = async () => {
+const setFormError = (itemId, message = '') => {
+  formErrors.value = { ...formErrors.value, [itemId]: message }
+}
+
+const setActionActive = (key, active) => {
+  const next = { ...activeActions.value }
+  if (active) next[key] = true
+  else delete next[key]
+  activeActions.value = next
+}
+
+const isActionActive = key => Boolean(activeActions.value[key])
+const isItemBusy = item => Object.keys(activeActions.value)
+  .some(key => key.endsWith(item.reReviewItemId) || key.endsWith(item.candidateId))
+
+const initializeCandidateForms = queue => {
+  const nextForms = { ...candidateForms.value }
+  const nextSearchTexts = { ...suitSearchTexts.value }
+
+  queue.forEach(item => {
+    if (!item.canSubmitCandidate || nextForms[item.reReviewItemId]) return
+    const form = createJuryCandidateForm(item.basePayload)
+    nextForms[item.reReviewItemId] = form
+    const suitName = item.baseSuitName
+      || suitsById.value.get(String(form.suit_id))?.name
+      || ''
+    nextSearchTexts[item.reReviewItemId] = form.suit_id && suitName
+      ? `《${suitName}》`
+      : ''
+  })
+
+  candidateForms.value = nextForms
+  suitSearchTexts.value = nextSearchTexts
+}
+
+const needsSuitRows = queue => queue.some(item => (
+  item.issues.some(issue => issue.field === 'suit')
+))
+
+const loadSuits = async queueRequestId => {
+  if (suits.value.length) return
+  const requestId = suitRequests.next()
+  suitController?.abort()
+  const controller = new AbortController()
+  suitController = controller
+  isSuitsLoading.value = true
+  try {
+    const rows = await withJuryRequestTimeout(
+      requestSignal => suitService.getAllSuits({ signal: requestSignal }),
+      { signal: controller.signal }
+    )
+    if (!suitRequests.isCurrent(requestId) || !queueRequests.isCurrent(queueRequestId)) return
+    suits.value = rows
+    const nextSearchTexts = { ...suitSearchTexts.value }
+    Object.entries(candidateForms.value).forEach(([itemId, form]) => {
+      if (!form?.suit_id) return
+      const suitName = suitsById.value.get(String(form.suit_id))?.name
+      if (suitName) nextSearchTexts[itemId] = `《${suitName}》`
+    })
+    suitSearchTexts.value = nextSearchTexts
+    initializeCandidateForms(items.value)
+  } catch (error) {
+    if (controller.signal.aborted || !suitRequests.isCurrent(requestId)) return
+    console.error('加载套装列表失败:', error)
+    notice.value = {
+      tone: 'warning',
+      message: '审核事项已加载，但套装列表暂时不可用。可以稍后重试刷新。'
+    }
+  } finally {
+    if (suitRequests.isCurrent(requestId)) isSuitsLoading.value = false
+  }
+}
+
+const loadQueue = async ({ background = false } = {}) => {
   if (!props.isLoggedIn) {
+    loadController?.abort()
+    suitController?.abort()
+    queueRequests.invalidate()
+    suitRequests.invalidate()
     items.value = []
+    isLoading.value = false
+    isRefreshing.value = false
+    isSuitsLoading.value = false
     return
   }
 
-  isLoading.value = true
+  const requestId = queueRequests.next()
+  loadController?.abort()
+  const controller = new AbortController()
+  loadController = controller
+  const hasExistingItems = items.value.length > 0
+  isLoading.value = !background && !hasExistingItems
+  isRefreshing.value = background || hasExistingItems
   loadError.value = ''
+
   try {
-    const [queue, suitRows] = await Promise.all([
-      fetchJuryReviewQueue(supabase),
-      suitService.getAllSuits()
-    ])
+    const queue = await fetchJuryReviewQueue(supabase, {
+      signal: controller.signal
+    })
+    if (!queueRequests.isCurrent(requestId)) return
+
     items.value = queue
-    suits.value = suitRows
+    initializeCandidateForms(queue)
+    if (needsSuitRows(queue)) {
+      void loadSuits(requestId)
+    } else {
+      suitController?.abort()
+      suitRequests.invalidate()
+      isSuitsLoading.value = false
+    }
   } catch (error) {
+    if (controller.signal.aborted || !queueRequests.isCurrent(requestId)) return
     console.error('加载陪审团失败:', error)
-    loadError.value = error?.message || '陪审团暂时无法加载'
+    const message = error?.message || '陪审团暂时无法加载'
+    if (hasExistingItems) {
+      notice.value = { tone: 'warning', message: `刷新失败，页面保留了现有内容：${message}` }
+    } else {
+      loadError.value = message
+    }
   } finally {
-    isLoading.value = false
+    if (queueRequests.isCurrent(requestId)) {
+      isLoading.value = false
+      isRefreshing.value = false
+    }
   }
 }
 
-const candidateSuitName = (item) => {
-  const suitId = String(item.candidatePayload?.suit_id || '')
-  return suitsById.value.get(suitId)?.name || (suitId ? `套装 ${suitId}` : '尚未提交候选套装')
-}
+const runAction = async ({ key, item, action, onSuccess, successMessage }) => {
+  if (isActionActive(key)) return
+  const controller = new AbortController()
+  actionControllers.add(controller)
+  setActionActive(key, true)
+  setFormError(item.reReviewItemId)
 
-const runAction = async (key, action, successMessage) => {
-  if (activeActionKey.value) return
-  activeActionKey.value = key
   try {
-    await action()
-    alert(successMessage)
-    await loadQueue()
+    const result = await action(controller.signal)
+    onSuccess?.(result)
+    notice.value = { tone: 'success', message: successMessage(result) }
+    void loadQueue({ background: true })
   } catch (error) {
-    alert(error?.message || '操作失败，请稍后重试。')
+    if (controller.signal.aborted) return
+    console.error('陪审团操作失败:', error)
+    if (isJuryResultUncertain(error)) {
+      notice.value = {
+        tone: 'warning',
+        message: '操作结果暂时无法确认，正在重新读取。请不要重复点击。'
+      }
+      await loadQueue({ background: true })
+    } else {
+      setFormError(item.reReviewItemId, error?.message || '操作失败，请稍后重试。')
+    }
   } finally {
-    activeActionKey.value = ''
+    actionControllers.delete(controller)
+    setActionActive(key, false)
   }
 }
 
-const handleSubmitCandidate = async (item) => {
-  const suitId = selectedSuitIds.value[item.reReviewItemId]
-  if (!suitId) return alert('请先选择一个明确的正式套装。')
-
-  await runAction(
-    `candidate:${item.reReviewItemId}`,
-    () => submitJuryCandidate(supabase, item.reReviewItemId, suitId),
-    '候选快照已冻结，陪审团可以开始投票。'
-  )
+const applyCandidateResult = (item, payload, result) => {
+  Object.assign(item, {
+    itemStatus: 'voting',
+    candidateId: String(result?.candidate_id || ''),
+    candidatePayload: payload,
+    candidateStatus: 'voting',
+    approveCount: 0,
+    rejectCount: 0,
+    myVote: '',
+    canSubmitCandidate: false,
+    canVote: false,
+    isCandidateAuthor: true,
+    canAdminReject: false
+  })
 }
 
-const handleVote = async (item, vote) => {
-  const label = vote === JURY_VOTE.APPROVE ? '赞同' : '驳回'
-  if (!confirm(`确认对《${item.clothesName}》投“${label}”吗？投票后不能修改。`)) return
-
-  await runAction(
-    `vote:${item.candidateId}`,
-    () => castJuryVote(supabase, item.candidateId, vote),
-    '投票已记录。'
-  )
+const executeCandidateSubmission = async item => {
+  const form = candidateForms.value[item.reReviewItemId]
+  if (!form) return
+  if (!['existing', 'none'].includes(form.suit_status)) {
+    setFormError(item.reReviewItemId, '所属套装必须选择已有套装，或明确选择“无关联套装（纯散件）”。')
+    return
+  }
+  const payload = buildJuryCandidatePayload(form)
+  await runAction({
+    key: `candidate:${item.reReviewItemId}`,
+    item,
+    action: signal => submitJuryCandidate(
+      supabase,
+      item.reReviewItemId,
+      payload,
+      { signal }
+    ),
+    onSuccess: result => applyCandidateResult(item, payload, result),
+    successMessage: () => '补充内容已提交，其他用户现在可以参与审核。'
+  })
 }
 
-const handleAdminReject = async (item) => {
+const executeVote = async (item, vote) => {
+  await runAction({
+    key: `vote:${item.candidateId}`,
+    item,
+    action: signal => castJuryVote(supabase, item.candidateId, vote, { signal }),
+    onSuccess: result => {
+      const update = buildJuryVoteUpdate(result, vote)
+      if (update.approveCount !== null) item.approveCount = update.approveCount
+      if (update.rejectCount !== null) item.rejectCount = update.rejectCount
+      if (update.status === 'approved') {
+        items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+      } else if (update.status === 'returned') {
+        Object.assign(item, {
+          itemStatus: 'pending',
+          candidateId: '',
+          candidatePayload: null,
+          candidateStatus: '',
+          candidateSuitName: '',
+          approveCount: 0,
+          rejectCount: 0,
+          myVote: '',
+          canSubmitCandidate: true,
+          canVote: false,
+          isCandidateAuthor: false,
+          canAdminReject: false
+        })
+        initializeCandidateForms([item])
+      } else {
+        item.itemStatus = 'voting'
+        item.myVote = update.myVote
+        item.canVote = false
+        item.canAdminReject = false
+      }
+    },
+    successMessage: result => Number(result?.points_awarded) === 1
+      ? '投票已记录，你获得了 1 积分。'
+      : '投票已记录。'
+  })
+}
+
+const executeAdminReject = async item => {
   const reason = String(adminReasons.value[item.candidateId] || '').trim()
-  if (!reason) return alert('永久驳回必须填写终审理由。')
-  if (!confirm(`确认永久驳回《${item.clothesName}》当前候选吗？该动作与普通投票分开记录。`)) return
-
-  await runAction(
-    `admin:${item.candidateId}`,
-    () => rejectJuryCandidateAsAdmin(supabase, item.candidateId, reason),
-    '管理员终审已记录，该审核项已永久驳回。'
-  )
+  await runAction({
+    key: `admin:${item.candidateId}`,
+    item,
+    action: signal => rejectJuryCandidateAsAdmin(
+      supabase,
+      item.candidateId,
+      reason,
+      { signal }
+    ),
+    onSuccess: () => {
+      items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+    },
+    successMessage: () => '管理员终审已记录，该事项已永久驳回。'
+  })
 }
 
-watch(() => props.isLoggedIn, loadQueue)
-onMounted(loadQueue)
+const askCandidateConfirmation = item => {
+  setFormError(item.reReviewItemId)
+  confirmation.value = {
+    title: '确认提交补充内容',
+    message: '提交后，本轮审核期间不能修改。请确认缺失或冲突字段已经核对完成。',
+    confirmText: '确认提交',
+    tone: 'purple',
+    action: () => executeCandidateSubmission(item)
+  }
+}
+
+const askVoteConfirmation = (item, vote) => {
+  const label = vote === JURY_VOTE.APPROVE ? '赞同' : '反对'
+  confirmation.value = {
+    title: `确认投“${label}”`,
+    message: `你正在审核《${item.clothesName}》。投票提交后不能修改。`,
+    confirmText: `确认${label}`,
+    tone: vote === JURY_VOTE.APPROVE ? 'green' : 'rose',
+    action: () => executeVote(item, vote)
+  }
+}
+
+const askAdminConfirmation = item => {
+  const reason = String(adminReasons.value[item.candidateId] || '').trim()
+  if (!reason) {
+    setFormError(item.reReviewItemId, '永久驳回必须填写终审理由。')
+    return
+  }
+  confirmation.value = {
+    title: '确认永久驳回',
+    message: `该操作与普通投票分开记录，理由为：“${reason}”`,
+    confirmText: '永久驳回',
+    tone: 'rose',
+    action: () => executeAdminReject(item)
+  }
+}
+
+const confirmPendingAction = () => {
+  const action = confirmation.value?.action
+  confirmation.value = null
+  void action?.()
+}
+
+const issueGroups = item => describeJuryIssues(item.issues)
+const readonlyFields = item => getReadonlyJuryFields(item.issues)
+const itemSuitsById = item => {
+  const names = new Map(suitsById.value)
+  const baseSuitId = String(item.basePayload?.suit_id || '')
+  const candidateSuitId = String(item.candidatePayload?.suit_id || '')
+  if (baseSuitId && item.baseSuitName) names.set(baseSuitId, { name: item.baseSuitName })
+  if (candidateSuitId && item.candidateSuitName) {
+    names.set(candidateSuitId, { name: item.candidateSuitName })
+  }
+  return names
+}
+const candidateSummary = item => getCandidateSummary(item.candidatePayload, itemSuitsById(item))
+const issueValue = (item, issue) => formatJuryFieldValue(
+  item.candidatePayload,
+  issue.field,
+  itemSuitsById(item)
+)
+
+watch(() => props.isLoggedIn, () => loadQueue(), { immediate: true })
+
+onBeforeUnmount(() => {
+  queueRequests.invalidate()
+  suitRequests.invalidate()
+  loadController?.abort()
+  suitController?.abort()
+  actionControllers.forEach(controller => controller.abort())
+  actionControllers.clear()
+})
 </script>
 
 <template>
@@ -114,31 +387,41 @@ onMounted(loadQueue)
         <div>
           <h2 class="text-xl font-black text-slate-800">⚖️ 陪审团</h2>
           <p class="mt-1 text-xs font-bold leading-relaxed text-slate-500">
-            每人一票。赞同票至少 5 且多于反对票时通过；反对票领先至少 3 时退回重审；其他情况继续投票。
+            每人一票。赞同票至少 5 且多于反对票时通过；反对票领先至少 3 时要求重新补充；其他情况继续投票。
           </p>
         </div>
         <button
           type="button"
           class="rounded-xl border border-purple-200 px-4 py-2 text-sm font-black text-purple-600 hover:bg-purple-50 disabled:cursor-wait disabled:opacity-50"
-          :disabled="isLoading"
-          @click="loadQueue"
+          :disabled="isLoading || isRefreshing"
+          @click="loadQueue()"
         >
-          {{ isLoading ? '刷新中…' : '刷新陪审团' }}
+          {{ isLoading || isRefreshing ? '刷新中…' : '刷新陪审团' }}
         </button>
       </div>
     </section>
 
+    <section
+      v-if="notice"
+      class="rounded-2xl border p-4 text-sm font-bold"
+      :class="notice.tone === 'success'
+        ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+        : 'border-amber-100 bg-amber-50 text-amber-700'"
+    >
+      {{ notice.message }}
+    </section>
+
     <section v-if="!isLoggedIn" class="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-400">
-      登录后才能查看与你无关的重审项并参与陪审团。
+      登录后才能查看与你无关的审核事项并参与陪审团。
     </section>
 
-    <section v-else-if="loadError" class="rounded-2xl border border-rose-100 bg-rose-50 p-6 text-center text-sm font-bold text-rose-600">
+    <section v-else-if="loadError && items.length === 0" class="rounded-2xl border border-rose-100 bg-rose-50 p-6 text-center text-sm font-bold text-rose-600">
       <p>{{ loadError }}</p>
-      <button type="button" class="mt-3 underline" @click="loadQueue">重新加载</button>
+      <button type="button" class="mt-3 underline" @click="loadQueue()">重新加载</button>
     </section>
 
-    <section v-else-if="isLoading" class="rounded-2xl border border-dashed border-purple-100 bg-white p-8 text-center text-sm font-bold text-purple-500">
-      正在读取可参与的审核项…
+    <section v-else-if="isLoading && items.length === 0" class="rounded-2xl border border-dashed border-purple-100 bg-white p-8 text-center text-sm font-bold text-purple-500">
+      正在读取可参与的审核事项…
     </section>
 
     <section v-else-if="items.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-400">
@@ -146,103 +429,166 @@ onMounted(loadQueue)
     </section>
 
     <template v-else>
-    <article
-      v-for="item in items"
-      :key="item.reReviewItemId"
-      class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
-    >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <h3 class="text-lg font-black text-slate-800">{{ item.clothesName }}</h3>
-            <span class="rounded-full bg-purple-50 px-2.5 py-1 text-[11px] font-black text-purple-600">
-              {{ getJuryStatusText(item.itemStatus) }}
-            </span>
+      <article
+        v-for="item in items"
+        :key="item.reReviewItemId"
+        class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+      >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-lg font-black text-slate-800">{{ item.clothesName }}</h3>
+              <span class="rounded-full bg-purple-50 px-2.5 py-1 text-[11px] font-black text-purple-600">
+                {{ getJuryStatusText(item.itemStatus) }}
+              </span>
+            </div>
+            <p class="mt-1 text-xs font-bold text-slate-400">
+              {{ item.category || '未知分类' }} · 短编号 {{ item.gameId || '未知' }}
+            </p>
           </div>
-          <p class="mt-1 text-xs font-bold text-slate-400">
-            {{ item.category || '未知分类' }} · 短编号 {{ item.gameId || '未知' }} · 所属套装待确认
+          <div class="flex gap-2 text-xs font-black">
+            <span class="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-600">赞同 {{ item.approveCount }}</span>
+            <span class="rounded-lg bg-rose-50 px-3 py-2 text-rose-600">反对 {{ item.rejectCount }}</span>
+          </div>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4">
+          <p v-if="issueGroups(item).missing.length" class="text-sm font-black text-amber-800">
+            缺少：{{ issueGroups(item).missing.join('、') }}
+          </p>
+          <p v-if="issueGroups(item).conflicts.length" class="mt-1 text-sm font-black text-rose-700">
+            存在分歧：{{ issueGroups(item).conflicts.join('、') }}
+          </p>
+          <p class="mt-2 text-xs font-bold leading-relaxed text-slate-600">
+            请补充或核对上述字段，并提交一份完整资料供其他用户审核。
           </p>
         </div>
-        <div class="flex gap-2 text-xs font-black">
-          <span class="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-600">赞同 {{ item.approveCount }}</span>
-          <span class="rounded-lg bg-rose-50 px-3 py-2 text-rose-600">反对 {{ item.rejectCount }}</span>
-        </div>
-      </div>
 
-      <div v-if="item.canSubmitCandidate" class="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4">
-        <p class="text-sm font-black text-amber-700">该事项已退回或尚无候选，请选择一个明确套装形成新的冻结快照。</p>
-        <div class="mt-3 flex flex-col gap-2 sm:flex-row">
-          <select
-            v-model="selectedSuitIds[item.reReviewItemId]"
-            class="min-w-0 flex-1 rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
-          >
-            <option value="">选择正式套装</option>
-            <option v-for="suit in suits" :key="suit.id" :value="suit.id">{{ suit.name }}</option>
-          </select>
-          <button
-            type="button"
-            class="rounded-xl bg-amber-500 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
-            :disabled="Boolean(activeActionKey)"
-            @click="handleSubmitCandidate(item)"
-          >
-            提交并冻结候选
-          </button>
-        </div>
-      </div>
-
-      <div v-else-if="item.candidateId" class="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
-        <div class="text-xs font-bold text-slate-400">当前冻结候选</div>
-        <div class="mt-1 text-base font-black text-slate-700">《{{ candidateSuitName(item) }}》</div>
-        <p class="mt-2 text-xs font-bold text-slate-500">候选内容在本轮投票期间不会变化；若被退回，旧票保留为历史，新候选重新计票。</p>
-
-        <div v-if="item.myVote" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-purple-600">
-          你已投：{{ item.myVote === JURY_VOTE.APPROVE ? '赞同' : '驳回' }}（一票定稿）
-        </div>
-        <div v-else-if="item.isCandidateAuthor" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-slate-500">
-          这是你提交的候选快照，不能参与本轮投票。
-        </div>
-        <div v-else class="mt-4 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            class="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-            :disabled="!item.canVote || Boolean(activeActionKey)"
-            @click="handleVote(item, JURY_VOTE.APPROVE)"
-          >
-            赞同候选
-          </button>
-          <button
-            type="button"
-            class="rounded-xl bg-rose-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
-            :disabled="!item.canVote || Boolean(activeActionKey)"
-            @click="handleVote(item, JURY_VOTE.REJECT)"
-          >
-            驳回并要求修正
-          </button>
+        <div v-if="item.canSubmitCandidate" class="mt-4 rounded-xl border border-purple-100 bg-purple-50/40 p-4">
+          <ClothesEntryForm
+            v-if="candidateForms[item.reReviewItemId]"
+            :form="candidateForms[item.reReviewItemId]"
+            :suit-search-text="suitSearchTexts[item.reReviewItemId] || ''"
+            :available-suits="suits"
+            :readonly-fields="readonlyFields(item)"
+            :is-submitting="isActionActive(`candidate:${item.reReviewItemId}`)"
+            :allow-pending-review="false"
+            :allow-create-suit="false"
+            :show-rule-note="false"
+            :inline-validation="true"
+            submit-text="提交补充内容"
+            submit-loading-text="正在提交…"
+            @update:suit-search-text="value => (suitSearchTexts[item.reReviewItemId] = value)"
+            @validation-error="message => setFormError(item.reReviewItemId, message)"
+            @submit="askCandidateConfirmation(item)"
+          />
+          <p v-if="isSuitsLoading && item.issues.some(issue => issue.field === 'suit')" class="mt-2 text-xs font-bold text-purple-500">
+            正在读取套装列表…
+          </p>
         </div>
 
-        <div v-if="isSuperAdmin" class="mt-5 border-t border-slate-200 pt-4">
-          <div class="text-xs font-black text-rose-600">管理员独立终审</div>
-          <p class="mt-1 text-[11px] font-bold text-slate-500">永久驳回不会计入普通票；已经投过本候选的管理员不能终审。</p>
-          <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              v-model="adminReasons[item.candidateId]"
-              type="text"
-              maxlength="200"
-              placeholder="填写永久驳回理由"
-              class="min-w-0 flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
-            />
+        <div v-else-if="item.candidateId" class="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+          <div class="text-xs font-bold text-slate-400">待审核内容</div>
+          <div class="mt-3 grid gap-2 sm:grid-cols-2">
+            <div
+              v-for="summary in candidateSummary(item)"
+              :key="summary.label"
+              class="rounded-lg bg-white px-3 py-2"
+            >
+              <div class="text-[11px] font-bold text-slate-400">{{ summary.label }}</div>
+              <div class="mt-0.5 text-sm font-black text-slate-700">{{ summary.value }}</div>
+            </div>
+          </div>
+
+          <div class="mt-3 space-y-2">
+            <div
+              v-for="issue in item.issues"
+              :key="issue.field"
+              class="flex items-center justify-between gap-3 rounded-lg border border-purple-100 bg-purple-50 px-3 py-2 text-sm"
+            >
+              <span class="font-bold text-purple-600">{{ JURY_FIELD_LABELS[issue.field] || issue.field }}</span>
+              <span class="text-right font-black text-slate-700">{{ issueValue(item, issue) }}</span>
+            </div>
+          </div>
+
+          <p class="mt-3 text-xs font-bold text-slate-500">
+            本轮投票期间内容不会变化；如果需要修改，会开启新一轮投票。
+          </p>
+
+          <div v-if="item.myVote" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-purple-600">
+            你已投：{{ item.myVote === JURY_VOTE.APPROVE ? '赞同' : '反对' }}
+          </div>
+          <div v-else-if="item.isCandidateAuthor" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-slate-500">
+            这是你补充的内容，不能参与本轮投票。
+          </div>
+          <div v-else class="mt-4 grid grid-cols-2 gap-3">
             <button
               type="button"
-              class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-black text-rose-600 disabled:opacity-50"
-              :disabled="Boolean(activeActionKey)"
-              @click="handleAdminReject(item)"
+              class="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+              :disabled="!item.canVote || isItemBusy(item)"
+              @click="askVoteConfirmation(item, JURY_VOTE.APPROVE)"
             >
-              永久驳回
+              确认正确
+            </button>
+            <button
+              type="button"
+              class="rounded-xl bg-rose-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
+              :disabled="!item.canVote || isItemBusy(item)"
+              @click="askVoteConfirmation(item, JURY_VOTE.REJECT)"
+            >
+              需要修改
             </button>
           </div>
+
+          <div v-if="isSuperAdmin" class="mt-5 border-t border-slate-200 pt-4">
+            <div class="text-xs font-black text-rose-600">管理员独立终审</div>
+            <p v-if="!item.canAdminReject" class="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-500">
+              你已参与普通投票、提交过本次内容或参与过原始录入，因此不能再执行终审。
+            </p>
+            <div v-else class="mt-2 flex flex-col gap-2 sm:flex-row">
+              <input
+                v-model="adminReasons[item.candidateId]"
+                type="text"
+                maxlength="200"
+                placeholder="填写永久驳回理由"
+                class="min-w-0 flex-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+              />
+              <button
+                type="button"
+                class="rounded-xl border border-rose-200 bg-white px-4 py-2 text-sm font-black text-rose-600 disabled:opacity-50"
+                :disabled="isItemBusy(item)"
+                @click="askAdminConfirmation(item)"
+              >
+                永久驳回
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p v-if="formErrors[item.reReviewItemId]" class="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600">
+          {{ formErrors[item.reReviewItemId] }}
+        </p>
+      </article>
+    </template>
+
+    <div v-if="confirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" @click.self="confirmation = null">
+      <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+        <h3 class="text-lg font-black text-slate-800">{{ confirmation.title }}</h3>
+        <p class="mt-2 text-sm font-bold leading-relaxed text-slate-600">{{ confirmation.message }}</p>
+        <div class="mt-5 flex justify-end gap-3">
+          <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500" @click="confirmation = null">
+            取消
+          </button>
+          <button
+            type="button"
+            class="rounded-xl px-4 py-2 text-sm font-black text-white"
+            :class="confirmation.tone === 'green' ? 'bg-emerald-500' : confirmation.tone === 'rose' ? 'bg-rose-500' : 'bg-purple-500'"
+            @click="confirmPendingAction"
+          >
+            {{ confirmation.confirmText }}
+          </button>
         </div>
       </div>
-    </article>
-    </template>
+    </div>
   </div>
 </template>

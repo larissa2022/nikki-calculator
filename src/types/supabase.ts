@@ -307,6 +307,7 @@ export type Database = {
           created_at: string
           delta: number
           id: string
+          jury_vote_id: string | null
           occurred_at: string
           re_review_candidate_id: string | null
           reversal_of: string | null
@@ -319,6 +320,7 @@ export type Database = {
           created_at?: string
           delta: number
           id?: string
+          jury_vote_id?: string | null
           occurred_at?: string
           re_review_candidate_id?: string | null
           reversal_of?: string | null
@@ -331,6 +333,7 @@ export type Database = {
           created_at?: string
           delta?: number
           id?: string
+          jury_vote_id?: string | null
           occurred_at?: string
           re_review_candidate_id?: string | null
           reversal_of?: string | null
@@ -340,6 +343,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "points_ledger_jury_vote_id_fkey"
+            columns: ["jury_vote_id"]
+            isOneToOne: false
+            referencedRelation: "jury_votes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "points_ledger_re_review_candidate_id_fkey"
             columns: ["re_review_candidate_id"]
@@ -487,6 +497,7 @@ export type Database = {
           clothes_id: string | null
           created_at: string
           id: string
+          identity_key: string | null
           payload: Json
           reason: string
           resolved_at: string | null
@@ -500,6 +511,7 @@ export type Database = {
           clothes_id?: string | null
           created_at?: string
           id?: string
+          identity_key?: string | null
           payload: Json
           reason: string
           resolved_at?: string | null
@@ -513,6 +525,7 @@ export type Database = {
           clothes_id?: string | null
           created_at?: string
           id?: string
+          identity_key?: string | null
           payload?: Json
           reason?: string
           resolved_at?: string | null
@@ -647,6 +660,14 @@ export type Database = {
         Args: { p_candidate_id: string; p_reason: string }
         Returns: Json
       }
+      apply_approved_jury_candidate: {
+        Args: {
+          p_candidate_id: string
+          p_re_review_item_id: string
+          p_resolved_by: string
+        }
+        Returns: Json
+      }
       approve_pending_clothes_arbitration: {
         Args: {
           p_category: string
@@ -676,6 +697,10 @@ export type Database = {
           p_tags?: string
           p_temp_suit_name?: string
         }
+        Returns: Json
+      }
+      build_jury_review_payload: {
+        Args: { p_clothes_id?: string; p_pending_ids: number[] }
         Returns: Json
       }
       cast_jury_vote: {
@@ -713,6 +738,14 @@ export type Database = {
         Returns: Json
       }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
+      ensure_full_jury_review_item: {
+        Args: {
+          p_clothes_id?: string
+          p_pending_id: number
+          p_require_five_sources?: boolean
+        }
+        Returns: string
+      }
       ensure_missing_suit_re_review_item: {
         Args: {
           p_allow_create?: boolean
@@ -724,6 +757,32 @@ export type Database = {
       get_jury_review_queue: { Args: never; Returns: Json }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      jury_clothes_payload: { Args: { p_clothes_id: string }; Returns: Json }
+      jury_field_value_is_missing: {
+        Args: { p_field: string; p_payload: Json }
+        Returns: boolean
+      }
+      jury_payload_field_value: {
+        Args: { p_field: string; p_payload: Json }
+        Returns: Json
+      }
+      jury_payload_is_complete: { Args: { p_payload: Json }; Returns: boolean }
+      jury_pending_payload: { Args: { p_pending_id: number }; Returns: Json }
+      jury_record_payload: {
+        Args: {
+          p_category: string
+          p_game_id: string
+          p_name: string
+          p_needs_suit_review: boolean
+          p_scores: Json
+          p_stars: number
+          p_suit_id: string
+          p_tags: string
+          p_temp_suit_name: string
+        }
+        Returns: Json
+      }
+      jury_scores_are_complete: { Args: { p_scores: Json }; Returns: boolean }
       normalize_known_clothing_tags: {
         Args: { p_tags: string }
         Returns: string
@@ -734,6 +793,20 @@ export type Database = {
       }
       profile_role_to_level: { Args: { p_role: string }; Returns: number }
       submit_clothing_contribution: {
+        Args: {
+          p_category: string
+          p_game_id: string
+          p_name: string
+          p_needs_suit_review?: boolean
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
+      submit_clothing_contribution_db7_core: {
         Args: {
           p_category: string
           p_game_id: string

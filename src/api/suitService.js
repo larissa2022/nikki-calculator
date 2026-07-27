@@ -3,13 +3,19 @@ import { supabase } from './supabase'
 
 export const suitService = {
   // 1. 获取所有套装列表 (用于下拉搜索)
-  async getAllSuits() {
+  async getAllSuits({ signal } = {}) {
     try {
-      const { data, error } = await supabase
+      let request = supabase
         .from('suits')
         .select('id, name')
         // 🌟 核心修改：改为按照创建时间倒序排列 (最新的在最上面)
-        .order('created_at', { ascending: false }); 
+        .order('created_at', { ascending: false });
+
+      if (signal && typeof request.abortSignal === 'function') {
+        request = request.abortSignal(signal)
+      }
+
+      const { data, error } = await request
         
       if (error) throw error;
       return data || [];

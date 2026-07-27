@@ -51,7 +51,7 @@ const filteredPendingList = computed(() => {
   }
   return sortedPendingList.value.filter(group => group.candidateStatus === activeAuditFilter.value)
 })
-// 每次只展示一屏候选，审核掉一个，下一个自动补位
+// 每次只展示一屏申请，审核掉一个，下一个自动补位
 const displayPendingList = computed(() => filteredPendingList.value.slice(0, 9))
 const auditSubmitText = computed(() => {
   if (auditSelectionInfo.value?.requiresManualReview) return '需重审 / 人工处理'
@@ -157,7 +157,7 @@ const rejectSelectedPendingClothes = async () => {
     return
   }
 
-  const clothesName = String(newClothes.name || '当前候选').trim()
+  const clothesName = String(newClothes.name || '当前申请').trim()
   const confirmed = confirm(`确认驳回《${clothesName}》对应的 ${pendingIds.length} 条服装申请吗？驳回后提交人可以重新申请。`)
   if (!confirmed) return
 
@@ -188,7 +188,7 @@ const rejectSelectedPendingClothes = async () => {
     <div v-show="activeTab === 'audit'">
       <section v-if="sortedPendingList.length > 0" class="mb-8">
         <div class="mb-4 flex flex-col gap-3">
-          <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">🔥 自动入库候选</h3>
+          <h3 class="text-lg font-black text-slate-800 flex items-center gap-2">🔥 自动入库申请</h3>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="option in auditFilterOptions"
@@ -203,7 +203,7 @@ const rejectSelectedPendingClothes = async () => {
           </div>
         </div>
         <div v-if="displayPendingList.length === 0" class="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-6 text-center text-sm font-bold text-slate-400">
-          当前筛选下暂无候选。
+          当前筛选下暂无申请。
         </div>
         <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           <div v-for="group in displayPendingList" :key="group.key" @click="handleClusteredItem(group)" class="bg-white border-2 border-slate-100 hover:border-purple-300 p-4 rounded-xl cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md group">
