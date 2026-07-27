@@ -61,6 +61,7 @@ export function useAudit() {
         normalizeText(item.stars),
         normalizeText(item.suit_id),
         normalizeText(item.temp_suit_name),
+        item.needs_suit_review === true ? 'needs-suit-review' : 'settled-suit-status',
         normalizeClothingTags(item.tags) || '',
         stableStringify(item.scores || {})
     ].join('||')
@@ -273,7 +274,11 @@ export function useAudit() {
                 stars: variant.sample?.stars || '',
                 suitLabel: variant.sample?.suit_id
                     ? '已关联套装'
-                    : (variant.sample?.temp_suit_name ? `新套装：${variant.sample.temp_suit_name}` : '无关联套装'),
+                    : (
+                        variant.sample?.temp_suit_name
+                            ? `新套装：${variant.sample.temp_suit_name}`
+                            : (variant.sample?.needs_suit_review ? '所属套装待确认' : '无关联套装（纯散件）')
+                    ),
                 tags: normalizeClothingTags(variant.sample?.tags) || '无标签',
                 pendingIds: variant.items.map(item => item.id).join(', ')
             }))
@@ -351,7 +356,10 @@ export function useAudit() {
         if (!gameId) missingFields.push('短编号')
         if (gameId && !/^\d+$/.test(gameId)) missingFields.push('数字短编号')
         if (!newClothes.stars) missingFields.push('星级')
-        if (!newClothes.suit_id && newClothes.suit_status !== 'none') missingFields.push('套装状态')
+        if (
+            !newClothes.suit_id
+            && !['none', 'pending_review'].includes(newClothes.suit_status)
+        ) missingFields.push('套装状态')
         const matrix = SCORE_MATRIX[getBroadCategory(newClothes.category)] || SCORE_MATRIX['饰品']
         const invalidAttributeGrades = []
         ATTRIBUTE_PAIRS.forEach((pair, index) => {
@@ -384,6 +392,7 @@ export function useAudit() {
                 id: `custom_${Date.now()}`, game_id: gameId, name: clothesName,
                 category: newClothes.category, stars: Number(newClothes.stars), scores: calculatedScores,
                 suit_id: newClothes.suit_id || null,
+                needs_suit_review: newClothes.suit_status === 'pending_review',
                 tags: normalizeClothingTags(newClothes.tags) || null
             }
 

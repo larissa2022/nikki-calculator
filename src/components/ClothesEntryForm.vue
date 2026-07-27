@@ -19,18 +19,22 @@ const emit = defineEmits(['update:suitSearchText', 'submit', 'create-suit'])
 
 const isSuitDropdownOpen = ref(false)
 const explicitNoSuit = ref(false)
+const explicitPendingReview = ref(false)
 
 const cleanSuitSearchText = computed(() => props.suitSearchText.replace(/[《》]/g, '').trim())
 const hasSuitData = computed(() => props.availableSuits.length > 0)
-const suitInputValue = computed(() => (
-  explicitNoSuit.value ? '-- 无关联套装 (纯散件) --' : props.suitSearchText
-))
+const suitInputValue = computed(() => {
+  if (explicitNoSuit.value) return '-- 无关联套装（纯散件）--'
+  if (explicitPendingReview.value) return '-- 所属套装待确认 --'
+  return props.suitSearchText
+})
 const gameIdText = computed(() => String(props.form.game_id || '').trim())
 const hasSuitStatus = computed(() => Boolean(
   props.form.suit_status
   || props.form.suit_id
   || cleanSuitSearchText.value
   || explicitNoSuit.value
+  || explicitPendingReview.value
 ))
 const missingCoreFields = computed(() => {
   const missing = []
@@ -58,6 +62,7 @@ watch(
   () => props.form.suit_status,
   (status) => {
     explicitNoSuit.value = status === 'none'
+    explicitPendingReview.value = status === 'pending_review'
   }
 )
 
@@ -70,6 +75,7 @@ const filteredSuits = computed(() => {
 
 const handleSuitInput = (value) => {
   explicitNoSuit.value = false
+  explicitPendingReview.value = false
   props.form.suit_status = value.trim() ? 'new' : ''
   if (props.form.suit_id) {
     props.form.suit_id = ''
@@ -87,6 +93,7 @@ const handleGameIdInput = (event) => {
 
 const selectSuit = (suit) => {
   explicitNoSuit.value = false
+  explicitPendingReview.value = false
   props.form.suit_id = suit.id || ''
   props.form.suit_status = suit.id ? 'existing' : ''
   emit('update:suitSearchText', suit.id ? `《${suit.name}》` : '')
@@ -95,8 +102,20 @@ const selectSuit = (suit) => {
 
 const selectNoSuit = async () => {
   explicitNoSuit.value = true
+  explicitPendingReview.value = false
   props.form.suit_id = ''
   props.form.suit_status = 'none'
+  emit('update:suitSearchText', '')
+  isSuitDropdownOpen.value = false
+  await nextTick()
+  document.activeElement?.blur?.()
+}
+
+const selectPendingReview = async () => {
+  explicitNoSuit.value = false
+  explicitPendingReview.value = true
+  props.form.suit_id = ''
+  props.form.suit_status = 'pending_review'
   emit('update:suitSearchText', '')
   isSuitDropdownOpen.value = false
   await nextTick()
@@ -106,6 +125,7 @@ const selectNoSuit = async () => {
 const handleCreateSuit = () => {
   if (!cleanSuitSearchText.value) return
   explicitNoSuit.value = false
+  explicitPendingReview.value = false
   props.form.suit_id = ''
   props.form.suit_status = 'new'
   emit('create-suit', cleanSuitSearchText.value)
@@ -144,17 +164,18 @@ const handleSubmit = () => {
             @focus="isSuitDropdownOpen = true"
             @blur="setTimeout(() => isSuitDropdownOpen = false, 200)"
             @keydown.escape="isSuitDropdownOpen = false"
-            placeholder="🔍 搜索已有套装、输入新套装名，或选择无关联套装"
+            placeholder="🔍 搜索已有套装、输入新套装名，或选择套装状态"
             class="search-input"
             :class="{'border-rose-200 bg-rose-50/30': !hasSuitStatus}"
           />
           <Transition name="slide">
             <div v-if="isSuitDropdownOpen" class="select-dropdown">
-              <div class="option no-suit-option" @pointerdown.prevent="selectNoSuit">-- 无关联套装 (纯散件) --</div>
+              <div class="option no-suit-option" @pointerdown.prevent="selectNoSuit">-- 无关联套装（纯散件）--</div>
+              <div class="option pending-review-option" @pointerdown.prevent="selectPendingReview">-- 所属套装待确认 --</div>
               <div v-for="s in filteredSuits" :key="s.id" class="option" @pointerdown.prevent="selectSuit(s)">《{{ s.name }}》</div>
               
               <div v-if="!hasSuitData && !cleanSuitSearchText" class="option empty-option">
-                暂无套装数据。可直接输入套装名后申请，或选择“无关联套装”。
+                暂无套装数据。可直接输入套装名后申请，也可选择“无关联套装”或“所属套装待确认”。
               </div>
 
               <div 

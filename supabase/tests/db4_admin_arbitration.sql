@@ -431,7 +431,7 @@ $$;
 
 do $$
 declare
-  v_signature text := 'public.approve_pending_clothes_arbitration(text,text,text,text,integer,jsonb,uuid,text,text,bigint[])';
+  v_signature text := 'public.approve_pending_clothes_arbitration(text,text,text,text,integer,jsonb,uuid,text,text,bigint[],boolean)';
 begin
   if has_function_privilege('anon', v_signature, 'EXECUTE')
     or not has_function_privilege('authenticated', v_signature, 'EXECUTE')

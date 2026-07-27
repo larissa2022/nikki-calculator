@@ -230,7 +230,8 @@ export const adminService = {
             p_suit_id: payload.suit_id || null,
             p_temp_suit_name: payload.temp_suit_name || null,
             p_tags: payload.tags || null,
-            p_pending_ids: pendingIds || []
+            p_pending_ids: pendingIds || [],
+            p_needs_suit_review: payload.needs_suit_review === true
         });
 
         if (error) {

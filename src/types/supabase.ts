@@ -149,6 +149,7 @@ export type Database = {
           game_id: string | null
           id: number
           name: string | null
+          needs_suit_review: boolean
           scores: Json | null
           stars: number | null
           status: string | null
@@ -164,6 +165,7 @@ export type Database = {
           game_id?: string | null
           id?: number
           name?: string | null
+          needs_suit_review?: boolean
           scores?: Json | null
           stars?: number | null
           status?: string | null
@@ -179,6 +181,7 @@ export type Database = {
           game_id?: string | null
           id?: number
           name?: string | null
+          needs_suit_review?: boolean
           scores?: Json | null
           stars?: number | null
           status?: string | null
@@ -318,6 +321,131 @@ export type Database = {
         }
         Relationships: []
       }
+      re_review_candidates: {
+        Row: {
+          created_at: string
+          id: string
+          payload: Json
+          re_review_item_id: string
+          submitted_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          payload: Json
+          re_review_item_id: string
+          submitted_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          payload?: Json
+          re_review_item_id?: string
+          submitted_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_candidates_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      re_review_item_sources: {
+        Row: {
+          created_at: string
+          re_review_item_id: string
+          source_pending_id: number
+          source_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          re_review_item_id: string
+          source_pending_id: number
+          source_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          re_review_item_id?: string
+          source_pending_id?: number
+          source_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_item_sources_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "re_review_item_sources_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      re_review_items: {
+        Row: {
+          clothes_id: string | null
+          created_at: string
+          id: string
+          payload: Json
+          reason: string
+          resolved_at: string | null
+          resolved_by: string | null
+          source_pending_id: number | null
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          clothes_id?: string | null
+          created_at?: string
+          id?: string
+          payload: Json
+          reason: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_pending_id?: number | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          clothes_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          reason?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_pending_id?: number | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "re_review_items_clothes_id_fkey"
+            columns: ["clothes_id"]
+            isOneToOne: false
+            referencedRelation: "clothes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "re_review_items_source_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stages: {
         Row: {
           created_at: string
@@ -428,6 +556,22 @@ export type Database = {
           p_game_id: string
           p_id: string
           p_name: string
+          p_needs_suit_review?: boolean
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
+      approve_pending_clothes_arbitration_db4_core: {
+        Args: {
+          p_category: string
+          p_game_id: string
+          p_id: string
+          p_name: string
           p_pending_ids?: number[]
           p_scores: Json
           p_stars: number
@@ -452,7 +596,30 @@ export type Database = {
         }
         Returns: Json
       }
+      complete_existing_clothes_from_pending_db3_core: {
+        Args: {
+          p_category: string
+          p_existing_id: string
+          p_game_id: string
+          p_name: string
+          p_pending_ids?: number[]
+          p_scores: Json
+          p_stars: number
+          p_suit_id?: string
+          p_tags?: string
+          p_temp_suit_name?: string
+        }
+        Returns: Json
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
+      ensure_missing_suit_re_review_item: {
+        Args: {
+          p_allow_create?: boolean
+          p_clothes_id: string
+          p_pending_ids: number[]
+        }
+        Returns: string
+      }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       normalize_known_clothing_tags: {
@@ -469,6 +636,7 @@ export type Database = {
           p_category: string
           p_game_id: string
           p_name: string
+          p_needs_suit_review?: boolean
           p_scores: Json
           p_stars: number
           p_suit_id?: string

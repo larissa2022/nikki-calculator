@@ -348,7 +348,11 @@ begin
   if v_result->>'auto_approved' <> 'false'
     or not exists (select 1 from public.pending_clothes where name = 'DB5 测试无套装保留' and status = 'pending')
     or exists (select 1 from public.clothes where name = 'DB5 测试无套装保留')
-    or pg_catalog.to_regclass('public.re_review_items') is not null then
+    or exists (
+      select 1
+      from public.re_review_items
+      where payload->>'name' = 'DB5 测试无套装保留'
+    ) then
     raise exception 'DB5_ASSERT: no-suit narrow-scope behavior mismatch: %', v_result;
   end if;
 end;
@@ -440,7 +444,7 @@ drop trigger db5_force_points_failure on public.points_ledger;
 
 do $$
 declare
-  v_signature text := 'public.submit_clothing_contribution(text,text,text,integer,jsonb,uuid,text,text)';
+  v_signature text := 'public.submit_clothing_contribution(text,text,text,integer,jsonb,uuid,text,text,boolean)';
   v_definition text;
   v_config text[];
 begin

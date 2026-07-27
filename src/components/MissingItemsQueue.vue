@@ -158,7 +158,11 @@ const submitContribution = async (name) => {
   if (!itemName) missingFields.push('服装名称')
   if (!String(contribForm.category || '').trim()) missingFields.push('分类部位')
   if (!contribForm.stars) missingFields.push('星级')
-  if (!contribForm.suit_id && !typedSuitName && contribForm.suit_status !== 'none') {
+  if (
+    !contribForm.suit_id
+    && !typedSuitName
+    && !['none', 'pending_review'].includes(contribForm.suit_status)
+  ) {
     missingFields.push('套装状态')
   }
   ATTRIBUTE_PAIRS.forEach((pair, index) => {
@@ -253,6 +257,7 @@ const submitContribution = async (name) => {
         scores: calculatedScores,
         suit_id: contribForm.suit_id || null,
         temp_suit_name: contribForm.suit_id ? null : (typedSuitName || null),
+        needs_suit_review: contribForm.suit_status === 'pending_review',
         tags: normalizeClothingTags(contribForm.tags) || null
       };
 
@@ -264,7 +269,8 @@ const submitContribution = async (name) => {
         p_scores: payload.scores,
         p_suit_id: payload.suit_id,
         p_temp_suit_name: payload.temp_suit_name,
-        p_tags: payload.tags
+        p_tags: payload.tags,
+        p_needs_suit_review: payload.needs_suit_review
       })
 
       if (submitErr) throw new Error(submitErr.message)
