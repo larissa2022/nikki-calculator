@@ -51,6 +51,12 @@ update public.profiles
 set role = 'admin', role_level = 1
 where id = 'db600000-0000-4000-8000-000000000007'::uuid;
 
+insert into public.suits (id, name)
+values (
+  'db600000-0000-4000-8000-000000000098'::uuid,
+  'DB6 接入测试社区候选套装'
+);
+
 select pg_catalog.set_config('request.jwt.claims', '{}', true);
 
 do $$
@@ -251,6 +257,17 @@ end;
 $$;
 
 select pg_catalog.set_config(
+  'db6.source_item_id',
+  (
+    select item.id::text
+    from public.re_review_items as item
+    join public.clothes as clothes on clothes.id = item.clothes_id
+    where clothes.name = 'DB6 接入测试自动建项'
+  ),
+  true
+);
+
+select pg_catalog.set_config(
   'request.jwt.claims',
   '{"sub":"db600000-0000-4000-8000-000000000001","role":"authenticated"}',
   true
@@ -263,22 +280,16 @@ declare
   v_item_id uuid;
   v_denied boolean := false;
 begin
-  select item.id
-    into v_item_id
-  from public.re_review_items as item
-  join public.clothes as clothes on clothes.id = item.clothes_id
-  where clothes.name = 'DB6 接入测试自动建项';
+  v_item_id := pg_catalog.current_setting('db6.source_item_id')::uuid;
 
   if exists (select 1 from public.re_review_items where id = v_item_id) then
     raise exception 'DB6_INTEGRATION_ASSERT: source user can read own review item';
   end if;
 
   begin
-    insert into public.re_review_candidates (re_review_item_id, payload, submitted_by)
-    values (
+    perform public.submit_jury_candidate(
       v_item_id,
-      '{"suit_id":"forbidden-self-review"}'::jsonb,
-      'db600000-0000-4000-8000-000000000001'::uuid
+      '{"suit_id":"db600000-0000-4000-8000-000000000098"}'::jsonb
     );
   exception when others then
     v_denied := sqlstate = '42501';
@@ -314,11 +325,9 @@ begin
     raise exception 'DB6_INTEGRATION_ASSERT: unrelated community user cannot read open item';
   end if;
 
-  insert into public.re_review_candidates (re_review_item_id, payload, submitted_by)
-  values (
+  perform public.submit_jury_candidate(
     v_item_id,
-    '{"suit_id":"community-candidate"}'::jsonb,
-    'db600000-0000-4000-8000-000000000006'::uuid
+    '{"suit_id":"db600000-0000-4000-8000-000000000098"}'::jsonb
   );
 end;
 $$;

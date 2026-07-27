@@ -142,6 +142,83 @@ export type Database = {
           },
         ]
       }
+      jury_admin_decisions: {
+        Row: {
+          admin_user_id: string | null
+          candidate_id: string
+          created_at: string
+          decision: string
+          id: string
+          re_review_item_id: string
+          reason: string
+        }
+        Insert: {
+          admin_user_id?: string | null
+          candidate_id: string
+          created_at?: string
+          decision: string
+          id?: string
+          re_review_item_id: string
+          reason: string
+        }
+        Update: {
+          admin_user_id?: string | null
+          candidate_id?: string
+          created_at?: string
+          decision?: string
+          id?: string
+          re_review_item_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jury_admin_decisions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: true
+            referencedRelation: "re_review_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_admin_decisions_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jury_votes: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          id: string
+          user_id: string | null
+          vote: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          id?: string
+          user_id?: string | null
+          vote: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          user_id?: string | null
+          vote?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jury_votes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_clothes: {
         Row: {
           category: string | null
@@ -231,6 +308,7 @@ export type Database = {
           delta: number
           id: string
           occurred_at: string
+          re_review_candidate_id: string | null
           reversal_of: string | null
           source_id: string | null
           source_type: string
@@ -242,6 +320,7 @@ export type Database = {
           delta: number
           id?: string
           occurred_at?: string
+          re_review_candidate_id?: string | null
           reversal_of?: string | null
           source_id?: string | null
           source_type: string
@@ -253,6 +332,7 @@ export type Database = {
           delta?: number
           id?: string
           occurred_at?: string
+          re_review_candidate_id?: string | null
           reversal_of?: string | null
           source_id?: string | null
           source_type?: string
@@ -260,6 +340,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "points_ledger_re_review_candidate_id_fkey"
+            columns: ["re_review_candidate_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_candidates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "points_ledger_reversal_of_fkey"
             columns: ["reversal_of"]
@@ -327,6 +414,8 @@ export type Database = {
           id: string
           payload: Json
           re_review_item_id: string
+          resolved_at: string | null
+          status: string
           submitted_by: string | null
         }
         Insert: {
@@ -334,6 +423,8 @@ export type Database = {
           id?: string
           payload: Json
           re_review_item_id: string
+          resolved_at?: string | null
+          status?: string
           submitted_by?: string | null
         }
         Update: {
@@ -341,6 +432,8 @@ export type Database = {
           id?: string
           payload?: Json
           re_review_item_id?: string
+          resolved_at?: string | null
+          status?: string
           submitted_by?: string | null
         }
         Relationships: [
@@ -550,6 +643,10 @@ export type Database = {
         Args: { p_clothes_id: string; p_user_ids: string[] }
         Returns: number
       }
+      admin_reject_jury_candidate: {
+        Args: { p_candidate_id: string; p_reason: string }
+        Returns: Json
+      }
       approve_pending_clothes_arbitration: {
         Args: {
           p_category: string
@@ -579,6 +676,10 @@ export type Database = {
           p_tags?: string
           p_temp_suit_name?: string
         }
+        Returns: Json
+      }
+      cast_jury_vote: {
+        Args: { p_candidate_id: string; p_vote: string }
         Returns: Json
       }
       complete_existing_clothes_from_pending: {
@@ -620,6 +721,7 @@ export type Database = {
         }
         Returns: string
       }
+      get_jury_review_queue: { Args: never; Returns: Json }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       normalize_known_clothing_tags: {
@@ -643,6 +745,10 @@ export type Database = {
           p_tags?: string
           p_temp_suit_name?: string
         }
+        Returns: Json
+      }
+      submit_jury_candidate: {
+        Args: { p_payload: Json; p_re_review_item_id: string }
         Returns: Json
       }
       update_profile_username: {
