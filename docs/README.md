@@ -9,9 +9,8 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | 文档 | 唯一职责 | 不承担 |
 | --- | --- | --- |
 | [`AGENTS.md`](../AGENTS.md) | 自动入口、任务分类、读取路由、启动回执和最短连续批次摘要 | 完整强规则、PR 预算细则、长篇流程、产品决策、历史流水 |
-| [项目强规则](ai/RULES.md) | 角色边界、强门禁、安全约束 | 具体命令、读取清单、临时任务状态 |
+| [项目强规则](ai/RULES.md) | 决策边界、强门禁、安全约束 | 具体命令、读取清单、临时任务状态 |
 | [AI / Codex 工作流程](ai/WORKFLOWS.md) | 执行步骤、检查清单、执行单、验证、rollback、回传模板 | 正式 Rule、产品实现细节 |
-| [当前业务看板](ai/CURRENT_TASK.md) | 业务目标、技术目标、当前阶段、最近完成、下一步任务、阻塞与待确认 | Git 操作步骤、PR 状态流水、新任务启动教程、长期历史 |
 | [Final 决策记录](ai/DECISIONS.md) | 已确认的产品和技术口径 | 待确认事项、临时推测、执行步骤 |
 
 权威关系：
@@ -19,10 +18,10 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 1. 读取路由和连续执行总则以 `AGENTS.md` 为准，具体操作步骤由 `WORKFLOWS.md` 展开。
 2. 强门禁以 `RULES.md` 为准。
 3. 操作流程以 `WORKFLOWS.md` 为准。
-4. 当前业务状态与下一步以 `CURRENT_TASK.md` 为准。
+4. 当前执行状态以本地分支、工作区和开放 PR 为准。
 5. 产品与技术 Final 口径以 `DECISIONS.md` 为准。
 
-每次项目任务完成回传都必须附上 `CURRENT_TASK.md` 链接，并确保回复中的下一步与看板一致。
+`docs/ai/CURRENT_TASK.md` 是可选的本机任务指针，已由 `.gitignore` 排除，不属于仓库文档或远程事实。它只在需要跨任务保存负责人优先级时使用，缺失不阻断执行。
 
 ## 2. 需求、规划与验证
 
@@ -48,7 +47,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [schema 摘要](database/schema.md) | development 数据库结构相关任务 | production 实时事实 |
 | [Supabase Review](database/SUPABASE_REVIEW.md) | 专项 Supabase 审查背景和命令 | 默认数据库执行入口 |
 
-所有 database / Supabase 任务都进入 Strict Lane；不能只凭本目录索引直接执行 SQL 或 migration。
+所有 database / Supabase 远端操作都必须遵守固定环境、一次任务授权、development 先验证和 rollback 门禁；不能只凭本目录索引直接执行 SQL 或 migration。
 
 ## 4. 复盘与历史材料
 
@@ -65,7 +64,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 
 以下职责已合并，不再保留独立文件：
 
-- ChatGPT → Codex 执行单：并入 `docs/ai/WORKFLOWS.md`。
+- 旧 ChatGPT → Codex 执行单：已由 Codex 单人开发工作流替代，不再作为当前入口。
 - 文档职责地图：并入本文件。
 - Rejected Ideas：并入 `docs/ai/LESSONS.md`。
 - Codex 历史报告与 Token 使用审计：迁入 `docs/archive/**`。

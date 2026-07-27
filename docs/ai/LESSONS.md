@@ -18,6 +18,18 @@
 
 ## 当前 Lessons
 
+### Lesson: 合体后切换为 Codex 单人开发模式
+
+- 日期：2026-07-27
+- 来源任务：对近期 DB-5、DB-6 开发耗时、长任务日志和现行治理规则进行只读诊断后实施流程改造
+- 现象：业务实现完成后，重复审计、过程 push、PR 状态回读、Supabase 重连 / 重复前检和多份状态文档收口继续占用大量时间；旧规则仍假设 ChatGPT 规划、Codex 机械执行。
+- 原因：原流程为多工具交接和环境恢复设计；合体后仍把 GitHub 当开发过程日志，把普通 `develop` merge 和同一 migration 的每个步骤拆成独立授权点，并在长对话里重复加载完整上下文。
+- 处理方式：本地工作区作为开发中事实，GitHub 只承担共享 / PR / 合并 / 发布事实；Codex 对一个目标端到端负责；一次最终验证、一次远端交付；普通 `develop` PR 检查通过后按任务授权合并；固定 development migration 可一次授权完整闭环并复用现有 link；任务看板退出 Git，只保留可选的本机极简指针。
+- 后续影响：保留 `main` / production、破坏性数据、env / 凭据、数据库环境与 rollback 门禁；取消旧 ChatGPT 预审批、逐命令确认、重复审计、Git 跟踪任务看板和纯状态提交。
+- Pattern Candidate：采用“本地连续实现 → 一次相称验证 → 一次 GitHub 交付 → 普通 develop 自动收口”的单人开发闭环。
+- Rule Candidate：负责人已于 2026-07-27 批准，已同步到 `RULES.md` 和 `WORKFLOWS.md`。
+- 状态：可复用
+
 ### Lesson: DB-2 连续任务与合并收口协作复盘
 
 - 日期：2026-07-20
@@ -45,6 +57,7 @@
 - Pattern Candidate：采用“明确停止点 → 一次最新审计 → 单独授权检查点 → 远端事实回读 → 合并后稳定看板 → 新目标短交接”的连续任务闭环。
 - Rule Candidate：负责人已于 2026-07-22 批准“看板必须通过合并后稳定性门禁”，同步进入 `RULES.md`，具体检查保留在 `WORKFLOWS.md`。
 - 状态：可复用
+- 2026-07-27 更新：其中“每个 `develop` PR merge 单独确认”和多角色交接部分已被 Codex 单人开发模式替代；production、破坏性数据和环境边界仍保留。
 
 ### Lesson: Production Safari 图鉴全量加载卡住复盘
 
@@ -109,7 +122,7 @@
 - 后续影响：docs-only 任务应在 ChatGPT 指令中一次性写清敏感命令、用途、授权边界和失败处理，减少反复确认。
 - Pattern Candidate：docs-only 任务采用“ChatGPT 任务级预审批 + Codex 授权范围内连续执行”的协作模式。
 - Rule Candidate：暂无。
-- 状态：可复用
+- 状态：已废弃；已由 Codex 单人开发模式的一次任务授权和连续执行替代
 
 ### Lesson: 规则层与工作流层分离
 
@@ -139,6 +152,7 @@
 - Pattern Candidate：PR 发布前采用“gh 优先查询 -> git diff / changed files 交叉确认 -> 用户授权后才执行写操作”的工作流。
 - Rule Candidate：暂无。
 - 状态：可复用
+- 2026-07-27 更新：普通 `develop` merge 可由任务级授权覆盖；`main`、production 和 hotfix merge 仍需本次发布的明确授权。
 
 ### Lesson: AI + Codex + 双环境项目治理工作流复盘
 
@@ -164,6 +178,7 @@
 - Pattern Candidate：双环境项目发布前采用“事实源确认 -> 只读盘点 -> 分层审计 -> 环境内验证 -> 分风险 PR -> rollback 准备”的固定工作流。
 - Rule Candidate：已同步到 `RULES.md` 的硬规则包括任务前阅读治理文档、develop -> main 只读审计、migration 先 dev 验证、已执行 migration 用 patch migration 修正、production 操作前确认环境绑定。
 - 状态：可复用
+- 2026-07-27 更新：ChatGPT / Codex 角色分工与“每一步回传”已废弃；双环境映射、development 先验证和 production rollback 门禁继续有效。
 
 ### Lesson: 大模块开发前先拆阶段包
 

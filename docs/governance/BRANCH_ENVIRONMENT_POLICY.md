@@ -45,8 +45,8 @@ This file defines branch and environment mapping. Detailed operating procedures 
 - `gh` does not change the branch and environment mapping: `main` still maps only to production, and `develop` still maps only to development / preview.
 - Before any `develop -> main` promotion, the read-only diff audit is still required.
 - `gh` output must be judged together with `git diff` and PR changed files. Do not merge based on one tool alone.
-- If `gh` is unavailable, fall back to the GitHub web UI or the ChatGPT GitHub connector for confirmation.
-- `gh pr merge` is a write action and requires explicit user approval, especially for production-related PRs.
+- If `gh` is unavailable, fall back once to the GitHub web UI or an available Codex browser for confirmation.
+- Ordinary `develop` PR merge is covered by the task-level authorization after checks pass unless the owner asked to stop before merge. `main`, production, and hotfix merges still require explicit approval for that release.
 - Do not record `gh auth` tokens, device codes, authorization URLs, or keyring details in repository files, logs, or commits.
 - See [`../ai/WORKFLOWS.md`](../ai/WORKFLOWS.md) for the full PR and workflow check procedure.
 
@@ -68,11 +68,11 @@ This file defines branch and environment mapping. Detailed operating procedures 
 
 - Supabase production must correspond to `main` production operation only.
 - Supabase development must correspond to `develop`, `feature/*`, `fix/*`, and `docs/*` validation.
-- Database-related tasks must confirm the Supabase project ref before any command that can read or write linked project state.
+- Database-related tasks must run the fixed project-ref guard before the first remote operation. The result may be reused while the link, target, and migration set remain unchanged; repeated `supabase link` is not required.
 - Production database work requires prior backup, verified development migration, rollback notes, and explicit user approval.
 
-## Current Governance Recommendation
+## Current Operating Mode
 
-- Pause business feature development until `main`, `develop`, Vercel, and Supabase relationships are confirmed.
-- Treat open PRs and branches created before this policy as legacy state requiring manual triage.
-- Prefer merging documentation governance into `develop` first, then promote to `main` after review.
+- Codex owns the confirmed task end to end: local implementation, proportional verification, one GitHub delivery, and ordinary `develop` merge after checks pass.
+- GitHub remains the remote source for shared, PR, merged, and released state; local work does not need continuous upload while it is being developed.
+- Production promotion, production database work, destructive data operations, and environment binding changes remain separately approved operations.
