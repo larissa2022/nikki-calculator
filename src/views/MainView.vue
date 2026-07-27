@@ -6,8 +6,10 @@ import ImportZone from '../components/ImportZone.vue'
 import WardrobeGrid from '../components/WardrobeGrid.vue'
 import SuitGallery from '../components/SuitGallery.vue'
 import ContributorGallery from '../components/ContributorGallery.vue'
+import JuryReviewBoard from '../components/JuryReviewBoard.vue'
 import UserProfile from '../components/UserProfile.vue'
 import { readMainTab, writeMainTab } from '../utils/navigationState'
+import { isSuperAdminRole } from '../utils/roles'
 
 const props = defineProps({
   currentUser: Object, 
@@ -48,6 +50,7 @@ const switchTab = (tab) => {
         <button :class="{ active: currentTab === 'wardrobe' }" @click="switchTab('wardrobe')">我的衣柜</button>
         <button :class="{ active: currentTab === 'suits' }" @click="switchTab('suits')">套装图鉴</button>
         <button :class="{ active: currentTab === 'contributors' }" @click="switchTab('contributors')">贡献名录</button>
+        <button v-if="currentUser" :class="{ active: currentTab === 'jury' }" @click="switchTab('jury')">陪审团</button>
         <button v-if="isAdmin" :class="{ active: currentTab === 'admin' }" @click="emit('go-admin')" class="admin-tab-btn">图鉴管理</button>
       </nav>
     </header>
@@ -63,6 +66,11 @@ const switchTab = (tab) => {
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
       <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-catalog="emit('refresh-catalog')" />
       <ContributorGallery v-if="currentTab === 'contributors'" :wardrobe="fullWardrobeData" />
+      <JuryReviewBoard
+        v-if="currentTab === 'jury'"
+        :isLoggedIn="Boolean(currentUser)"
+        :isSuperAdmin="isSuperAdminRole(userProfile)"
+      />
       
       <UserProfile 
         v-if="currentTab === 'profile'" 

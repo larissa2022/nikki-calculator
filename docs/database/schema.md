@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `621583D2CA227F5F8D69AB4DBF8820469747170DC4E4AF2CE746E43A30322348`。2026-07-26 已从零重放仓库全部 migrations 至 `20260726024734_db6_integrate_missing_suit_review`，并在 development 完成 DB-6 基础、权限修复和缺套装接入的结构、权限与事务验证。当前快照继续保留 development DB-5 全量基线，并按 migration 原文嵌入 DB-6 各段，避免用本地 / development dump 的大量纯格式差异覆盖旧对象。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`。2026-07-27 已在 development 应用至 `20260727124555_db7_index_admin_user_fk`，并完成 DB-6 兼容回归、DB-7 状态机、权限、Advisor 和事务回滚验证。development 全量 dump 在首条只读查询遇到 SSL EOF，空输出已恢复；当前快照继续保留既有全量基线，并按 migration 原文嵌入 DB-6、DB-7 各段，避免用不完整或大量纯格式差异覆盖旧对象。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
 
 ## 表结构摘要
 
@@ -34,6 +34,18 @@
 | clothing_contributions | contribution_rank | smallint | null | NO |
 | clothing_contributions | source_created_at | timestamp with time zone | null | NO |
 | clothing_contributions | created_at | timestamp with time zone | now() | NO |
+| jury_admin_decisions | id | uuid | gen_random_uuid() | NO |
+| jury_admin_decisions | candidate_id | uuid | null | NO |
+| jury_admin_decisions | re_review_item_id | uuid | null | NO |
+| jury_admin_decisions | admin_user_id | uuid | null | YES |
+| jury_admin_decisions | decision | text | null | NO |
+| jury_admin_decisions | reason | text | null | NO |
+| jury_admin_decisions | created_at | timestamp with time zone | now() | NO |
+| jury_votes | id | uuid | gen_random_uuid() | NO |
+| jury_votes | candidate_id | uuid | null | NO |
+| jury_votes | user_id | uuid | null | YES |
+| jury_votes | vote | text | null | NO |
+| jury_votes | created_at | timestamp with time zone | now() | NO |
 | pending_clothes | id | bigint | identity | NO |
 | pending_clothes | created_at | timestamp with time zone | now() | NO |
 | pending_clothes | name | text | null | YES |
@@ -59,6 +71,7 @@
 | points_ledger | status | text | 'awarded' | NO |
 | points_ledger | source_type | text | null | NO |
 | points_ledger | source_id | uuid | null | YES |
+| points_ledger | re_review_candidate_id | uuid | null | YES |
 | points_ledger | reversal_of | uuid | null | YES |
 | points_ledger | occurred_at | timestamp with time zone | now() | NO |
 | points_ledger | created_at | timestamp with time zone | now() | NO |
@@ -78,6 +91,8 @@
 | re_review_candidates | payload | jsonb | null | NO |
 | re_review_candidates | submitted_by | uuid | null | YES |
 | re_review_candidates | created_at | timestamp with time zone | now() | NO |
+| re_review_candidates | status | text | 'voting' | NO |
+| re_review_candidates | resolved_at | timestamp with time zone | null | YES |
 | re_review_item_sources | re_review_item_id | uuid | null | NO |
 | re_review_item_sources | source_pending_id | bigint | null | NO |
 | re_review_item_sources | source_user_id | uuid | null | YES |
@@ -147,11 +162,24 @@
 | --- | --- |
 | `re_review_items` | 追踪 `missing_suit`、`field_conflict`、`field_missing`、`correction`；状态限定为 `pending / voting / approved / rejected / failed` |
 | `re_review_item_sources` | 保留全部 pending 来源及来源用户；普通用户只能读取自己的来源标记，供 RLS 防自审使用 |
-| `re_review_candidates` | 未参与原始提交的登录用户可提交候选修正版；每个重审项最多一份，客户端不能修改或删除 |
+| `re_review_candidates` | 保存每一轮不可变候选快照；同一重审项最多一份 `voting` 候选，退回后保留旧轮次并允许提交新快照 |
 | 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
-| 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 只读开放项 / 自己的来源标记，候选 INSERT 仅开放 `re_review_item_id`、`payload`、`submitted_by`，不能伪造 `id` / `created_at`；service_role 只保留必要读写列 |
+| 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 不再直接写候选、投票或终审底表，只能调用受控 RPC；service_role 只保留必要底表权限 |
 | 缺套装接入（development 已验证） | “所属套装待确认”以 `pending_clothes.needs_suit_review = true` 显式保存；自动入库、管理员仲裁与正式库已有补全同事务创建唯一 `missing_suit` 项及全部来源，绑定正式套装后自动关闭 |
-| 当前边界 | 纯散件和历史空套装事实不进入重审池；字段冲突 / 缺失、投票、最终处理和报错入口仍未接入 |
+| 当前边界 | 纯散件和历史空套装事实不进入重审池；第一版陪审团只处理 `missing_suit`，字段冲突 / 缺失和正式库报错入口仍未接入 |
+
+## DB-7 陪审团投票与独立终审
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `submit_jury_candidate(...)` | 未参与原始数据的登录用户为 `missing_suit` 重审项提交唯一冻结候选；退回后新候选形成新轮次，旧票和旧候选保留 |
+| `get_jury_review_queue()` | 只返回当前用户可参与的重审项、当前冻结候选、票数、本人投票和可操作状态，不暴露底表写权限 |
+| `cast_jury_vote(...)` | 一人一票且不可改票；同票重试幂等；候选提交者、原提交者和任一来源参与者均不得投票 |
+| 通过 | 同意票 `>= 5` 且同意票多于反对票；同事务按冻结候选更新正式服装、关闭重审项，并向候选提交者写入 `+8` 积分流水 |
+| 退回重审 | `反对票 - 同意票 >= 3`；候选轮次标记为 `returned`，重审项回到 `pending`，正式服装和积分均不修改 |
+| 继续投票 | 未达到通过或退回门槛时保持 `voting` |
+| `admin_reject_jury_candidate(...)` | 只有超级管理员可独立永久驳回；已参投、候选提交者、原提交者或来源参与者均不得终审，旧轮次不能覆盖当前候选 |
+| 默认拒绝 | `jury_votes`、`jury_admin_decisions` 启用 RLS 且不给 authenticated 底表 policy / DML；四个公开 RPC 均为空 `search_path`、仅授权 authenticated / service_role，并在函数内复核身份和状态 |
 
 ## 主要约束与索引
 
@@ -178,8 +206,10 @@
 | points_ledger_pkey | primary key | points_ledger.id |
 | points_ledger_user_id_fkey | foreign key | points_ledger.user_id -> auth.users.id，账号删除后置空 |
 | points_ledger_source_id_fkey | foreign key | points_ledger.source_id -> clothing_contributions.id，删除受限 |
+| points_ledger_re_review_candidate_id_fkey | foreign key | points_ledger.re_review_candidate_id -> re_review_candidates.id，删除受限 |
 | points_ledger_reversal_of_fkey | foreign key | points_ledger.reversal_of -> points_ledger.id，删除受限 |
 | points_ledger_source_id_key | partial unique index | 一条贡献最多产生一条正向流水 |
+| points_ledger_re_review_candidate_id_key | partial unique index | 每个通过的重审候选最多产生一条正向积分流水 |
 | points_ledger_reversal_of_key | partial unique index | 一条原流水最多产生一条扣回流水 |
 | points_ledger_user_occurred_at_idx | index | points_ledger.user_id, occurred_at desc |
 | profiles_pkey | primary key | profiles.id |
@@ -194,7 +224,19 @@
 | re_review_item_sources_pending_id_fkey | foreign key | re_review_item_sources.source_pending_id -> pending_clothes.id，删除受限 |
 | re_review_candidates_pkey | primary key | re_review_candidates.id |
 | re_review_candidates_item_id_fkey | foreign key | re_review_candidates.re_review_item_id -> re_review_items.id，删除受限 |
-| re_review_candidates_item_key | unique | 每个重审项最多一份候选修正版 |
+| re_review_candidates_active_item_key | partial unique index | 每个重审项最多一份 `voting` 候选，历史轮次可保留 |
+| jury_votes_pkey | primary key | jury_votes.id |
+| jury_votes_candidate_id_fkey | foreign key | jury_votes.candidate_id -> re_review_candidates.id，删除受限 |
+| jury_votes_user_id_fkey | foreign key | jury_votes.user_id -> auth.users.id，账号删除后置空 |
+| jury_votes_candidate_user_key | unique | 同一用户对同一候选轮次最多一票 |
+| jury_votes_user_created_at_idx | partial index | 按用户和投票时间追溯非匿名投票 |
+| jury_admin_decisions_pkey | primary key | jury_admin_decisions.id |
+| jury_admin_decisions_candidate_id_fkey | foreign key | jury_admin_decisions.candidate_id -> re_review_candidates.id，删除受限 |
+| jury_admin_decisions_item_id_fkey | foreign key | jury_admin_decisions.re_review_item_id -> re_review_items.id，删除受限 |
+| jury_admin_decisions_admin_user_id_fkey | foreign key | jury_admin_decisions.admin_user_id -> auth.users.id，账号删除后置空 |
+| jury_admin_decisions_candidate_key | unique | 每个候选轮次最多一条管理员终审记录 |
+| jury_admin_decisions_item_created_at_idx | index | 按重审项和时间追溯终审记录 |
+| jury_admin_decisions_admin_user_id_idx | partial index | 覆盖管理员用户外键，避免删除用户或按管理员追溯时扫描整表 |
 | suits_pkey | primary key | suits.id |
 | suits_name_key | unique | suits.name |
 | idx_clothes_suit_id | index | clothes.suit_id |
@@ -251,7 +293,8 @@
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
-- DB-6 三张表当前均为 0 行；社区读取、候选提交、审计字段防伪、防自审、匿名拒绝已在事务内验证，回滚后无测试数据残留。
+- DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
+- DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
