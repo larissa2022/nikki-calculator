@@ -12,14 +12,20 @@ const props = defineProps({
   submitText: { type: String, default: '确认提交' },
   submitLoadingText: { type: String, default: '系统处理中...' },
   suitNotFoundText: { type: String, default: '新建套装' },
-  showGameIdWarning: { type: Boolean, default: false }
+  showGameIdWarning: { type: Boolean, default: false },
+  readonlyFields: { type: Array, default: () => [] },
+  allowPendingReview: { type: Boolean, default: true },
+  allowCreateSuit: { type: Boolean, default: true },
+  showRuleNote: { type: Boolean, default: true },
+  inlineValidation: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:suitSearchText', 'submit', 'create-suit'])
+const emit = defineEmits(['update:suitSearchText', 'submit', 'create-suit', 'validation-error'])
 
 const isSuitDropdownOpen = ref(false)
 const explicitNoSuit = ref(false)
 const explicitPendingReview = ref(false)
+const isReadonly = field => props.readonlyFields.includes(field)
 
 const cleanSuitSearchText = computed(() => props.suitSearchText.replace(/[《》]/g, '').trim())
 const hasSuitData = computed(() => props.availableSuits.length > 0)
@@ -63,7 +69,8 @@ watch(
   (status) => {
     explicitNoSuit.value = status === 'none'
     explicitPendingReview.value = status === 'pending_review'
-  }
+  },
+  { immediate: true }
 )
 
 // 智能模糊搜索
@@ -74,6 +81,7 @@ const filteredSuits = computed(() => {
 })
 
 const handleSuitInput = (value) => {
+  if (isReadonly('suit')) return
   explicitNoSuit.value = false
   explicitPendingReview.value = false
   props.form.suit_status = value.trim() ? 'new' : ''
@@ -84,6 +92,7 @@ const handleSuitInput = (value) => {
 }
 
 const handleGameIdInput = (event) => {
+  if (isReadonly('game_id')) return
   const digitsOnly = event.target.value.replace(/\D/g, '')
   props.form.game_id = digitsOnly
   if (event.target.value !== digitsOnly) {
@@ -92,6 +101,7 @@ const handleGameIdInput = (event) => {
 }
 
 const selectSuit = (suit) => {
+  if (isReadonly('suit')) return
   explicitNoSuit.value = false
   explicitPendingReview.value = false
   props.form.suit_id = suit.id || ''
@@ -101,6 +111,7 @@ const selectSuit = (suit) => {
 }
 
 const selectNoSuit = async () => {
+  if (isReadonly('suit')) return
   explicitNoSuit.value = true
   explicitPendingReview.value = false
   props.form.suit_id = ''
@@ -112,6 +123,7 @@ const selectNoSuit = async () => {
 }
 
 const selectPendingReview = async () => {
+  if (isReadonly('suit') || !props.allowPendingReview) return
   explicitNoSuit.value = false
   explicitPendingReview.value = true
   props.form.suit_id = ''
@@ -123,7 +135,7 @@ const selectPendingReview = async () => {
 }
 
 const handleCreateSuit = () => {
-  if (!cleanSuitSearchText.value) return
+  if (isReadonly('suit') || !props.allowCreateSuit || !cleanSuitSearchText.value) return
   explicitNoSuit.value = false
   explicitPendingReview.value = false
   props.form.suit_id = ''
@@ -134,7 +146,9 @@ const handleCreateSuit = () => {
 
 const handleSubmit = () => {
   if (missingCoreFields.value.length) {
-    alert(`⚠️ 请先补全核心字段：${coreFieldMissingText.value}。\n特殊标签为选填，可不填写。`)
+    const message = `请先补全：${coreFieldMissingText.value}。特殊标签为选填。`
+    if (props.inlineValidation) emit('validation-error', message)
+    else alert(`⚠️ ${message}`)
     return
   }
 
@@ -144,14 +158,14 @@ const handleSubmit = () => {
 
 <template>
   <div class="mini-form-body">
-    <div class="entry-rule-note">
+    <div v-if="showRuleNote" class="entry-rule-note">
       新增服装按 <strong>分类部位 + 短编号</strong> 识别；特殊标签可选填。
     </div>
 
     <div class="form-row" style="grid-template-columns: 1fr;">
       <div class="form-group">
         <label>服装名称 <span class="required-mark">必填</span></label>
-        <input type="text" v-model.trim="form.name" class="custom-input" placeholder="确认官方精准名称" />
+        <input type="text" v-model.trim="form.name" class="custom-input" placeholder="确认官方精准名称" :disabled="isReadonly('name')" />
       </div>
       
       <div class="form-group">
@@ -161,17 +175,18 @@ const handleSubmit = () => {
             type="text" 
             :value="suitInputValue"
             @input="handleSuitInput($event.target.value)"
-            @focus="isSuitDropdownOpen = true"
+            @focus="!isReadonly('suit') && (isSuitDropdownOpen = true)"
             @blur="setTimeout(() => isSuitDropdownOpen = false, 200)"
             @keydown.escape="isSuitDropdownOpen = false"
             placeholder="🔍 搜索已有套装、输入新套装名，或选择套装状态"
             class="search-input"
             :class="{'border-rose-200 bg-rose-50/30': !hasSuitStatus}"
+            :readonly="isReadonly('suit')"
           />
           <Transition name="slide">
             <div v-if="isSuitDropdownOpen" class="select-dropdown">
               <div class="option no-suit-option" @pointerdown.prevent="selectNoSuit">-- 无关联套装（纯散件）--</div>
-              <div class="option pending-review-option" @pointerdown.prevent="selectPendingReview">-- 所属套装待确认 --</div>
+              <div v-if="allowPendingReview" class="option pending-review-option" @pointerdown.prevent="selectPendingReview">-- 所属套装待确认 --</div>
               <div v-for="s in filteredSuits" :key="s.id" class="option" @pointerdown.prevent="selectSuit(s)">《{{ s.name }}》</div>
               
               <div v-if="!hasSuitData && !cleanSuitSearchText" class="option empty-option">
@@ -179,7 +194,7 @@ const handleSubmit = () => {
               </div>
 
               <div 
-                v-if="filteredSuits.length === 0 && cleanSuitSearchText !== ''" 
+                v-if="allowCreateSuit && filteredSuits.length === 0 && cleanSuitSearchText !== ''"
                 class="option bg-purple-50 text-purple-600 font-bold flex justify-between items-center border border-purple-100 hover:bg-purple-100"
                 @pointerdown.prevent="handleCreateSuit"
               >
@@ -195,7 +210,7 @@ const handleSubmit = () => {
     <div class="form-row three-cols">
       <div class="form-group">
         <label>分类部位 <span class="required-mark">必填</span></label>
-        <select v-model="form.category" class="custom-input">
+        <select v-model="form.category" class="custom-input" :disabled="isReadonly('category')">
           <option v-for="cat in FULL_CATEGORIES" :key="cat">{{cat}}</option>
         </select>
       </div>
@@ -210,11 +225,12 @@ const handleSubmit = () => {
           inputmode="numeric"
           pattern="[0-9]*"
           placeholder="请输入数字短编号"
+          :disabled="isReadonly('game_id')"
         />
       </div>
       <div class="form-group">
         <label>星级 <span class="required-mark">必填</span></label>
-        <select v-model="form.stars" class="custom-input">
+        <select v-model="form.stars" class="custom-input" :disabled="isReadonly('stars')">
           <option v-for="s in 6" :key="s" :value="s">{{s}} 星</option>
         </select>
       </div>
@@ -223,17 +239,17 @@ const handleSubmit = () => {
     <div class="form-row">
       <div class="form-group">
         <label>特殊标签 <span class="optional-mark">选填</span></label>
-        <input type="text" v-model="form.tags" class="custom-input" placeholder="如: 洛丽塔, 中式古典..." />
+        <input type="text" v-model="form.tags" class="custom-input" placeholder="如: 洛丽塔, 中式古典..." :disabled="isReadonly('tags')" />
       </div>
     </div>
 
     <div class="flex flex-col gap-3 mt-2">
       <div class="attribute-title">五组属性 <span class="required-mark">必填</span></div>
       <div v-for="pair in ATTRIBUTE_PAIRS" :key="pair.key" class="grid grid-cols-2 gap-3">
-        <select v-model="form[pair.key]" class="custom-input !py-2">
+        <select v-model="form[pair.key]" class="custom-input !py-2" :disabled="isReadonly(pair.key)">
           <option v-for="opt in pair.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
-        <select v-model="form[pair.gradeKey]" class="custom-input !py-2 bg-pink-50 text-pink-600 border-pink-200">
+        <select v-model="form[pair.gradeKey]" class="custom-input !py-2 bg-pink-50 text-pink-600 border-pink-200" :disabled="isReadonly(pair.gradeKey)">
           <option v-for="g in GRADE_OPTIONS" :key="g">{{ g }}</option>
         </select>
       </div>
@@ -245,7 +261,7 @@ const handleSubmit = () => {
       需补全：{{ coreFieldMissingText }}
     </div>
 
-    <button class="btn-submit-contrib w-full" @click="handleSubmit" :disabled="isSubmitting">
+    <button type="button" class="btn-submit-contrib w-full" @click="handleSubmit" :disabled="isSubmitting">
       <span v-if="isSubmitting" class="loading loading-spinner loading-sm mr-2 inline-block"></span>
       {{ isSubmitting ? submitLoadingText : submitText }}
     </button>
@@ -266,6 +282,7 @@ const handleSubmit = () => {
 .core-field-hint { background: #fff1f2; border: 1.5px solid #fecdd3; color: #be123c; border-radius: 12px; padding: 8px 10px; font-size: 12px; font-weight: 800; line-height: 1.5; }
 .custom-input, .search-input { width: 100%; border: 2px solid #f1f5f9; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 800; color: #334155; transition: all 0.2s; outline: none; background: #fff; }
 .custom-input:focus, .search-input:focus { border-color: #f472b6; box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.1); }
+.custom-input:disabled, .search-input:read-only { background: #f8fafc; color: #64748b; cursor: not-allowed; }
 .searchable-select { position: relative; }
 .select-dropdown { position: absolute; z-index: 50; top: 100%; left: 0; right: 0; margin-top: 6px; background: white; border: 1px solid #f1f5f9; border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); max-height: 200px; overflow-y: auto; padding: 6px; }
 .option { padding: 8px 12px; font-size: 13px; font-weight: 800; color: #475569; border-radius: 8px; cursor: pointer; transition: background 0.2s; }

@@ -23,6 +23,6 @@ export const getJuryStatusText = (status) => ({
   returned: '已退回重审',
   rejected: '管理员已永久驳回',
   voting: '投票中',
-  pending: '等待候选快照',
-  failed: '等待重新整理'
+  pending: '等待补充',
+  failed: '需要重新补充'
 }[status] || '等待处理')
