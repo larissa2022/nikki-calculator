@@ -142,6 +142,62 @@ export type Database = {
           },
         ]
       }
+      correction_requests: {
+        Row: {
+          clothes_id: string
+          clothes_snapshot: Json
+          created_at: string
+          field_key: string
+          id: string
+          proposed_patch: Json
+          reason: string
+          reported_by: string | null
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          clothes_id: string
+          clothes_snapshot: Json
+          created_at?: string
+          field_key: string
+          id?: string
+          proposed_patch: Json
+          reason: string
+          reported_by?: string | null
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          clothes_id?: string
+          clothes_snapshot?: Json
+          created_at?: string
+          field_key?: string
+          id?: string
+          proposed_patch?: Json
+          reason?: string
+          reported_by?: string | null
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correction_requests_clothes_id_fkey"
+            columns: ["clothes_id"]
+            isOneToOne: false
+            referencedRelation: "clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jury_admin_decisions: {
         Row: {
           admin_user_id: string | null
@@ -755,6 +811,7 @@ export type Database = {
         Returns: string
       }
       get_jury_review_queue: { Args: never; Returns: Json }
+      get_my_correction_requests: { Args: never; Returns: Json }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       jury_clothes_payload: { Args: { p_clothes_id: string }; Returns: Json }
@@ -818,6 +875,10 @@ export type Database = {
           p_tags?: string
           p_temp_suit_name?: string
         }
+        Returns: Json
+      }
+      submit_correction_request: {
+        Args: { p_clothes_id: string; p_proposed_patch: Json; p_reason: string }
         Returns: Json
       }
       submit_jury_candidate: {

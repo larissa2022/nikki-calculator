@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`。2026-07-27 已在 development 应用至 `20260727124555_db7_index_admin_user_fk`，并完成 DB-6 兼容回归、DB-7 状态机、权限、Advisor 和事务回滚验证。development 全量 dump 在首条只读查询遇到 SSL EOF，空输出已恢复；当前快照继续保留既有全量基线，并按 migration 原文嵌入 DB-6、DB-7 各段，避免用不完整或大量纯格式差异覆盖旧对象。非 exposed `private_db2` helper 仍以 DB-2 migration 为权威定义。
+完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`。2026-07-28 已在 development 应用至 `20260728013639_db8_restrict_service_role_table_privileges`；DB-8 表、RPC、RLS、索引、约束、权限和事务回滚已通过 live catalog 与生成类型回读。development 全量 dump 仍在首条只读查询遇到 SSL EOF，零字节临时输出已删除，未覆盖既有快照；因此 DB-8 以 migration、live catalog 和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -34,6 +34,19 @@
 | clothing_contributions | contribution_rank | smallint | null | NO |
 | clothing_contributions | source_created_at | timestamp with time zone | null | NO |
 | clothing_contributions | created_at | timestamp with time zone | now() | NO |
+| correction_requests | id | uuid | gen_random_uuid() | NO |
+| correction_requests | clothes_id | character varying | null | NO |
+| correction_requests | reported_by | uuid | null | YES |
+| correction_requests | field_key | text | null | NO |
+| correction_requests | reason | text | null | NO |
+| correction_requests | proposed_patch | jsonb | null | NO |
+| correction_requests | clothes_snapshot | jsonb | null | NO |
+| correction_requests | status | text | 'pending' | NO |
+| correction_requests | reviewed_by | uuid | null | YES |
+| correction_requests | resolution_note | text | null | YES |
+| correction_requests | reviewed_at | timestamp with time zone | null | YES |
+| correction_requests | created_at | timestamp with time zone | now() | NO |
+| correction_requests | updated_at | timestamp with time zone | now() | NO |
 | jury_admin_decisions | id | uuid | gen_random_uuid() | NO |
 | jury_admin_decisions | candidate_id | uuid | null | NO |
 | jury_admin_decisions | re_review_item_id | uuid | null | NO |
@@ -181,6 +194,17 @@
 | `admin_reject_jury_candidate(...)` | 只有超级管理员可独立永久驳回；已参投、候选提交者、原提交者或来源参与者均不得终审，旧轮次不能覆盖当前候选 |
 | 默认拒绝 | `jury_votes`、`jury_admin_decisions` 启用 RLS 且不给 authenticated 底表 policy / DML；四个公开 RPC 均为空 `search_path`、仅授权 authenticated / service_role，并在函数内复核身份和状态 |
 
+## DB-8 正式图鉴报错受理
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `correction_requests` | 保存正式服装、单一问题字段、判断依据、建议值、提交时正式资料和处理状态；账号删除后匿名保留审计事实 |
+| `submit_correction_request(...)` | 登录用户对现有正式服装提交单字段报错；相同内容重试幂等，同一活动报错不得改写 |
+| `get_my_correction_requests()` | 只返回当前登录用户本人提交记录，不开放跨用户列表 |
+| 当前业务边界 | 只受理和展示本人进度；不修改 `clothes`、不创建 `re_review_items`、不写 `points_ledger` |
+| 默认拒绝 | RLS 已启用且无 policy；anon / authenticated 无底表权限，只能由 authenticated 调用两个空 `search_path` RPC |
+| 最小权限 | service_role 仅保留 SELECT / INSERT / UPDATE；DELETE / TRUNCATE / REFERENCES / TRIGGER 已由前向 patch 撤销 |
+
 ## 主要约束与索引
 
 | 对象 | 类型 | 字段 / 说明 |
@@ -228,6 +252,12 @@
 | jury_votes_pkey | primary key | jury_votes.id |
 | jury_votes_candidate_id_fkey | foreign key | jury_votes.candidate_id -> re_review_candidates.id，删除受限 |
 | jury_votes_user_id_fkey | foreign key | jury_votes.user_id -> auth.users.id，账号删除后置空 |
+| correction_requests_pkey | primary key | correction_requests.id |
+| correction_requests_clothes_id_fkey | foreign key | correction_requests.clothes_id -> clothes.id，删除受限 |
+| correction_requests_reported_by_fkey | foreign key | correction_requests.reported_by -> auth.users.id，账号删除后置空 |
+| correction_requests_reviewed_by_fkey | foreign key | correction_requests.reviewed_by -> auth.users.id，账号删除后置空 |
+| correction_requests_active_reporter_field_unique | partial unique index | 同一用户、正式服装和字段最多一个活动报错 |
+| correction_requests_open_queue_idx | partial index | pending / reviewing 队列按创建时间读取 |
 | jury_votes_candidate_user_key | unique | 同一用户对同一候选轮次最多一票 |
 | jury_votes_user_created_at_idx | partial index | 按用户和投票时间追溯非匿名投票 |
 | jury_admin_decisions_pkey | primary key | jury_admin_decisions.id |
@@ -254,6 +284,7 @@
 | add_clothes_to_submitter_wardrobes(uuid[], text) | internal function | 审核入库后同步提交人衣柜，仅 `service_role` 可直接执行 |
 | approve_pending_clothes_arbitration(...) | RPC | DB-4 管理员仲裁入库；服务端核对候选，原子写贡献、每人 10 分、衣柜和 pending，并支持重试幂等 |
 | complete_existing_clothes_from_pending(...) | RPC | DB-3 正式库空字段补全；函数内校验管理员，原子写贡献、每人 5 分、衣柜和 pending，并支持重试幂等 |
+| get_my_correction_requests() | RPC | DB-8 仅返回当前登录用户本人提交的正式服装报错和处理状态 |
 | deduct_user_quota(uuid) | function | 扣减用户 quota |
 | handle_new_user() | trigger function | auth.users 新用户初始化 profiles |
 | handle_new_user_quota() | trigger function | auth.users 新用户初始化 user_quotas |
@@ -261,6 +292,7 @@
 | is_super_admin() | function | 判断当前用户是否为 super_admin |
 | normalize_known_clothing_tags(text) | function | 清洗已知服装标签 |
 | submit_clothing_contribution(...) | RPC | DB-5 缺失项提交与 5 位不同用户一致后自动入库；保留来源 pending，原子写前 5 位贡献、每人 10 分和衣柜 |
+| submit_correction_request(varchar, text, jsonb) | RPC | DB-8 登录用户提交单字段正式服装报错；数据库校验字段、长度、正式服装存在性、活动唯一性和幂等 |
 | update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
 
@@ -271,6 +303,7 @@
 - app_errors
 - clothes
 - clothing_contributions（DB-1 默认拒绝，无 policy）
+- correction_requests（DB-8 默认拒绝，无 policy）
 - pending_clothes
 - pending_suits
 - points_ledger（DB-1 默认拒绝，无 policy）
@@ -295,6 +328,7 @@
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
 - DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。
+- DB-8 增强 fixture 已在 development 通过并 rollback 至 0 行；live catalog 确认 3 个外键均有索引、两个 `SECURITY DEFINER` RPC 均为空 `search_path` 且 anon 无执行权限，service_role 仅保留 SELECT / INSERT / UPDATE。原生 Advisor 命令受直连传输错误影响未返回，已用相同 catalog 检查逐项回读。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
