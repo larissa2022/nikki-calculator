@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAudit } from '../composables/useAudit'
 import UserManageBoard from '../components/UserManageBoard.vue'
+import CorrectionReviewBoard from '../components/CorrectionReviewBoard.vue'
 import { supabase } from '../api/supabase' // 🌟 新增这一行：引入数据库实例
 import ClothesEntryForm from '../components/ClothesEntryForm.vue'
 import { isSuperAdminRole } from '../utils/roles'
@@ -180,6 +181,7 @@ const rejectSelectedPendingClothes = async () => {
       <div class="flex gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 w-full md:w-auto">
         <button @click="activeTab = 'audit'" :class="activeTab === 'audit' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">👗 散件仲裁</button>
         <button @click="activeTab = 'suits'" :class="activeTab === 'suits' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📦 套装审核</button>
+        <button @click="activeTab = 'corrections'" :class="activeTab === 'corrections' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📝 图鉴报错</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'users'" :class="activeTab === 'users' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🛡️ 权限大盘</button>
       </div>
       <button @click="emit('back-to-main')" class="mt-4 md:mt-0 text-sm font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"><span class="text-lg">🏠</span> 返回前台</button>
@@ -332,6 +334,10 @@ const rejectSelectedPendingClothes = async () => {
 
     <div v-show="activeTab === 'users' && isSuperAdminRole(currentUserRole)">
       <UserManageBoard :allUsersList="allUsersList" :currentUserId="currentUserId || ''" @refresh-data="fetchAllData" />
+    </div>
+
+    <div v-show="activeTab === 'corrections'">
+      <CorrectionReviewBoard :suit-list="suitList" />
     </div>
   </div>
 </template>

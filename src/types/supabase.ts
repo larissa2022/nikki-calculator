@@ -144,47 +144,56 @@ export type Database = {
       }
       correction_requests: {
         Row: {
+          accepted_patch: Json | null
           clothes_id: string
           clothes_snapshot: Json
           created_at: string
           field_key: string
           id: string
           proposed_patch: Json
+          re_review_item_id: string | null
           reason: string
           reported_by: string | null
           resolution_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
+          source_pending_id: number | null
           status: string
           updated_at: string
         }
         Insert: {
+          accepted_patch?: Json | null
           clothes_id: string
           clothes_snapshot: Json
           created_at?: string
           field_key: string
           id?: string
           proposed_patch: Json
+          re_review_item_id?: string | null
           reason: string
           reported_by?: string | null
           resolution_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_pending_id?: number | null
           status?: string
           updated_at?: string
         }
         Update: {
+          accepted_patch?: Json | null
           clothes_id?: string
           clothes_snapshot?: Json
           created_at?: string
           field_key?: string
           id?: string
           proposed_patch?: Json
+          re_review_item_id?: string | null
           reason?: string
           reported_by?: string | null
           resolution_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          source_pending_id?: number | null
           status?: string
           updated_at?: string
         }
@@ -194,6 +203,20 @@ export type Database = {
             columns: ["clothes_id"]
             isOneToOne: false
             referencedRelation: "clothes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correction_requests_re_review_item_id_fkey"
+            columns: ["re_review_item_id"]
+            isOneToOne: false
+            referencedRelation: "re_review_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correction_requests_source_pending_id_fkey"
+            columns: ["source_pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
             referencedColumns: ["id"]
           },
         ]
@@ -360,6 +383,7 @@ export type Database = {
       }
       points_ledger: {
         Row: {
+          correction_request_id: string | null
           created_at: string
           delta: number
           id: string
@@ -373,6 +397,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          correction_request_id?: string | null
           created_at?: string
           delta: number
           id?: string
@@ -386,6 +411,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          correction_request_id?: string | null
           created_at?: string
           delta?: number
           id?: string
@@ -399,6 +425,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "points_ledger_correction_request_id_fkey"
+            columns: ["correction_request_id"]
+            isOneToOne: false
+            referencedRelation: "correction_requests"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "points_ledger_jury_vote_id_fkey"
             columns: ["jury_vote_id"]
@@ -793,6 +826,18 @@ export type Database = {
         }
         Returns: Json
       }
+      correction_accepted_value_is_valid: {
+        Args: { p_field: string; p_value: Json }
+        Returns: boolean
+      }
+      correction_field_is_directly_completable: {
+        Args: { p_field: string; p_payload: Json }
+        Returns: boolean
+      }
+      correction_field_value: {
+        Args: { p_field: string; p_payload: Json }
+        Returns: Json
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
       ensure_full_jury_review_item: {
         Args: {
@@ -810,6 +855,7 @@ export type Database = {
         }
         Returns: string
       }
+      get_correction_review_queue: { Args: never; Returns: Json }
       get_jury_review_queue: { Args: never; Returns: Json }
       get_my_correction_requests: { Args: never; Returns: Json }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
@@ -849,6 +895,15 @@ export type Database = {
         Returns: string
       }
       profile_role_to_level: { Args: { p_role: string }; Returns: number }
+      review_correction_request: {
+        Args: {
+          p_accepted_value?: Json
+          p_action: string
+          p_request_id: string
+          p_resolution_note?: string
+        }
+        Returns: Json
+      }
       submit_clothing_contribution: {
         Args: {
           p_category: string

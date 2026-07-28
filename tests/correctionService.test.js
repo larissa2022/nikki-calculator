@@ -2,18 +2,25 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  fetchCorrectionReviewQueue,
   createCorrectionRequestGate,
   fetchMyCorrectionRequests,
   isCorrectionResultUncertain,
+  normalizeCorrectionReviewItem,
+  reviewCorrectionRequest,
   submitCorrectionRequest,
   withCorrectionRequestTimeout
 } from '../src/api/correctionService.js'
 import {
+  buildCorrectionAcceptedValue,
+  createCorrectionReviewDraft,
   filterCorrectionClothes,
+  formatCorrectionReviewValue,
   getCorrectionCurrentValue,
   getCorrectionFieldLabel,
   getCorrectionStatusLabel,
-  hasMatchingActiveCorrectionRequest
+  hasMatchingActiveCorrectionRequest,
+  validateCorrectionReview
 } from '../src/utils/correctionRules.js'
 
 const createClient = responses => {
@@ -141,4 +148,135 @@ test('结果不确定时仅将内容完全一致的活动报错视为提交成�
   assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, status: 'approved' }], payload), false)
   assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, reason: '另一份依据说明' }], payload), false)
   assert.equal(hasMatchingActiveCorrectionRequest([], payload), false)
+})
+
+test('管理员报错队列与处理动作使用受控 RPC', async () => {
+  const client = createClient({
+    get_correction_review_queue: {
+      data: [{
+        request_id: 'request-2',
+        clothes_id: 'clothes-2',
+        clothes_name: '晨曦短裙',
+        game_id: '1002',
+        category: '下装',
+        field_key: 'stars',
+        reason: '游戏内显示为四星，请核对图鉴。',
+        proposed_patch: { stars: '4' },
+        base_payload: { stars: 5 },
+        current_value: 5,
+        reporter_name: '测试用户',
+        created_at: '2026-07-28T01:00:00Z',
+        is_own_request: false,
+        can_review: true,
+        can_approve_directly: false,
+        can_send_to_jury: true
+      }],
+      error: null
+    },
+    review_correction_request: {
+      data: { request_id: 'request-2', status: 'converted_to_re_review', points_awarded: 0 },
+      error: null
+    }
+  })
+
+  const queue = await fetchCorrectionReviewQueue(client)
+  await reviewCorrectionRequest(client, {
+    requestId: 'request-2',
+    action: 'send_to_jury',
+    acceptedValue: 4,
+    resolutionNote: '已经对照游戏内图鉴确认星级为四星。'
+  })
+
+  assert.deepEqual(queue[0], {
+    requestId: 'request-2',
+    clothesId: 'clothes-2',
+    clothesName: '晨曦短裙',
+    gameId: '1002',
+    category: '下装',
+    fieldKey: 'stars',
+    reason: '游戏内显示为四星，请核对图鉴。',
+    proposedPatch: { stars: '4' },
+    basePayload: { stars: 5 },
+    currentValue: 5,
+    reporterName: '测试用户',
+    createdAt: '2026-07-28T01:00:00Z',
+    isOwnRequest: false,
+    canReview: true,
+    canApproveDirectly: false,
+    canSendToJury: true
+  })
+  assert.deepEqual(client.calls.slice(-2), [
+    { name: 'get_correction_review_queue', params: {} },
+    {
+      name: 'review_correction_request',
+      params: {
+        p_request_id: 'request-2',
+        p_action: 'send_to_jury',
+        p_accepted_value: 4,
+        p_resolution_note: '已经对照游戏内图鉴确认星级为四星。'
+      }
+    }
+  ])
+})
+
+test('管理员本人报错被规范化为不可处理', () => {
+  const item = normalizeCorrectionReviewItem({
+    request_id: 'request-self',
+    is_own_request: true,
+    can_review: false,
+    can_approve_directly: false,
+    can_send_to_jury: false
+  })
+
+  assert.equal(item.isOwnRequest, true)
+  assert.equal(item.canReview, false)
+  assert.equal(item.canApproveDirectly, false)
+  assert.equal(item.canSendToJury, false)
+})
+
+test('管理员核对值按字段构造并阻止不完整属性分值', () => {
+  const item = {
+    fieldKey: 'stars',
+    proposedPatch: { stars: '4' },
+    basePayload: { stars: 5 }
+  }
+  const draft = createCorrectionReviewDraft(item)
+  draft.resolutionNote = '已经对照游戏内图鉴确认星级为四星。'
+  assert.equal(draft.stars, 4)
+  assert.equal(buildCorrectionAcceptedValue('stars', draft), 4)
+  assert.equal(validateCorrectionReview('stars', draft, 'send_to_jury'), '')
+
+  const scoresDraft = createCorrectionReviewDraft({ fieldKey: 'scores', basePayload: { scores: {} } })
+  scoresDraft.resolutionNote = '已经对照游戏内图鉴逐项核对全部属性。'
+  assert.equal(validateCorrectionReview('scores', scoresDraft, 'approve_empty'), '每组属性必须一项大于 0，另一项为 0。')
+  for (const [left] of [
+    ['simple', 'gorgeous'], ['active', 'elegant'], ['cute', 'mature'],
+    ['pure', 'sexy'], ['cool', 'warm']
+  ]) scoresDraft.scores[left] = 100
+  assert.equal(validateCorrectionReview('scores', scoresDraft, 'approve_empty'), '')
+})
+
+test('套装核对结果必须明确选择已有套装或无关联套装', () => {
+  const draft = createCorrectionReviewDraft({ fieldKey: 'suit' })
+  draft.resolutionNote = '已经对照游戏内图鉴确认没有关联套装。'
+  assert.equal(validateCorrectionReview('suit', draft, 'approve_empty'), '请选择已有套装，或明确选择无关联套装。')
+  draft.noSuit = true
+  assert.deepEqual(buildCorrectionAcceptedValue('suit', draft), {
+    suit_id: null,
+    temp_suit_name: null,
+    needs_suit_review: false
+  })
+  assert.equal(validateCorrectionReview('suit', draft, 'approve_empty'), '')
+  assert.equal(formatCorrectionReviewValue({ suit_id: null }, 'suit'), '无关联套装')
+})
+
+test('空特殊标签可以构造直接补全值', () => {
+  const draft = createCorrectionReviewDraft({
+    fieldKey: 'tags',
+    proposedPatch: { tags: '欧式古典' }
+  })
+  draft.resolutionNote = '已经对照游戏内图鉴确认需要补充特殊标签。'
+
+  assert.equal(buildCorrectionAcceptedValue('tags', draft), '欧式古典')
+  assert.equal(validateCorrectionReview('tags', draft, 'approve_empty'), '')
 })
