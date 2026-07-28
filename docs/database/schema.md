@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，当前 SHA-256 为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`。2026-07-28 已在 development 应用至 `20260728013639_db8_restrict_service_role_table_privileges`；DB-8 表、RPC、RLS、索引、约束、权限和事务回滚已通过 live catalog 与生成类型回读。development 全量 dump 仍在首条只读查询遇到 SSL EOF，零字节临时输出已删除，未覆盖既有快照；因此 DB-8 以 migration、live catalog 和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8 / DB-9，不能作为这两期对象的当前事实。2026-07-28 已在 development 应用至 `20260728025707_db9_process_correction_requests`；DB-8 / DB-9 表、RPC、触发器、RLS、索引、约束、权限和事务回滚已通过 live catalog、Advisor 与生成类型回读。因全量 dump 仍遇到远端传输错误，没有覆盖既有快照；DB-8 / DB-9 以 migration、live catalog 和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -40,11 +40,14 @@
 | correction_requests | field_key | text | null | NO |
 | correction_requests | reason | text | null | NO |
 | correction_requests | proposed_patch | jsonb | null | NO |
+| correction_requests | accepted_patch | jsonb | null | YES |
 | correction_requests | clothes_snapshot | jsonb | null | NO |
 | correction_requests | status | text | 'pending' | NO |
 | correction_requests | reviewed_by | uuid | null | YES |
 | correction_requests | resolution_note | text | null | YES |
 | correction_requests | reviewed_at | timestamp with time zone | null | YES |
+| correction_requests | source_pending_id | bigint | null | YES |
+| correction_requests | re_review_item_id | uuid | null | YES |
 | correction_requests | created_at | timestamp with time zone | now() | NO |
 | correction_requests | updated_at | timestamp with time zone | now() | NO |
 | jury_admin_decisions | id | uuid | gen_random_uuid() | NO |
@@ -85,6 +88,7 @@
 | points_ledger | source_type | text | null | NO |
 | points_ledger | source_id | uuid | null | YES |
 | points_ledger | re_review_candidate_id | uuid | null | YES |
+| points_ledger | correction_request_id | uuid | null | YES |
 | points_ledger | reversal_of | uuid | null | YES |
 | points_ledger | occurred_at | timestamp with time zone | now() | NO |
 | points_ledger | created_at | timestamp with time zone | now() | NO |
@@ -179,14 +183,14 @@
 | 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
 | 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 不再直接写候选、投票或终审底表，只能调用受控 RPC；service_role 只保留必要底表权限 |
 | 缺套装接入（development 已验证） | “所属套装待确认”以 `pending_clothes.needs_suit_review = true` 显式保存；自动入库、管理员仲裁与正式库已有补全同事务创建唯一 `missing_suit` 项及全部来源，绑定正式套装后自动关闭 |
-| 当前边界 | 纯散件和历史空套装事实不进入重审池；第一版陪审团只处理 `missing_suit`，字段冲突 / 缺失和正式库报错入口仍未接入 |
+| 当前边界 | 纯散件和历史空套装事实不进入重审池；`missing_suit`、`field_missing`、`field_conflict`、`correction` 已进入统一队列，正式图鉴报错由 DB-9 管理员核对后按字段现状直接补全或转入该队列 |
 
 ## DB-7 陪审团投票与独立终审
 
 | 对象 / 规则 | 当前契约 |
 | --- | --- |
-| `submit_jury_candidate(...)` | 未参与原始数据的登录用户为 `missing_suit` 重审项提交唯一冻结候选；退回后新候选形成新轮次，旧票和旧候选保留 |
-| `get_jury_review_queue()` | 只返回当前用户可参与的重审项、当前冻结候选、票数、本人投票和可操作状态，不暴露底表写权限 |
+| `submit_jury_candidate(...)` | 未参与原始数据的登录用户为统一重审项提交完整服装资料；只允许修改问题字段，退回后新内容形成新轮次，旧票和旧内容保留 |
+| `get_jury_review_queue()` | 返回当前用户可参与的重审项、完整基础资料、全部问题字段与分歧值、当前待审核内容、票数、本人投票和可操作状态，不暴露底表写权限 |
 | `cast_jury_vote(...)` | 一人一票且不可改票；同票重试幂等；候选提交者、原提交者和任一来源参与者均不得投票 |
 | 通过 | 同意票 `>= 5` 且同意票多于反对票；同事务按冻结候选更新正式服装、关闭重审项，并向候选提交者写入 `+8` 积分流水 |
 | 退回重审 | `反对票 - 同意票 >= 3`；候选轮次标记为 `returned`，重审项回到 `pending`，正式服装和积分均不修改 |
@@ -194,15 +198,18 @@
 | `admin_reject_jury_candidate(...)` | 只有超级管理员可独立永久驳回；已参投、候选提交者、原提交者或来源参与者均不得终审，旧轮次不能覆盖当前候选 |
 | 默认拒绝 | `jury_votes`、`jury_admin_decisions` 启用 RLS 且不给 authenticated 底表 policy / DML；四个公开 RPC 均为空 `search_path`、仅授权 authenticated / service_role，并在函数内复核身份和状态 |
 
-## DB-8 正式图鉴报错受理
+## DB-8 / DB-9 正式图鉴报错闭环
 
 | 对象 / 规则 | 当前契约 |
 | --- | --- |
 | `correction_requests` | 保存正式服装、单一问题字段、判断依据、建议值、提交时正式资料和处理状态；账号删除后匿名保留审计事实 |
 | `submit_correction_request(...)` | 登录用户对现有正式服装提交单字段报错；相同内容重试幂等，同一活动报错不得改写 |
 | `get_my_correction_requests()` | 只返回当前登录用户本人提交记录，不开放跨用户列表 |
-| 当前业务边界 | 只受理和展示本人进度；不修改 `clothes`、不创建 `re_review_items`、不写 `points_ledger` |
-| 默认拒绝 | RLS 已启用且无 policy；anon / authenticated 无底表权限，只能由 authenticated 调用两个空 `search_path` RPC |
+| `get_correction_review_queue()` | 只向管理员返回待处理报错、正式资料、本人报错标记和允许分流，不开放底表读取 |
+| `review_correction_request(...)` | 同事务执行不采纳、空字段直接补全或非空争议转全字段陪审；禁止自审、过期覆盖和不一致重试 |
+| 报错奖励 | 直接补全即时唯一 `+5`；转陪审仅在最终资料采用核对结果后唯一 `+5`，未采用不奖励 |
+| 当前业务边界 | 空字段可由管理员核实后补全；非空字段只能转全字段陪审；不采纳不修改正式资料，独立终审不奖励 |
+| 默认拒绝 | RLS 已启用且无 policy；anon / authenticated 无底表权限，authenticated 只能调用四个空 `search_path` 受控 RPC |
 | 最小权限 | service_role 仅保留 SELECT / INSERT / UPDATE；DELETE / TRUNCATE / REFERENCES / TRIGGER 已由前向 patch 撤销 |
 
 ## 主要约束与索引
@@ -231,9 +238,11 @@
 | points_ledger_user_id_fkey | foreign key | points_ledger.user_id -> auth.users.id，账号删除后置空 |
 | points_ledger_source_id_fkey | foreign key | points_ledger.source_id -> clothing_contributions.id，删除受限 |
 | points_ledger_re_review_candidate_id_fkey | foreign key | points_ledger.re_review_candidate_id -> re_review_candidates.id，删除受限 |
+| points_ledger_correction_request_id_fkey | foreign key | points_ledger.correction_request_id -> correction_requests.id，删除受限 |
 | points_ledger_reversal_of_fkey | foreign key | points_ledger.reversal_of -> points_ledger.id，删除受限 |
 | points_ledger_source_id_key | partial unique index | 一条贡献最多产生一条正向流水 |
 | points_ledger_re_review_candidate_id_key | partial unique index | 每个通过的重审候选最多产生一条正向积分流水 |
+| points_ledger_correction_request_id_key | partial unique index | 每条被采用的报错最多产生一条 `+5` 正向积分流水 |
 | points_ledger_reversal_of_key | partial unique index | 一条原流水最多产生一条扣回流水 |
 | points_ledger_user_occurred_at_idx | index | points_ledger.user_id, occurred_at desc |
 | profiles_pkey | primary key | profiles.id |
@@ -256,8 +265,12 @@
 | correction_requests_clothes_id_fkey | foreign key | correction_requests.clothes_id -> clothes.id，删除受限 |
 | correction_requests_reported_by_fkey | foreign key | correction_requests.reported_by -> auth.users.id，账号删除后置空 |
 | correction_requests_reviewed_by_fkey | foreign key | correction_requests.reviewed_by -> auth.users.id，账号删除后置空 |
+| correction_requests_source_pending_id_fkey | foreign key | correction_requests.source_pending_id -> pending_clothes.id，删除受限 |
+| correction_requests_re_review_item_id_fkey | foreign key | correction_requests.re_review_item_id -> re_review_items.id，删除受限 |
 | correction_requests_active_reporter_field_unique | partial unique index | 同一用户、正式服装和字段最多一个活动报错 |
 | correction_requests_open_queue_idx | partial index | pending / reviewing 队列按创建时间读取 |
+| correction_requests_source_pending_id_idx | index | 覆盖报错生成的 pending 来源外键 |
+| correction_requests_re_review_item_id_idx | index | 覆盖报错关联的重审事项外键 |
 | jury_votes_candidate_user_key | unique | 同一用户对同一候选轮次最多一票 |
 | jury_votes_user_created_at_idx | partial index | 按用户和投票时间追溯非匿名投票 |
 | jury_admin_decisions_pkey | primary key | jury_admin_decisions.id |
@@ -285,6 +298,9 @@
 | approve_pending_clothes_arbitration(...) | RPC | DB-4 管理员仲裁入库；服务端核对候选，原子写贡献、每人 10 分、衣柜和 pending，并支持重试幂等 |
 | complete_existing_clothes_from_pending(...) | RPC | DB-3 正式库空字段补全；函数内校验管理员，原子写贡献、每人 5 分、衣柜和 pending，并支持重试幂等 |
 | get_my_correction_requests() | RPC | DB-8 仅返回当前登录用户本人提交的正式服装报错和处理状态 |
+| get_correction_review_queue() | RPC | DB-9 管理员报错队列；返回正式资料、建议、本人报错和可执行分流 |
+| review_correction_request(...) | RPC | DB-9 原子执行不采纳、空字段补全或转全字段陪审，并结算直接采用奖励 |
+| sync_correction_requests_from_re_review() | trigger function | DB-9 在关联陪审结束后按最终是否采用核对结果结案并幂等结算报错奖励 |
 | deduct_user_quota(uuid) | function | 扣减用户 quota |
 | handle_new_user() | trigger function | auth.users 新用户初始化 profiles |
 | handle_new_user_quota() | trigger function | auth.users 新用户初始化 user_quotas |
@@ -295,6 +311,7 @@
 | submit_correction_request(varchar, text, jsonb) | RPC | DB-8 登录用户提交单字段正式服装报错；数据库校验字段、长度、正式服装存在性、活动唯一性和幂等 |
 | update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
+| sync_correction_requests_after_re_review | trigger | re_review_items 状态变化后同步关联报错的最终状态和奖励 |
 
 ## RLS 摘要
 

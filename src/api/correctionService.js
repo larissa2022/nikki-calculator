@@ -76,6 +76,29 @@ export const normalizeCorrectionRequest = row => ({
   updatedAt: row?.updated_at || null
 })
 
+export const normalizeCorrectionReviewItem = row => ({
+  requestId: String(row?.request_id || ''),
+  clothesId: String(row?.clothes_id || ''),
+  clothesName: String(row?.clothes_name || '未命名服装'),
+  gameId: String(row?.game_id || ''),
+  category: String(row?.category || ''),
+  fieldKey: String(row?.field_key || ''),
+  reason: String(row?.reason || ''),
+  proposedPatch: row?.proposed_patch && typeof row.proposed_patch === 'object'
+    ? row.proposed_patch
+    : {},
+  basePayload: row?.base_payload && typeof row.base_payload === 'object'
+    ? row.base_payload
+    : {},
+  currentValue: row?.current_value ?? null,
+  reporterName: String(row?.reporter_name || '已注销用户'),
+  createdAt: row?.created_at || null,
+  isOwnRequest: Boolean(row?.is_own_request),
+  canReview: Boolean(row?.can_review),
+  canApproveDirectly: Boolean(row?.can_approve_directly),
+  canSendToJury: Boolean(row?.can_send_to_jury)
+})
+
 export const fetchMyCorrectionRequests = async (client, options = {}) => {
   const data = await callRpc(client, 'get_my_correction_requests', {}, options)
   return (Array.isArray(data) ? data : [])
@@ -91,4 +114,22 @@ export const submitCorrectionRequest = (
   p_clothes_id: clothesId,
   p_reason: reason,
   p_proposed_patch: { [fieldKey]: proposedValue }
+}, options)
+
+export const fetchCorrectionReviewQueue = async (client, options = {}) => {
+  const data = await callRpc(client, 'get_correction_review_queue', {}, options)
+  return (Array.isArray(data) ? data : [])
+    .map(normalizeCorrectionReviewItem)
+    .filter(item => item.requestId)
+}
+
+export const reviewCorrectionRequest = (
+  client,
+  { requestId, action, acceptedValue = null, resolutionNote },
+  options = {}
+) => callRpc(client, 'review_correction_request', {
+  p_request_id: requestId,
+  p_action: action,
+  p_accepted_value: acceptedValue,
+  p_resolution_note: resolutionNote
 }, options)
