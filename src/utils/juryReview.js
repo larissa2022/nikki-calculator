@@ -21,9 +21,11 @@ const findGrade = (category, score) => {
   return GRADE_OPTIONS.find(grade => Number(matrix[grade]) === Number(score)) || '完美'
 }
 
-export const createJuryCandidateForm = (payload = {}) => {
+export const createJuryCandidateForm = (payload = {}, issues = []) => {
   const category = String(payload.category || '发型')
   const scores = payload.scores && typeof payload.scores === 'object' ? payload.scores : {}
+  const needsSuitDecision = (issues || []).some(issue => issue.field === 'suit')
+    && !payload.suit_id
   const form = createClothesEntryFormState({
     name: String(payload.name || ''),
     game_id: String(payload.game_id || ''),
@@ -31,7 +33,7 @@ export const createJuryCandidateForm = (payload = {}) => {
     stars: Number(payload.stars) || 5,
     tags: String(payload.tags || ''),
     suit_id: String(payload.suit_id || ''),
-    suit_status: payload.suit_id ? 'existing' : 'none'
+    suit_status: payload.suit_id ? 'existing' : (needsSuitDecision ? '' : 'none')
   })
 
   ATTRIBUTE_PAIRS.forEach(pair => {
@@ -44,19 +46,64 @@ export const createJuryCandidateForm = (payload = {}) => {
   return form
 }
 
-export const buildJuryCandidatePayload = form => ({
-  name: String(form.name || '').trim(),
-  game_id: String(form.game_id || '').trim(),
-  category: String(form.category || '').trim(),
-  stars: Number(form.stars),
-  scores: buildClothingScoresFromForm(form.category, form),
-  suit_id: form.suit_status === 'existing' && form.suit_id
-    ? String(form.suit_id)
-    : null,
-  temp_suit_name: null,
-  tags: normalizeClothingTags(form.tags) || null,
-  needs_suit_review: false
-})
+export const buildJuryCandidatePayload = (form, basePayload = {}, issues = []) => {
+  const formScores = buildClothingScoresFromForm(form.category, form)
+  const hasBasePayload = basePayload && Object.keys(basePayload).length > 0
+  const sourcePayload = hasBasePayload ? basePayload : {
+    name: form.name,
+    game_id: form.game_id,
+    category: form.category,
+    stars: form.stars,
+    scores: formScores,
+    suit_id: form.suit_id,
+    temp_suit_name: null,
+    tags: form.tags,
+    needs_suit_review: false
+  }
+  const editable = new Set(hasBasePayload
+    ? (issues || []).map(issue => issue.field)
+    : ['name', 'game_id', 'category', 'stars', 'pair1', 'pair2', 'pair3', 'pair4', 'pair5', 'suit', 'tags'])
+  const baseScores = sourcePayload.scores && typeof sourcePayload.scores === 'object'
+    ? { ...sourcePayload.scores }
+    : {}
+  const payload = {
+    name: String(sourcePayload.name || '').trim(),
+    game_id: String(sourcePayload.game_id || '').trim(),
+    category: String(sourcePayload.category || '').trim(),
+    stars: Number(sourcePayload.stars),
+    scores: baseScores,
+    suit_id: sourcePayload.suit_id ? String(sourcePayload.suit_id) : null,
+    temp_suit_name: sourcePayload.temp_suit_name || null,
+    tags: normalizeClothingTags(sourcePayload.tags) || null,
+    needs_suit_review: Boolean(sourcePayload.needs_suit_review)
+  }
+
+  if (editable.has('name')) payload.name = String(form.name || '').trim()
+  if (editable.has('game_id')) payload.game_id = String(form.game_id || '').trim()
+  if (editable.has('category')) payload.category = String(form.category || '').trim()
+  if (editable.has('stars')) payload.stars = Number(form.stars)
+  if (editable.has('tags')) payload.tags = normalizeClothingTags(form.tags) || null
+  if (editable.has('suit')) {
+    payload.suit_id = form.suit_status === 'existing' && form.suit_id
+      ? String(form.suit_id)
+      : null
+    payload.temp_suit_name = null
+    payload.needs_suit_review = false
+  }
+
+  ATTRIBUTE_PAIRS.forEach((pair, index) => {
+    if (!editable.has(`pair${index + 1}`)) return
+    pair.options.forEach(option => {
+      payload.scores[option.value] = formScores[option.value]
+    })
+  })
+
+  return payload
+}
+
+export const getEditableJuryFields = issues => (
+  [...new Set((issues || []).map(issue => issue.field).filter(Boolean))]
+)
 
 export const getReadonlyJuryFields = issues => {
   const editable = new Set((issues || []).map(issue => issue.field))

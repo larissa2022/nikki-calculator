@@ -17,9 +17,12 @@ import {
   filterCorrectionClothes,
   formatCorrectionReviewValue,
   getCorrectionCurrentValue,
+  getCorrectionCurrentProposalValue,
+  getCorrectionScoreProposal,
   getCorrectionFieldLabel,
   getCorrectionStatusLabel,
   hasMatchingActiveCorrectionRequest,
+  correctionValuesMatch,
   validateCorrectionReview
 } from '../src/utils/correctionRules.js'
 
@@ -128,7 +131,7 @@ test('服装搜索、当前值与自然语言状态保持一致', () => {
   assert.equal(getCorrectionCurrentValue(wardrobe[0], 'suit'), '星河梦境')
   assert.equal(getCorrectionCurrentValue(wardrobe[0], 'stars'), '5')
   assert.equal(getCorrectionFieldLabel('game_id'), '短编号')
-  assert.equal(getCorrectionStatusLabel('converted_to_re_review'), '已转交复核')
+  assert.equal(getCorrectionStatusLabel('converted_to_re_review'), '陪审中')
 })
 
 test('结果不确定时仅将内容完全一致的活动报错视为提交成功', () => {
@@ -148,6 +151,76 @@ test('结果不确定时仅将内容完全一致的活动报错视为提交成�
   assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, status: 'approved' }], payload), false)
   assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, reason: '另一份依据说明' }], payload), false)
   assert.equal(hasMatchingActiveCorrectionRequest([], payload), false)
+})
+
+test('结构化建议按深层内容确认幂等，转陪审状态仍视为活动请求', () => {
+  const suitValue = {
+    suit_id: '11111111-1111-1111-1111-111111111111',
+    temp_suit_name: null,
+    needs_suit_review: false
+  }
+  const payload = {
+    clothesId: 'clothes-2',
+    fieldKey: 'suit',
+    proposedValue: suitValue,
+    reason: '游戏内套装归属与图鉴记录不一致。'
+  }
+  const request = {
+    clothesId: 'clothes-2',
+    fieldKey: 'suit',
+    proposedPatch: {
+      suit: {
+        needs_suit_review: false,
+        temp_suit_name: null,
+        suit_id: suitValue.suit_id
+      }
+    },
+    reason: payload.reason,
+    status: 'converted_to_re_review'
+  }
+
+  assert.equal(correctionValuesMatch(request.proposedPatch.suit, suitValue), true)
+  assert.equal(hasMatchingActiveCorrectionRequest([request], payload), true)
+  assert.deepEqual(getCorrectionCurrentProposalValue({ suit_id: null }, 'suit'), {
+    suit_id: null,
+    temp_suit_name: null,
+    needs_suit_review: false
+  })
+})
+
+test('属性选项只重建用户改动的分组，其他历史分值保持不变', () => {
+  const currentScores = {
+    simple: 3210,
+    gorgeous: 0,
+    active: 2870,
+    elegant: 0,
+    cute: 1980,
+    mature: 0,
+    pure: 1760,
+    sexy: 0,
+    cool: 1540,
+    warm: 0
+  }
+  const rebuiltScores = {
+    simple: 4305,
+    gorgeous: 0,
+    active: 4305,
+    elegant: 0,
+    cute: 4305,
+    mature: 0,
+    pure: 4305,
+    sexy: 0,
+    cool: 4305,
+    warm: 0
+  }
+
+  assert.equal(getCorrectionScoreProposal(currentScores, rebuiltScores, []), currentScores)
+  assert.deepEqual(getCorrectionScoreProposal(currentScores, rebuiltScores, [0]), {
+    ...currentScores,
+    simple: 4305,
+    gorgeous: 0
+  })
+  assert.deepEqual(getCorrectionScoreProposal(null, rebuiltScores, [0]), rebuiltScores)
 })
 
 test('管理员报错队列与处理动作使用受控 RPC', async () => {

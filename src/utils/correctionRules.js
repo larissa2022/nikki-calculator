@@ -5,9 +5,10 @@ export const CORRECTION_FIELDS = Object.freeze([
   { key: 'stars', label: '星级' },
   { key: 'scores', label: '属性分值' },
   { key: 'suit', label: '所属套装' },
-  { key: 'tags', label: '特殊标签' },
-  { key: 'other', label: '其他资料' }
+  { key: 'tags', label: '特殊标签' }
 ])
+
+export const CORRECTION_OPTION_FIELDS = Object.freeze(['category', 'stars', 'scores', 'suit'])
 
 const FIELD_LABELS = new Map(CORRECTION_FIELDS.map(field => [field.key, field.label]))
 
@@ -16,19 +17,31 @@ const STATUS_LABELS = new Map([
   ['reviewing', '处理中'],
   ['approved', '已确认'],
   ['rejected', '未采纳'],
-  ['converted_to_re_review', '已转交复核']
+  ['converted_to_re_review', '陪审中']
 ])
 
 export const getCorrectionFieldLabel = fieldKey => FIELD_LABELS.get(fieldKey) || '其他资料'
 export const getCorrectionStatusLabel = status => STATUS_LABELS.get(status) || '状态更新中'
+
+const stableValue = value => {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, stableValue(value[key])]))
+  }
+  return value
+}
+
+export const correctionValuesMatch = (left, right) => (
+  JSON.stringify(stableValue(left)) === JSON.stringify(stableValue(right))
+)
 
 export const hasMatchingActiveCorrectionRequest = (requests, payload) => (
   (Array.isArray(requests) ? requests : []).some(item => (
     item.clothesId === payload.clothesId
     && item.fieldKey === payload.fieldKey
     && item.reason === payload.reason
-    && String(item.proposedPatch?.[payload.fieldKey] || '') === payload.proposedValue
-    && ['pending', 'reviewing'].includes(item.status)
+    && correctionValuesMatch(item.proposedPatch?.[payload.fieldKey], payload.proposedValue)
+    && ['pending', 'reviewing', 'converted_to_re_review'].includes(item.status)
   ))
 )
 
@@ -62,6 +75,23 @@ export const getCorrectionCurrentValue = (clothes, fieldKey) => {
     : String(value)
 }
 
+export const getCorrectionCurrentProposalValue = (clothes, fieldKey) => {
+  if (!clothes) return null
+  if (fieldKey === 'suit') {
+    return {
+      suit_id: clothes.suit_id ? String(clothes.suit_id) : null,
+      temp_suit_name: null,
+      needs_suit_review: false
+    }
+  }
+  if (fieldKey === 'scores') {
+    return clothes.scores && typeof clothes.scores === 'object' ? { ...clothes.scores } : null
+  }
+  if (fieldKey === 'stars') return clothes.stars ? Number(clothes.stars) : null
+  const value = clothes[fieldKey]
+  return value === null || value === undefined ? null : String(value)
+}
+
 const SCORE_FIELDS = Object.freeze([
   'simple', 'gorgeous', 'active', 'elegant', 'cute',
   'mature', 'pure', 'sexy', 'cool', 'warm'
@@ -74,6 +104,28 @@ const SCORE_PAIRS = Object.freeze([
   ['pure', 'sexy'],
   ['cool', 'warm']
 ])
+
+const correctionScoresAreComplete = scores => (
+  scores && typeof scores === 'object' && SCORE_PAIRS.every(([left, right]) => {
+    const leftValue = Number(scores[left])
+    const rightValue = Number(scores[right])
+    return (leftValue > 0 && rightValue === 0) || (rightValue > 0 && leftValue === 0)
+  })
+)
+
+export const getCorrectionScoreProposal = (currentScores, rebuiltScores, changedPairIndexes = []) => {
+  const changedPairs = new Set(Array.isArray(changedPairIndexes) ? changedPairIndexes : [])
+  if (changedPairs.size === 0) return currentScores
+  if (!correctionScoresAreComplete(currentScores)) return rebuiltScores
+
+  const result = { ...currentScores }
+  changedPairs.forEach(index => {
+    const pair = SCORE_PAIRS[Number(index)]
+    if (!pair) return
+    pair.forEach(key => { result[key] = Number(rebuiltScores?.[key]) || 0 })
+  })
+  return result
+}
 
 export const createCorrectionReviewDraft = item => {
   const fieldKey = String(item?.fieldKey || '')

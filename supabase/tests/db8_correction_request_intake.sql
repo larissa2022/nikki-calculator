@@ -197,8 +197,9 @@ begin
   );
 
   if coalesce((v_first->>'idempotent')::boolean, true)
-    or v_first->>'status' <> 'pending'
-    or nullif(v_first->>'request_id', '') is null then
+    or v_first->>'status' <> 'converted_to_re_review'
+    or nullif(v_first->>'request_id', '') is null
+    or nullif(v_first->>'re_review_item_id', '') is null then
     raise exception 'DB8_CORRECTION_ASSERT: first submission result is invalid';
   end if;
 
@@ -284,7 +285,7 @@ begin
       from jsonb_array_elements(v_history) as history(item)
       where history.item->>'field_key' = 'name'
         and history.item->>'clothes_name' = 'DB8 报错受理测试服装'
-        and history.item->>'status' = 'pending'
+        and history.item->>'status' = 'converted_to_re_review'
     ) then
     raise exception 'DB8_CORRECTION_ASSERT: reporter history is incomplete';
   end if;
@@ -305,12 +306,37 @@ begin
     raise exception 'DB8_CORRECTION_ASSERT: intake changed formal clothes';
   end if;
 
-  if exists (
-    select 1
+  if (
+    select count(*)
     from public.re_review_items
     where clothes_id = 'db8_correction_fixture'
+      and status = 'pending'
+  ) <> 1 or (
+    select count(*)
+    from public.re_review_item_sources as source
+    join public.re_review_items as item on item.id = source.re_review_item_id
+    where item.clothes_id = 'db8_correction_fixture'
+  ) <> 2 then
+    raise exception 'DB8_CORRECTION_ASSERT: intake did not route into one jury item';
+  end if;
+
+  if not exists (
+    select 1
+    from public.re_review_items as item
+    where item.clothes_id = 'db8_correction_fixture'
+      and item.status = 'pending'
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(item.payload->'issues') as issue(value)
+        where issue.value->>'field' = 'name'
+      )
+      and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(item.payload->'issues') as issue(value)
+        where issue.value->>'field' = 'stars'
+      )
   ) then
-    raise exception 'DB8_CORRECTION_ASSERT: intake created a re-review item';
+    raise exception 'DB8_CORRECTION_ASSERT: reused jury item did not retain every reported field';
   end if;
 
   if exists (

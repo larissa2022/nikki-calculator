@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8 / DB-9，不能作为这两期对象的当前事实。2026-07-28 已在 development 应用至 `20260728025707_db9_process_correction_requests`；DB-8 / DB-9 表、RPC、触发器、RLS、索引、约束、权限和事务回滚已通过 live catalog、Advisor 与生成类型回读。因全量 dump 仍遇到远端传输错误，没有覆盖既有快照；DB-8 / DB-9 以 migration、live catalog 和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8 / DB-9 及后续直达陪审补丁，不能作为这些对象的当前事实。2026-07-28 已在 development 应用至 `20260728135701_route_corrections_directly_to_jury`；相关表、RPC、触发器、RLS、索引、约束、权限、UTF-8 正文和事务回滚已通过 live catalog、Advisor 与生成类型回读。因本补丁不要求覆盖全量 dump，migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -183,7 +183,7 @@
 | 社区读取 | 登录用户只能看到自己未提交、未作为主来源、也未作为任何来源参与的重审项 |
 | 最小权限 | `PUBLIC` / `anon` 无权限；authenticated 不再直接写候选、投票或终审底表，只能调用受控 RPC；service_role 只保留必要底表权限 |
 | 缺套装接入（development 已验证） | “所属套装待确认”以 `pending_clothes.needs_suit_review = true` 显式保存；自动入库、管理员仲裁与正式库已有补全同事务创建唯一 `missing_suit` 项及全部来源，绑定正式套装后自动关闭 |
-| 当前边界 | 纯散件和历史空套装事实不进入重审池；`missing_suit`、`field_missing`、`field_conflict`、`correction` 已进入统一队列，正式图鉴报错由 DB-9 管理员核对后按字段现状直接补全或转入该队列 |
+| 当前边界 | 纯散件和历史空套装事实不进入重审池；`missing_suit`、`field_missing`、`field_conflict`、`correction` 进入统一队列；新正式图鉴报错直接挂到该服装唯一的活动审核项，管理员队列仅保留历史记录兼容与异常兜底 |
 
 ## DB-7 陪审团投票与独立终审
 
@@ -203,12 +203,12 @@
 | 对象 / 规则 | 当前契约 |
 | --- | --- |
 | `correction_requests` | 保存正式服装、单一问题字段、判断依据、建议值、提交时正式资料和处理状态；账号删除后匿名保留审计事实 |
-| `submit_correction_request(...)` | 登录用户对现有正式服装提交单字段报错；相同内容重试幂等，同一活动报错不得改写 |
+| `submit_correction_request(...)` | 登录用户对现有正式服装提交单字段报错并原子挂到唯一活动陪审项；相同内容重试幂等，同一活动报错不得改写，报错者不得自审 |
 | `get_my_correction_requests()` | 只返回当前登录用户本人提交记录，不开放跨用户列表 |
-| `get_correction_review_queue()` | 只向管理员返回待处理报错、正式资料、本人报错标记和允许分流，不开放底表读取 |
-| `review_correction_request(...)` | 同事务执行不采纳、空字段直接补全或非空争议转全字段陪审；禁止自审、过期覆盖和不一致重试 |
-| 报错奖励 | 直接补全即时唯一 `+5`；转陪审仅在最终资料采用核对结果后唯一 `+5`，未采用不奖励 |
-| 当前业务边界 | 空字段可由管理员核实后补全；非空字段只能转全字段陪审；不采纳不修改正式资料，独立终审不奖励 |
+| `get_correction_review_queue()` | 只向管理员返回补丁前遗留待处理报错，用于兼容与异常兜底，不开放底表读取 |
+| `review_correction_request(...)` | 保留处理遗留报错的原子分流能力；禁止自审、过期覆盖和不一致重试，不作为新报错前置步骤 |
+| 报错奖励 | 陪审最终资料精确采用报错建议后唯一 `+5`；仅提交、转陪审、退回或未采用均不奖励 |
+| 当前业务边界 | 新报错直接进入社区陪审，不直接修改正式资料；报错者和其他来源参与者不得自审，独立终审不奖励 |
 | 默认拒绝 | RLS 已启用且无 policy；anon / authenticated 无底表权限，authenticated 只能调用四个空 `search_path` 受控 RPC |
 | 最小权限 | service_role 仅保留 SELECT / INSERT / UPDATE；DELETE / TRUNCATE / REFERENCES / TRIGGER 已由前向 patch 撤销 |
 
@@ -308,7 +308,8 @@
 | is_super_admin() | function | 判断当前用户是否为 super_admin |
 | normalize_known_clothing_tags(text) | function | 清洗已知服装标签 |
 | submit_clothing_contribution(...) | RPC | DB-5 缺失项提交与 5 位不同用户一致后自动入库；保留来源 pending，原子写前 5 位贡献、每人 10 分和衣柜 |
-| submit_correction_request(varchar, text, jsonb) | RPC | DB-8 登录用户提交单字段正式服装报错；数据库校验字段、长度、正式服装存在性、活动唯一性和幂等 |
+| submit_correction_request(varchar, text, jsonb) | RPC | 登录用户提交单字段正式服装报错；数据库校验结构、正式服装、活动唯一性和幂等，并原子挂到唯一活动陪审项 |
+| route_correction_request_to_jury(uuid) | internal function | 将报错来源挂到该服装唯一活动审核项，合并报错字段与正式资料其他缺失字段；不对客户端开放 |
 | update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
 | sync_correction_requests_after_re_review | trigger | re_review_items 状态变化后同步关联报错的最终状态和奖励 |

@@ -282,7 +282,11 @@ declare
 begin
   v_item_id := pg_catalog.current_setting('db6.source_item_id')::uuid;
 
-  if exists (select 1 from public.re_review_items where id = v_item_id) then
+  if exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(public.get_jury_review_queue()) as queue(item)
+    where (queue.item->>'re_review_item_id')::uuid = v_item_id
+  ) then
     raise exception 'DB6_INTEGRATION_ASSERT: source user can read own review item';
   end if;
 
@@ -315,13 +319,12 @@ do $$
 declare
   v_item_id uuid;
 begin
-  select item.id
+  select (queue.item->>'re_review_item_id')::uuid
     into v_item_id
-  from public.re_review_items as item
-  join public.clothes as clothes on clothes.id = item.clothes_id
-  where clothes.name = 'DB6 接入测试自动建项';
+  from pg_catalog.jsonb_array_elements(public.get_jury_review_queue()) as queue(item)
+  where queue.item->>'clothes_name' = 'DB6 接入测试自动建项';
 
-  if not exists (select 1 from public.re_review_items where id = v_item_id) then
+  if v_item_id is null then
     raise exception 'DB6_INTEGRATION_ASSERT: unrelated community user cannot read open item';
   end if;
 

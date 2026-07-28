@@ -1,21 +1,48 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { supabase } from '@/api/supabase'
 
 const props = defineProps(['user', 'profile'])
 // 🌟 新增抛出 'open-profile' 事件
-const emit = defineEmits(['open-login', 'open-profile'])
+const emit = defineEmits(['open-login', 'open-profile', 'signed-out'])
 
 const displayName = computed(() => props.profile?.username || props.user?.email || '个人中心')
+const isSigningOut = ref(false)
+const authNotice = ref('')
+
+const withLogoutTimeout = promise => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error('退出请求等待时间过长')), 15000)
+  Promise.resolve(promise).then(
+    value => {
+      clearTimeout(timer)
+      resolve(value)
+    },
+    error => {
+      clearTimeout(timer)
+      reject(error)
+    }
+  )
+})
 
 const handleLogout = async () => {
+  if (isSigningOut.value) return
+  isSigningOut.value = true
+  authNotice.value = ''
   try {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await withLogoutTimeout(supabase.auth.signOut())
     if (error) throw error
-    alert('已成功安全退出！')
-    window.location.reload() 
+    authNotice.value = '已安全退出。'
+    emit('signed-out')
   } catch (err) {
-    alert('退出失败：' + err.message)
+    const { data } = await withLogoutTimeout(supabase.auth.getSession()).catch(() => ({ data: null }))
+    if (!data?.session) {
+      authNotice.value = '已安全退出。'
+      emit('signed-out')
+    } else {
+      authNotice.value = `${err?.message || '退出失败'}，请稍后重试。`
+    }
+  } finally {
+    isSigningOut.value = false
   }
 }
 </script>
@@ -28,9 +55,10 @@ const handleLogout = async () => {
       </span>
       <button class="btn-tiny btn-profile" @click="$emit('open-profile')">✨ 个人中心</button>
       
-      <button class="btn-tiny btn-logout" @click="handleLogout">登出</button>
+      <button class="btn-tiny btn-logout" :disabled="isSigningOut" @click="handleLogout">{{ isSigningOut ? '退出中…' : '登出' }}</button>
     </div>
     <button v-else class="btn-login" @click="$emit('open-login')">🛡️ 登录开启云端同步</button>
+    <span v-if="authNotice" class="auth-notice" role="status">{{ authNotice }}</span>
   </div>
 </template>
 
@@ -48,5 +76,7 @@ const handleLogout = async () => {
 .btn-login:hover { background: #eff6ff; }
 .btn-logout { background: #fee2e2; color: #ef4444; border-radius: 6px; padding: 4px 10px; cursor: pointer; border: none; font-weight: bold; transition: background 0.2s;}
 .btn-logout:hover { background: #fca5a5; color: white;}
+.btn-logout:disabled { opacity: 0.6; cursor: wait; }
+.auth-notice { margin-left: 8px; color: #64748b; font-size: 12px; font-weight: 700; }
 .btn-tiny { font-size: 12px; cursor: pointer; }
 </style>
