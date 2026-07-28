@@ -21,7 +21,7 @@ const createStorage = (initialValue = null) => {
 test('刷新后恢复每个合法的主页面位置', () => {
   const storage = createStorage()
 
-  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'jury', 'profile']) {
+  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'corrections', 'jury', 'profile']) {
     assert.equal(writeMainTab(tab, storage), tab)
     assert.equal(readMainTab(storage), tab)
   }
