@@ -9,12 +9,20 @@ import {
 } from '../api/correctionService'
 import {
   CORRECTION_FIELDS,
+  CORRECTION_OPTION_FIELDS,
+  correctionValuesMatch,
   filterCorrectionClothes,
   getCorrectionCurrentValue,
+  getCorrectionCurrentProposalValue,
+  getCorrectionScoreProposal,
   getCorrectionFieldLabel,
   getCorrectionStatusLabel,
   hasMatchingActiveCorrectionRequest
 } from '../utils/correctionRules'
+import { ATTRIBUTE_PAIRS, FULL_CATEGORIES } from '../utils/gameConstants'
+import { GRADE_OPTIONS } from '../composables/useScoreEngine'
+import { buildClothingScoresFromForm } from '../utils/clothingScores'
+import { createJuryCandidateForm } from '../utils/juryReview'
 
 const props = defineProps({
   isLoggedIn: Boolean,
@@ -24,7 +32,13 @@ const props = defineProps({
 const searchQuery = ref('')
 const selectedClothes = ref(null)
 const fieldKey = ref('name')
-const proposedValue = ref('')
+const useManualInput = ref(false)
+const proposalTextValue = ref('')
+const proposalCategory = ref('')
+const proposalStars = ref(1)
+const proposalSuitId = ref('none')
+const proposalScoreForm = ref(createJuryCandidateForm())
+const changedScorePairIndexes = ref([])
 const reason = ref('')
 const requests = ref([])
 const isLoading = ref(false)
@@ -38,28 +52,88 @@ let activeSubmitController = null
 const searchResults = computed(() => (
   selectedClothes.value ? [] : filterCorrectionClothes(props.wardrobe, searchQuery.value)
 ))
+const availableSuits = computed(() => {
+  const unique = new Map()
+  props.wardrobe.forEach(item => {
+    if (item?.suit_id && item?.suit_name) {
+      unique.set(String(item.suit_id), { id: String(item.suit_id), name: item.suit_name })
+    }
+  })
+  return [...unique.values()].sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+})
+const hasOptionInput = computed(() => CORRECTION_OPTION_FIELDS.includes(fieldKey.value))
 const currentValue = computed(() => getCorrectionCurrentValue(selectedClothes.value, fieldKey.value))
+const currentProposalValue = computed(() => getCorrectionCurrentProposalValue(selectedClothes.value, fieldKey.value))
+const proposedValue = computed(() => {
+  if (useManualInput.value || !hasOptionInput.value) return proposalTextValue.value.trim()
+  if (fieldKey.value === 'category') return proposalCategory.value
+  if (fieldKey.value === 'stars') return Number(proposalStars.value)
+  if (fieldKey.value === 'scores') {
+    return getCorrectionScoreProposal(
+      currentProposalValue.value,
+      buildClothingScoresFromForm(proposalScoreForm.value.category, proposalScoreForm.value),
+      changedScorePairIndexes.value
+    )
+  }
+  if (fieldKey.value === 'suit') {
+    return {
+      suit_id: proposalSuitId.value === 'none' ? null : proposalSuitId.value,
+      temp_suit_name: null,
+      needs_suit_review: false
+    }
+  }
+  return proposalTextValue.value.trim()
+})
+const proposalHasValue = computed(() => {
+  if (useManualInput.value || !hasOptionInput.value) {
+    return proposalTextValue.value.trim().length >= 1 && proposalTextValue.value.trim().length <= 500
+  }
+  if (fieldKey.value === 'scores') {
+    return changedScorePairIndexes.value.length > 0
+      ? Boolean(proposalScoreForm.value?.category)
+      : currentProposalValue.value !== null
+  }
+  return proposedValue.value !== null && proposedValue.value !== undefined && proposedValue.value !== ''
+})
+const proposalChanged = computed(() => !correctionValuesMatch(proposedValue.value, currentProposalValue.value))
 const canSubmit = computed(() => (
   props.isLoggedIn
   && selectedClothes.value
-  && proposedValue.value.trim().length >= 1
-  && proposedValue.value.trim().length <= 500
+  && proposalHasValue.value
+  && proposalChanged.value
   && reason.value.trim().length >= 10
   && reason.value.trim().length <= 1000
   && !isSubmitting.value
 ))
 
+const resetProposal = () => {
+  const clothes = selectedClothes.value
+  const current = getCorrectionCurrentProposalValue(clothes, fieldKey.value)
+  useManualInput.value = false
+  proposalTextValue.value = current === null || typeof current === 'object' ? '' : String(current)
+  proposalCategory.value = String(clothes?.category || FULL_CATEGORIES[0] || '')
+  proposalStars.value = Number(clothes?.stars) || 1
+  proposalSuitId.value = clothes?.suit_id ? String(clothes.suit_id) : 'none'
+  proposalScoreForm.value = createJuryCandidateForm(clothes || {})
+  changedScorePairIndexes.value = []
+}
+
+const markScorePairChanged = index => {
+  if (changedScorePairIndexes.value.includes(index)) return
+  changedScorePairIndexes.value = [...changedScorePairIndexes.value, index]
+}
+
 const selectClothes = item => {
   selectedClothes.value = item
   searchQuery.value = `${item.name || '未命名服装'}${item.game_id ? ` #${item.game_id}` : ''}`
-  proposedValue.value = ''
+  resetProposal()
   notice.value = null
 }
 
 const clearSelection = () => {
   selectedClothes.value = null
   searchQuery.value = ''
-  proposedValue.value = ''
+  proposalTextValue.value = ''
   notice.value = null
 }
 
@@ -103,7 +177,7 @@ const submitReport = async () => {
   const payload = {
     clothesId: selectedClothes.value.id,
     fieldKey: fieldKey.value,
-    proposedValue: proposedValue.value.trim(),
+    proposedValue: proposedValue.value,
     reason: reason.value.trim()
   }
 
@@ -115,9 +189,9 @@ const submitReport = async () => {
       type: 'success',
       message: result?.idempotent
         ? '这条报错之前已经提交，现有记录保持不变。'
-        : '报错已提交。处理前不会自动修改正式图鉴。'
+        : '报错已提交，并已直接转交陪审团。'
     }
-    proposedValue.value = ''
+    resetProposal()
     reason.value = ''
     await loadRequests({ background: true })
   } catch (error) {
@@ -132,9 +206,9 @@ const submitReport = async () => {
       if (confirmed) {
         notice.value = {
           type: 'success',
-          message: '已从数据库确认报错提交成功。处理前不会自动修改正式图鉴。'
+          message: '已从数据库确认报错提交成功，并已直接转交陪审团。'
         }
-        proposedValue.value = ''
+        resetProposal()
         reason.value = ''
       }
     } else {
@@ -162,7 +236,15 @@ const formatDate = value => {
   }).format(date)
 }
 
-const proposedText = item => String(item.proposedPatch?.[item.fieldKey] || '')
+const proposedText = item => {
+  const value = item.proposedPatch?.[item.fieldKey]
+  if (value && typeof value === 'object') return JSON.stringify(value)
+  return String(value ?? '')
+}
+
+watch([selectedClothes, fieldKey], () => {
+  if (selectedClothes.value) resetProposal()
+})
 
 watch(() => props.isLoggedIn, isLoggedIn => {
   if (isLoggedIn) loadRequests()
@@ -187,7 +269,7 @@ onBeforeUnmount(() => {
       <div>
         <p class="eyebrow">正式图鉴纠错</p>
         <h2 id="correction-title">报告资料问题</h2>
-        <p>选择一件正式服装，说明哪里不对以及建议改成什么。提交后不会直接修改图鉴。</p>
+        <p>选择错误项目并改成你认为正确的内容。提交后会直接进入陪审团，不需要等待管理员转交。</p>
       </div>
     </header>
 
@@ -237,29 +319,70 @@ onBeforeUnmount(() => {
             <span class="selected-badge">已选择</span>
           </div>
 
-          <div class="form-section form-grid">
+          <div class="form-section">
             <label>
               <span>2. 哪项资料有问题</span>
               <select v-model="fieldKey">
                 <option v-for="field in CORRECTION_FIELDS" :key="field.key" :value="field.key">{{ field.label }}</option>
               </select>
             </label>
-            <div class="current-value">
-              <span>图鉴当前记录</span>
-              <strong>{{ currentValue }}</strong>
-            </div>
           </div>
 
           <div class="form-section">
-            <label for="correction-proposal">3. 建议改成什么</label>
-            <textarea
+            <div class="proposal-heading">
+              <label for="correction-proposal">3. 改成正确内容</label>
+              <button
+                v-if="hasOptionInput"
+                type="button"
+                class="manual-toggle"
+                @click="useManualInput = !useManualInput"
+              >
+                {{ useManualInput ? '返回选项' : '没有选项？改为手动输入' }}
+              </button>
+            </div>
+
+            <div class="current-value">
+              <span>图鉴当前值（下方已默认带入）</span>
+              <strong>{{ currentValue }}</strong>
+            </div>
+
+            <input
+              v-if="useManualInput || !hasOptionInput"
               id="correction-proposal"
-              v-model="proposedValue"
+              v-model="proposalTextValue"
+              type="text"
               maxlength="500"
-              rows="3"
-              placeholder="填写你认为正确的内容；属性问题可写完整属性和值"
+              placeholder="填写正确内容"
             />
-            <span class="counter">{{ proposedValue.trim().length }} / 500</span>
+
+            <select v-else-if="fieldKey === 'category'" v-model="proposalCategory" id="correction-proposal">
+              <option v-for="category in FULL_CATEGORIES" :key="category" :value="category">{{ category }}</option>
+            </select>
+
+            <select v-else-if="fieldKey === 'stars'" v-model.number="proposalStars" id="correction-proposal">
+              <option v-for="stars in 6" :key="stars" :value="stars">{{ stars }} 星</option>
+            </select>
+
+            <div v-else-if="fieldKey === 'scores'" id="correction-proposal" class="score-options">
+              <div v-for="(pair, index) in ATTRIBUTE_PAIRS" :key="pair.key" class="score-row">
+                <select v-model="proposalScoreForm[pair.key]" @change="markScorePairChanged(index)">
+                  <option v-for="option in pair.options" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+                <select v-model="proposalScoreForm[pair.gradeKey]" @change="markScorePairChanged(index)">
+                  <option v-for="grade in GRADE_OPTIONS" :key="grade" :value="grade">{{ grade }}</option>
+                </select>
+              </div>
+            </div>
+
+            <select v-else-if="fieldKey === 'suit'" v-model="proposalSuitId" id="correction-proposal">
+              <option value="none">无关联套装（纯散件）</option>
+              <option v-for="suit in availableSuits" :key="suit.id" :value="suit.id">《{{ suit.name }}》</option>
+            </select>
+
+            <p class="proposal-help" :class="{ invalid: proposalHasValue && !proposalChanged }">
+              {{ proposalHasValue && !proposalChanged ? '请把默认值改成正确内容后再提交。' : '提交后由其他用户补充完整资料并投票审核。' }}
+            </p>
+            <span v-if="useManualInput || !hasOptionInput" class="counter">{{ proposalTextValue.trim().length }} / 500</span>
           </div>
 
           <div class="form-section">
@@ -279,7 +402,7 @@ onBeforeUnmount(() => {
           <div v-if="notice" class="notice" :class="notice.type" role="status">{{ notice.message }}</div>
 
           <button type="submit" class="primary-btn" :disabled="!canSubmit">
-            {{ isSubmitting ? '正在提交…' : '提交图鉴报错' }}
+            {{ isSubmitting ? '正在提交并转交…' : '提交并转交陪审团' }}
           </button>
         </template>
       </form>
@@ -336,6 +459,9 @@ h3 { font-size: 18px; }
 .report-form, .history-section { padding: 18px; border: 1px solid #f1f5f9; border-radius: 18px; background: rgba(255,255,255,0.9); box-shadow: 0 6px 18px rgba(148,163,184,0.08); }
 .form-section { position: relative; margin-bottom: 16px; }
 .form-section > label, .form-section label > span { display: block; margin-bottom: 7px; color: #475569; font-size: 12px; font-weight: 900; }
+.proposal-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.proposal-heading label { color: #475569; font-size: 12px; font-weight: 900; }
+.manual-toggle { padding: 0; border: 0; background: transparent; color: #7c3aed; font-size: 11px; font-weight: 900; text-decoration: underline; cursor: pointer; }
 input, textarea, select { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1.5px solid #e2e8f0; border-radius: 11px; background: #fff; color: #334155; font-size: 13px; font-weight: 650; outline: none; }
 textarea { resize: vertical; line-height: 1.65; }
 input:focus, textarea:focus, select:focus { border-color: #f472b6; box-shadow: 0 0 0 3px rgba(244,114,182,0.12); }
@@ -352,6 +478,11 @@ input:focus, textarea:focus, select:focus { border-color: #f472b6; box-shadow: 0
 .current-value { padding: 10px 12px; border-radius: 11px; background: #f8fafc; }
 .current-value span { display: block; margin-bottom: 5px; color: #94a3b8; font-size: 11px; font-weight: 800; }
 .current-value strong { display: block; color: #475569; font-size: 12px; line-height: 1.6; word-break: break-word; }
+.proposal-heading + .current-value { margin-bottom: 8px; }
+.proposal-help { margin: 7px 0 0; color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.5; }
+.proposal-help.invalid { color: #be123c; }
+.score-options { display: grid; gap: 8px; }
+.score-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .counter { display: block; margin-top: 5px; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: right; }
 .counter.invalid { color: #e11d48; }
 .primary-btn, .secondary-btn { border: 0; border-radius: 10px; font-weight: 900; cursor: pointer; }

@@ -347,17 +347,19 @@ onBeforeUnmount(() => {
       </div>
     </article>
 
-    <div v-if="confirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" @click.self="confirmation = null">
-      <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-        <h3 class="text-lg font-black text-slate-800">{{ confirmation.title }}</h3>
-        <p class="mt-2 text-sm font-bold leading-relaxed text-slate-600">{{ confirmation.message }}</p>
-        <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500" @click="confirmation = null">取消</button>
-          <button type="button" class="rounded-xl px-4 py-2 text-sm font-black text-white" :class="confirmation.tone === 'green' ? 'bg-emerald-500' : confirmation.tone === 'rose' ? 'bg-rose-500' : 'bg-purple-500'" @click="confirmPendingAction">
-            {{ confirmation.confirmText }}
-          </button>
+    <Teleport to="body">
+      <div v-if="confirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" @click.self="confirmation = null">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+          <h3 class="text-lg font-black text-slate-800">{{ confirmation.title }}</h3>
+          <p class="mt-2 text-sm font-bold leading-relaxed text-slate-600">{{ confirmation.message }}</p>
+          <div class="mt-5 flex justify-end gap-3">
+            <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500" @click="confirmation = null">取消</button>
+            <button type="button" class="rounded-xl px-4 py-2 text-sm font-black text-white" :class="confirmation.tone === 'green' ? 'bg-emerald-500' : confirmation.tone === 'rose' ? 'bg-rose-500' : 'bg-purple-500'" @click="confirmPendingAction">
+              {{ confirmation.confirmText }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

@@ -14,6 +14,8 @@ const props = defineProps({
   suitNotFoundText: { type: String, default: '新建套装' },
   showGameIdWarning: { type: Boolean, default: false },
   readonlyFields: { type: Array, default: () => [] },
+  visibleFields: { type: Array, default: () => [] },
+  reviewMode: { type: Boolean, default: false },
   allowPendingReview: { type: Boolean, default: true },
   allowCreateSuit: { type: Boolean, default: true },
   showRuleNote: { type: Boolean, default: true },
@@ -26,6 +28,10 @@ const isSuitDropdownOpen = ref(false)
 const explicitNoSuit = ref(false)
 const explicitPendingReview = ref(false)
 const isReadonly = field => props.readonlyFields.includes(field)
+const isVisible = field => props.visibleFields.length === 0 || props.visibleFields.includes(field)
+const hasVisibleAttributeFields = computed(() => ATTRIBUTE_PAIRS.some((pair, index) => (
+  isVisible(`pair${index + 1}`)
+)))
 
 const cleanSuitSearchText = computed(() => props.suitSearchText.replace(/[《》]/g, '').trim())
 const hasSuitData = computed(() => props.availableSuits.length > 0)
@@ -44,19 +50,19 @@ const hasSuitStatus = computed(() => Boolean(
 ))
 const missingCoreFields = computed(() => {
   const missing = []
-  if (!String(props.form.name || '').trim()) missing.push('服装名称')
-  if (!String(props.form.category || '').trim()) missing.push('分类部位')
-  if (!gameIdText.value) missing.push('短编号')
-  if (!props.form.stars) missing.push('星级')
-  if (!hasSuitStatus.value) missing.push('套装状态')
+  if (isVisible('name') && !String(props.form.name || '').trim()) missing.push('服装名称')
+  if (isVisible('category') && !String(props.form.category || '').trim()) missing.push('分类部位')
+  if (isVisible('game_id') && !gameIdText.value) missing.push('短编号')
+  if (isVisible('stars') && !props.form.stars) missing.push('星级')
+  if (isVisible('suit') && !hasSuitStatus.value) missing.push('套装状态（请选择已有套装或纯散件）')
 
   ATTRIBUTE_PAIRS.forEach((pair, index) => {
-    if (!props.form[pair.key] || !props.form[pair.gradeKey]) {
+    if (isVisible(`pair${index + 1}`) && (!props.form[pair.key] || !props.form[pair.gradeKey])) {
       missing.push(`第 ${index + 1} 组属性`)
     }
   })
 
-  if (gameIdText.value && !/^\d+$/.test(gameIdText.value)) {
+  if (isVisible('game_id') && gameIdText.value && !/^\d+$/.test(gameIdText.value)) {
     missing.push('数字短编号')
   }
 
@@ -163,13 +169,13 @@ const handleSubmit = () => {
     </div>
 
     <div class="form-row" style="grid-template-columns: 1fr;">
-      <div class="form-group">
-        <label>服装名称 <span class="required-mark">必填</span></label>
+      <div v-if="isVisible('name')" class="form-group">
+        <label>服装名称 <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></label>
         <input type="text" v-model.trim="form.name" class="custom-input" placeholder="确认官方精准名称" :disabled="isReadonly('name')" />
       </div>
       
-      <div class="form-group">
-        <label>套装状态 <span class="required-mark">必填</span></label>
+      <div v-if="isVisible('suit')" class="form-group">
+        <label>套装状态 <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></label>
         <div class="searchable-select">
           <input 
             type="text" 
@@ -208,14 +214,14 @@ const handleSubmit = () => {
     </div>
     
     <div class="form-row three-cols">
-      <div class="form-group">
-        <label>分类部位 <span class="required-mark">必填</span></label>
+      <div v-if="isVisible('category')" class="form-group">
+        <label>分类部位 <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></label>
         <select v-model="form.category" class="custom-input" :disabled="isReadonly('category')">
           <option v-for="cat in FULL_CATEGORIES" :key="cat">{{cat}}</option>
         </select>
       </div>
-      <div class="form-group">
-        <label :class="{'text-rose-500': showGameIdWarning}">短编号(如001) <span class="required-mark">必填</span></label>
+      <div v-if="isVisible('game_id')" class="form-group">
+        <label :class="{'text-rose-500': showGameIdWarning}">短编号(如001) <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></label>
         <input
           type="text"
           :value="form.game_id"
@@ -228,8 +234,8 @@ const handleSubmit = () => {
           :disabled="isReadonly('game_id')"
         />
       </div>
-      <div class="form-group">
-        <label>星级 <span class="required-mark">必填</span></label>
+      <div v-if="isVisible('stars')" class="form-group">
+        <label>星级 <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></label>
         <select v-model="form.stars" class="custom-input" :disabled="isReadonly('stars')">
           <option v-for="s in 6" :key="s" :value="s">{{s}} 星</option>
         </select>
@@ -237,22 +243,24 @@ const handleSubmit = () => {
     </div>
     
     <div class="form-row">
-      <div class="form-group">
-        <label>特殊标签 <span class="optional-mark">选填</span></label>
+      <div v-if="isVisible('tags')" class="form-group">
+        <label>特殊标签 <span :class="reviewMode ? 'review-mark' : 'optional-mark'">{{ reviewMode ? '请审核' : '选填' }}</span></label>
         <input type="text" v-model="form.tags" class="custom-input" placeholder="如: 洛丽塔, 中式古典..." :disabled="isReadonly('tags')" />
       </div>
     </div>
 
-    <div class="flex flex-col gap-3 mt-2">
-      <div class="attribute-title">五组属性 <span class="required-mark">必填</span></div>
-      <div v-for="pair in ATTRIBUTE_PAIRS" :key="pair.key" class="grid grid-cols-2 gap-3">
-        <select v-model="form[pair.key]" class="custom-input !py-2" :disabled="isReadonly(pair.key)">
-          <option v-for="opt in pair.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-        <select v-model="form[pair.gradeKey]" class="custom-input !py-2 bg-pink-50 text-pink-600 border-pink-200" :disabled="isReadonly(pair.gradeKey)">
-          <option v-for="g in GRADE_OPTIONS" :key="g">{{ g }}</option>
-        </select>
-      </div>
+    <div v-if="hasVisibleAttributeFields" class="flex flex-col gap-3 mt-2">
+      <div class="attribute-title">需要核对的属性 <span :class="reviewMode ? 'review-mark' : 'required-mark'">{{ reviewMode ? '请审核' : '必填' }}</span></div>
+      <template v-for="(pair, index) in ATTRIBUTE_PAIRS" :key="pair.key">
+        <div v-if="isVisible(`pair${index + 1}`)" class="grid grid-cols-2 gap-3">
+          <select v-model="form[pair.key]" class="custom-input !py-2" :disabled="isReadonly(pair.key)">
+            <option v-for="opt in pair.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+          <select v-model="form[pair.gradeKey]" class="custom-input !py-2 bg-pink-50 text-pink-600 border-pink-200" :disabled="isReadonly(pair.gradeKey)">
+            <option v-for="g in GRADE_OPTIONS" :key="g">{{ g }}</option>
+          </select>
+        </div>
+      </template>
     </div>
 
     <slot name="admin-tips"></slot>
@@ -277,6 +285,7 @@ const handleSubmit = () => {
 .form-group label { font-size: 12px; font-weight: 800; color: #64748b; padding-left: 2px; }
 .entry-rule-note { background: #fdf2f8; border: 1.5px solid #fbcfe8; color: #be185d; border-radius: 12px; padding: 8px 10px; font-size: 12px; font-weight: 800; }
 .required-mark { color: #e11d48; font-size: 11px; margin-left: 4px; }
+.review-mark { color: #7c3aed; font-size: 11px; margin-left: 4px; }
 .optional-mark { color: #94a3b8; font-size: 11px; margin-left: 4px; }
 .attribute-title { font-size: 12px; font-weight: 900; color: #64748b; padding-left: 2px; }
 .core-field-hint { background: #fff1f2; border: 1.5px solid #fecdd3; color: #be123c; border-radius: 12px; padding: 8px 10px; font-size: 12px; font-weight: 800; line-height: 1.5; }

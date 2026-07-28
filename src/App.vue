@@ -2,18 +2,27 @@
 import { ref, onMounted, watch } from 'vue'
 import { useAuth } from './composables/useAuth'
 import { useWardrobe } from './composables/useWardrobe'
-import { supabase } from './api/supabase'
 
 import AuthModal from './components/AuthModal.vue'
 import MainView from './views/MainView.vue'
 import AdminView from './views/AdminView.vue'
 
 // 🌟 1. 核心修复：在这里把 userProfile 提取出来
-const { currentUser, userProfile, isAdmin, userQuota, initAuth, fetchProfile } = useAuth()
+const { currentUser, userProfile, isAdmin, isAuthInitialized, userQuota, initAuth, fetchProfile } = useAuth()
 const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadingDebugMessage, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
 const isAuthModalOpen = ref(false)
+const cloudSaveNotice = ref(null)
+let cloudSaveNoticeSequence = 0
+
+const showCloudSaveNotice = (type, message) => {
+  const sequence = ++cloudSaveNoticeSequence
+  cloudSaveNotice.value = { type, message }
+  setTimeout(() => {
+    if (sequence === cloudSaveNoticeSequence) cloudSaveNotice.value = null
+  }, 5000)
+}
 
 watch(currentUser, (newUser) => {
   if (newUser) syncWardrobeFromCloud(newUser.id)
@@ -23,20 +32,14 @@ watch(currentUser, (newUser) => {
 onMounted(() => {
   initAuth().catch(err => console.error('初始化登录状态失败:', err))
   loadData()
-  
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_OUT') {
-      currentUser.value = null 
-    } 
-  })
 })
 
 const handleSaveCloud = async (payload = {}) => {
   try {
     await saveWardrobeToCloud(currentUser.value?.id, payload.ids || null, { mode: payload.mode || 'replace' })
-    alert('🎉 录入成功！数据已同步至云端。')
+    showCloudSaveNotice('success', '录入成功，数据已同步至云端。')
   } catch (err) {
-    alert('❌ 保存失败：' + err.message)
+    showCloudSaveNotice('error', `保存失败：${err.message}`)
   }
 }
 
@@ -68,6 +71,7 @@ const handleProfileUpdated = (updatedProfile) => {
     <MainView 
       v-else
       :currentUser="currentUser"
+      :authInitialized="isAuthInitialized"
       :userProfile="userProfile" 
       :isAdmin="isAdmin"
       :userQuota="userQuota"
@@ -76,6 +80,7 @@ const handleProfileUpdated = (updatedProfile) => {
       :stagesData="stagesData"
       :isLoading="isLoading"
       :loadingDebugMessage="loadingDebugMessage"
+      :cloudSaveNotice="cloudSaveNotice"
       @open-login="isAuthModalOpen = true"
       @go-admin="currentMode = 'admin'"
       @update:ownedIds="myWardrobeIds = $event"

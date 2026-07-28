@@ -838,6 +838,10 @@ export type Database = {
         Args: { p_field: string; p_payload: Json }
         Returns: Json
       }
+      correction_proposed_value_is_valid: {
+        Args: { p_field: string; p_value: Json }
+        Returns: boolean
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
       ensure_full_jury_review_item: {
         Args: {
@@ -903,6 +907,10 @@ export type Database = {
           p_resolution_note?: string
         }
         Returns: Json
+      }
+      route_correction_request_to_jury: {
+        Args: { p_request_id: string }
+        Returns: string
       }
       submit_clothing_contribution: {
         Args: {

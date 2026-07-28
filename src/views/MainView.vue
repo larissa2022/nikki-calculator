@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import AuthBar from '../components/AuthBar.vue'
 import Calculator from '../components/Calculator.vue'
 import ImportZone from '../components/ImportZone.vue'
@@ -9,11 +9,12 @@ import ContributorGallery from '../components/ContributorGallery.vue'
 import CorrectionRequestBoard from '../components/CorrectionRequestBoard.vue'
 import JuryReviewBoard from '../components/JuryReviewBoard.vue'
 import UserProfile from '../components/UserProfile.vue'
-import { readMainTab, writeMainTab } from '../utils/navigationState'
+import { normalizeMainTabForSession, readMainTab, writeMainTab } from '../utils/navigationState'
 import { isSuperAdminRole } from '../utils/roles'
 
 const props = defineProps({
-  currentUser: Object, 
+  currentUser: Object,
+  authInitialized: Boolean,
   userProfile: Object, // 🌟 接收全局档案数据
   isAdmin: Boolean, 
   userQuota: Number,
@@ -21,17 +22,34 @@ const props = defineProps({
   myWardrobeIds: Array, 
   stagesData: Array, 
   isLoading: Boolean,
-  loadingDebugMessage: String
+  loadingDebugMessage: String,
+  cloudSaveNotice: Object
 })
 
 const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
-const currentTab = ref(readMainTab())
+const currentTab = ref(normalizeMainTabForSession(
+  readMainTab(),
+  Boolean(props.currentUser),
+  props.authInitialized
+))
 
 const switchTab = (tab) => {
   const nextTab = writeMainTab(tab)
   currentTab.value = nextTab
   if (nextTab === 'suits') emit('refresh-catalog')
 }
+
+const handleSignedOut = () => {
+  const nextTab = normalizeMainTabForSession(currentTab.value, false)
+  if (nextTab !== currentTab.value) switchTab(nextTab)
+}
+
+watch(
+  [() => props.currentUser, () => props.authInitialized],
+  ([currentUser, authInitialized]) => {
+    if (authInitialized && !currentUser) handleSignedOut()
+  }
+)
 </script>
 
 <template>
@@ -41,6 +59,7 @@ const switchTab = (tab) => {
       :profile="userProfile" 
       @open-login="emit('open-login')" 
       @open-profile="switchTab('profile')"
+      @signed-out="handleSignedOut"
     />
 
     <header>
@@ -57,12 +76,21 @@ const switchTab = (tab) => {
       </nav>
     </header>
 
-    <div v-if="isLoading" class="loading-state">
-      <h2>⏳ 奇迹载入中...</h2>
+    <div v-if="isLoading" class="loading-state" role="status">
+      <strong>⏳ 图鉴正在后台更新，页面仍可正常切换</strong>
       <p v-if="loadingDebugMessage" class="debug-loading-message">诊断：{{ loadingDebugMessage }}</p>
     </div>
+
+    <div
+      v-if="cloudSaveNotice"
+      class="cloud-save-notice"
+      :class="`cloud-save-notice--${cloudSaveNotice.type}`"
+      role="status"
+    >
+      {{ cloudSaveNotice.message }}
+    </div>
     
-    <main v-else>
+    <main>
       <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
       <ImportZone v-if="currentTab === 'import'" :key="currentUser?.id || 'guest'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" :userId="currentUser?.id || ''" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
@@ -100,7 +128,10 @@ h1 { color: #f472b6; font-size: 24px; margin-bottom: 20px; font-weight: 900; let
 .tabs button:hover:not(.active) { background: #fdf2f8; transform: translateY(-1px); }
 .admin-tab-btn { background: #f3e8ff !important; border-color: #d8b4fe !important; color: #9333ea !important; }
 .admin-tab-btn.active { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%) !important; color: white !important; }
-.loading-state { text-align: center; padding: 50px 0; color: #f472b6; }
+.loading-state { margin-bottom: 14px; padding: 10px 12px; border: 1px solid #fbcfe8; border-radius: 12px; background: #fdf2f8; color: #be185d; font-size: 12px; text-align: center; }
+.cloud-save-notice { margin-bottom: 14px; padding: 10px 12px; border: 1px solid; border-radius: 12px; font-size: 13px; font-weight: 800; text-align: center; }
+.cloud-save-notice--success { border-color: #bbf7d0; background: #f0fdf4; color: #15803d; }
+.cloud-save-notice--error { border-color: #fecaca; background: #fef2f2; color: #b91c1c; }
 .debug-loading-message { margin: 12px auto 0; max-width: 420px; color: #64748b; font-size: 13px; line-height: 1.7; word-break: break-word; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
 </style>

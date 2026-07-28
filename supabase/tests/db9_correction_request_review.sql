@@ -136,6 +136,7 @@ declare
   v_self_request_id uuid;
   v_existing_item_id uuid;
   v_contribution_result jsonb;
+  v_queue jsonb;
 begin
   perform pg_catalog.set_config(
     'request.jwt.claims',
@@ -143,29 +144,38 @@ begin
     true
   );
 
-  v_empty_request_id := (
-    public.submit_correction_request(
-      'db9_correction_empty',
-      '正式图鉴缺少完整属性分值，请管理员核对补全。',
-      '{"scores":"五组属性请按游戏内图鉴完整补全"}'::jsonb
-    )->>'request_id'
-  )::uuid;
+  insert into public.correction_requests (
+    clothes_id, reported_by, field_key, reason, proposed_patch, clothes_snapshot
+  ) values (
+    'db9_correction_empty',
+    'db900000-0000-4000-8000-000000000001'::uuid,
+    'scores',
+    '正式图鉴缺少完整属性分值，请管理员核对补全。',
+    '{"scores":"五组属性请按游戏内图鉴完整补全"}'::jsonb,
+    public.jury_clothes_payload('db9_correction_empty')
+  ) returning id into v_empty_request_id;
 
-  v_conflict_request_id := (
-    public.submit_correction_request(
-      'db9_correction_conflict',
-      '游戏内图鉴显示为四星，现有五星资料需要复核。',
-      '{"stars":"4"}'::jsonb
-    )->>'request_id'
-  )::uuid;
+  insert into public.correction_requests (
+    clothes_id, reported_by, field_key, reason, proposed_patch, clothes_snapshot
+  ) values (
+    'db9_correction_conflict',
+    'db900000-0000-4000-8000-000000000001'::uuid,
+    'stars',
+    '游戏内图鉴显示为四星，现有五星资料需要复核。',
+    '{"stars":"4"}'::jsonb,
+    public.jury_clothes_payload('db9_correction_conflict')
+  ) returning id into v_conflict_request_id;
 
-  v_tags_request_id := (
-    public.submit_correction_request(
-      'db9_correction_empty',
-      '正式图鉴未记录特殊标签，请管理员核对后直接补全。',
-      '{"tags":"欧式古典"}'::jsonb
-    )->>'request_id'
-  )::uuid;
+  insert into public.correction_requests (
+    clothes_id, reported_by, field_key, reason, proposed_patch, clothes_snapshot
+  ) values (
+    'db9_correction_empty',
+    'db900000-0000-4000-8000-000000000001'::uuid,
+    'tags',
+    '正式图鉴未记录特殊标签，请管理员核对后直接补全。',
+    '{"tags":"欧式古典"}'::jsonb,
+    public.jury_clothes_payload('db9_correction_empty')
+  ) returning id into v_tags_request_id;
 
   perform pg_catalog.set_config(
     'request.jwt.claims',
@@ -173,13 +183,16 @@ begin
     true
   );
 
-  v_reject_request_id := (
-    public.submit_correction_request(
-      'db9_correction_reject',
-      '该标签看起来不准确，但暂时没有足够依据支持修改。',
-      '{"tags":"建议标签"}'::jsonb
-    )->>'request_id'
-  )::uuid;
+  insert into public.correction_requests (
+    clothes_id, reported_by, field_key, reason, proposed_patch, clothes_snapshot
+  ) values (
+    'db9_correction_reject',
+    'db900000-0000-4000-8000-000000000002'::uuid,
+    'tags',
+    '该标签看起来不准确，但暂时没有足够依据支持修改。',
+    '{"tags":"建议标签"}'::jsonb,
+    public.jury_clothes_payload('db9_correction_reject')
+  ) returning id into v_reject_request_id;
 
   v_contribution_result := public.submit_clothing_contribution(
     'DB9 非空修正测试',
@@ -205,13 +218,16 @@ begin
     true
   );
 
-  v_self_request_id := (
-    public.submit_correction_request(
-      'db9_correction_reject',
-      '管理员本人提交的报错不能由本人继续处理审核。',
-      '{"stars":"3"}'::jsonb
-    )->>'request_id'
-  )::uuid;
+  insert into public.correction_requests (
+    clothes_id, reported_by, field_key, reason, proposed_patch, clothes_snapshot
+  ) values (
+    'db9_correction_reject',
+    'db900000-0000-4000-8000-000000000003'::uuid,
+    'stars',
+    '管理员本人提交的报错不能由本人继续处理审核。',
+    '{"stars":"3"}'::jsonb,
+    public.jury_clothes_payload('db9_correction_reject')
+  ) returning id into v_self_request_id;
 
   perform pg_catalog.set_config(
     'request.jwt.claims',
@@ -232,38 +248,50 @@ begin
     true
   );
 
-  if pg_catalog.jsonb_array_length(public.get_correction_review_queue()) <> 5
+  v_queue := public.get_correction_review_queue();
+
+  if (
+    select pg_catalog.count(*)
+    from pg_catalog.jsonb_array_elements(v_queue) as queue(item)
+    where (queue.item->>'request_id')::uuid = any(array[
+      v_empty_request_id,
+      v_conflict_request_id,
+      v_tags_request_id,
+      v_reject_request_id,
+      v_self_request_id
+    ]::uuid[])
+  ) <> 5
     or not exists (
       select 1
-      from pg_catalog.jsonb_array_elements(public.get_correction_review_queue()) as queue(item)
+      from pg_catalog.jsonb_array_elements(v_queue) as queue(item)
       where (queue.item->>'request_id')::uuid = v_empty_request_id
         and (queue.item->>'can_approve_directly')::boolean
         and not (queue.item->>'can_send_to_jury')::boolean
     )
     or not exists (
       select 1
-      from pg_catalog.jsonb_array_elements(public.get_correction_review_queue()) as queue(item)
+      from pg_catalog.jsonb_array_elements(v_queue) as queue(item)
       where (queue.item->>'request_id')::uuid = v_conflict_request_id
         and not (queue.item->>'can_approve_directly')::boolean
         and (queue.item->>'can_send_to_jury')::boolean
     )
     or not exists (
       select 1
-      from pg_catalog.jsonb_array_elements(public.get_correction_review_queue()) as queue(item)
+      from pg_catalog.jsonb_array_elements(v_queue) as queue(item)
       where (queue.item->>'request_id')::uuid = v_tags_request_id
         and (queue.item->>'can_approve_directly')::boolean
         and not (queue.item->>'can_send_to_jury')::boolean
     )
     or not exists (
       select 1
-      from pg_catalog.jsonb_array_elements(public.get_correction_review_queue()) as queue(item)
+      from pg_catalog.jsonb_array_elements(v_queue) as queue(item)
       where (queue.item->>'request_id')::uuid = v_self_request_id
         and (queue.item->>'is_own_request')::boolean
         and not (queue.item->>'can_review')::boolean
         and not (queue.item->>'can_approve_directly')::boolean
         and not (queue.item->>'can_send_to_jury')::boolean
     ) then
-    raise exception 'DB9_CORRECTION_ASSERT: admin queue routing is incorrect';
+    raise exception 'DB9_CORRECTION_ASSERT: admin queue routing is incorrect: %', v_queue;
   end if;
 
   begin

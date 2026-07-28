@@ -19,8 +19,8 @@ import {
   createJuryCandidateForm,
   describeJuryIssues,
   formatJuryFieldValue,
+  getEditableJuryFields,
   getCandidateSummary,
-  getReadonlyJuryFields,
   JURY_FIELD_LABELS
 } from '../utils/juryReview'
 
@@ -74,7 +74,7 @@ const initializeCandidateForms = queue => {
 
   queue.forEach(item => {
     if (!item.canSubmitCandidate || nextForms[item.reReviewItemId]) return
-    const form = createJuryCandidateForm(item.basePayload)
+    const form = createJuryCandidateForm(item.basePayload, item.issues)
     nextForms[item.reReviewItemId] = form
     const suitName = item.baseSuitName
       || suitsById.value.get(String(form.suit_id))?.name
@@ -187,20 +187,39 @@ const runAction = async ({ key, item, action, onSuccess, successMessage }) => {
   setActionActive(key, true)
   setFormError(item.reReviewItemId)
 
-  try {
-    const result = await action(controller.signal)
+  const applySuccess = result => {
     onSuccess?.(result)
     notice.value = { tone: 'success', message: successMessage(result) }
     void loadQueue({ background: true })
+  }
+
+  try {
+    const result = await action(controller.signal)
+    applySuccess(result)
   } catch (error) {
     if (controller.signal.aborted) return
     console.error('陪审团操作失败:', error)
     if (isJuryResultUncertain(error)) {
       notice.value = {
         tone: 'warning',
-        message: '操作结果暂时无法确认，正在重新读取。请不要重复点击。'
+        message: '操作结果暂时无法确认，正在用完全相同的内容核对。请不要重复点击。'
       }
-      await loadQueue({ background: true })
+      try {
+        const confirmedResult = await action(controller.signal)
+        applySuccess(confirmedResult)
+      } catch (confirmationError) {
+        if (controller.signal.aborted) return
+        console.error('核对陪审团操作结果失败:', confirmationError)
+        if (isJuryResultUncertain(confirmationError)) {
+          await loadQueue({ background: true })
+          notice.value = {
+            tone: 'warning',
+            message: '操作结果仍未确认，已重新读取队列。请先核对页面状态，不要重复点击。'
+          }
+        } else {
+          setFormError(item.reReviewItemId, confirmationError?.message || '操作结果核对失败，请刷新后再试。')
+        }
+      }
     } else {
       setFormError(item.reReviewItemId, error?.message || '操作失败，请稍后重试。')
     }
@@ -233,7 +252,7 @@ const executeCandidateSubmission = async item => {
     setFormError(item.reReviewItemId, '所属套装必须选择已有套装，或明确选择“无关联套装（纯散件）”。')
     return
   }
-  const payload = buildJuryCandidatePayload(form)
+  const payload = buildJuryCandidatePayload(form, item.basePayload, item.issues)
   await runAction({
     key: `candidate:${item.reReviewItemId}`,
     item,
@@ -350,7 +369,7 @@ const confirmPendingAction = () => {
 }
 
 const issueGroups = item => describeJuryIssues(item.issues)
-const readonlyFields = item => getReadonlyJuryFields(item.issues)
+const editableFields = item => getEditableJuryFields(item.issues)
 const itemSuitsById = item => {
   const names = new Map(suitsById.value)
   const baseSuitId = String(item.basePayload?.suit_id || '')
@@ -460,7 +479,7 @@ onBeforeUnmount(() => {
             存在分歧：{{ issueGroups(item).conflicts.join('、') }}
           </p>
           <p class="mt-2 text-xs font-bold leading-relaxed text-slate-600">
-            请补充或核对上述字段，并提交一份完整资料供其他用户审核。
+            下方只显示本次需要你核对的字段；请逐项确认后提交，其他资料会保持正式记录不变。
           </p>
         </div>
 
@@ -470,7 +489,8 @@ onBeforeUnmount(() => {
             :form="candidateForms[item.reReviewItemId]"
             :suit-search-text="suitSearchTexts[item.reReviewItemId] || ''"
             :available-suits="suits"
-            :readonly-fields="readonlyFields(item)"
+            :visible-fields="editableFields(item)"
+            review-mode
             :is-submitting="isActionActive(`candidate:${item.reReviewItemId}`)"
             :allow-pending-review="false"
             :allow-create-suit="false"
@@ -571,24 +591,26 @@ onBeforeUnmount(() => {
       </article>
     </template>
 
-    <div v-if="confirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" @click.self="confirmation = null">
-      <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-        <h3 class="text-lg font-black text-slate-800">{{ confirmation.title }}</h3>
-        <p class="mt-2 text-sm font-bold leading-relaxed text-slate-600">{{ confirmation.message }}</p>
-        <div class="mt-5 flex justify-end gap-3">
-          <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500" @click="confirmation = null">
-            取消
-          </button>
-          <button
-            type="button"
-            class="rounded-xl px-4 py-2 text-sm font-black text-white"
-            :class="confirmation.tone === 'green' ? 'bg-emerald-500' : confirmation.tone === 'rose' ? 'bg-rose-500' : 'bg-purple-500'"
-            @click="confirmPendingAction"
-          >
-            {{ confirmation.confirmText }}
-          </button>
+    <Teleport to="body">
+      <div v-if="confirmation" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-4" @click.self="confirmation = null">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+          <h3 class="text-lg font-black text-slate-800">{{ confirmation.title }}</h3>
+          <p class="mt-2 text-sm font-bold leading-relaxed text-slate-600">{{ confirmation.message }}</p>
+          <div class="mt-5 flex justify-end gap-3">
+            <button type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500" @click="confirmation = null">
+              取消
+            </button>
+            <button
+              type="button"
+              class="rounded-xl px-4 py-2 text-sm font-black text-white"
+              :class="confirmation.tone === 'green' ? 'bg-emerald-500' : confirmation.tone === 'rose' ? 'bg-rose-500' : 'bg-purple-500'"
+              @click="confirmPendingAction"
+            >
+              {{ confirmation.confirmText }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Teleport>
   </div>
 </template>

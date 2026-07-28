@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   DEFAULT_MAIN_TAB,
   MAIN_TAB_STORAGE_KEY,
+  normalizeMainTabForSession,
   readMainTab,
   writeMainTab
 } from '../src/utils/navigationState.js'
@@ -39,4 +40,13 @@ test('本地存储不可用时页面切换仍然可用', () => {
 
   assert.equal(readMainTab(blockedStorage), DEFAULT_MAIN_TAB)
   assert.equal(writeMainTab('suits', blockedStorage), 'suits')
+})
+
+test('退出登录或未登录重进时受限页面回退到首页', () => {
+  assert.equal(normalizeMainTabForSession('jury', false, false), 'jury')
+  assert.equal(normalizeMainTabForSession('jury', false), DEFAULT_MAIN_TAB)
+  assert.equal(normalizeMainTabForSession('corrections', false), DEFAULT_MAIN_TAB)
+  assert.equal(normalizeMainTabForSession('profile', false), DEFAULT_MAIN_TAB)
+  assert.equal(normalizeMainTabForSession('jury', true), 'jury')
+  assert.equal(normalizeMainTabForSession('wardrobe', false), 'wardrobe')
 })
