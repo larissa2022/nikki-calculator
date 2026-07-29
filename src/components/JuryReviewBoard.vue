@@ -11,18 +11,20 @@ import {
   withJuryRequestTimeout
 } from '../api/juryService'
 import { suitService } from '../api/suitService'
+import { createCorrectionEvidenceSignedUrl } from '../api/correctionEvidenceService'
 import ClothesEntryForm from './ClothesEntryForm.vue'
 import { getJuryStatusText, JURY_VOTE } from '../utils/juryRules'
 import {
   buildJuryVoteUpdate,
   buildJuryCandidatePayload,
+  buildJuryCandidateSubmissionPayload,
   createJuryCandidateForm,
-  describeJuryIssues,
   formatJuryFieldValue,
   getEditableJuryFields,
   getCandidateSummary,
   JURY_FIELD_LABELS
 } from '../utils/juryReview'
+import { clampJuryCardIndex, getJurySwipeDirection } from '../utils/juryCarousel'
 
 const props = defineProps({
   isLoggedIn: Boolean,
@@ -42,6 +44,10 @@ const isSuitsLoading = ref(false)
 const loadError = ref('')
 const notice = ref(null)
 const confirmation = ref(null)
+const activeCardIndex = ref(0)
+const evidenceUrls = ref({})
+const evidenceFailures = ref({})
+const swipeStart = ref(null)
 
 const queueRequests = createJuryRequestGate()
 const suitRequests = createJuryRequestGate()
@@ -52,6 +58,52 @@ const actionControllers = new Set()
 const suitsById = computed(() => new Map(
   suits.value.map(suit => [String(suit.id), suit])
 ))
+const activeItem = computed(() => items.value[activeCardIndex.value] || null)
+
+const moveToCard = index => {
+  activeCardIndex.value = clampJuryCardIndex(index, items.value.length)
+}
+
+const handleSwipeStart = event => {
+  const touch = event.touches?.[0]
+  swipeStart.value = touch ? { x: touch.clientX, y: touch.clientY } : null
+}
+
+const handleSwipeEnd = event => {
+  const touch = event.changedTouches?.[0]
+  if (!touch || !swipeStart.value) return
+  const direction = getJurySwipeDirection({
+    startX: swipeStart.value.x,
+    startY: swipeStart.value.y,
+    endX: touch.clientX,
+    endY: touch.clientY
+  })
+  swipeStart.value = null
+  if (direction === 'next') moveToCard(activeCardIndex.value + 1)
+  if (direction === 'previous') moveToCard(activeCardIndex.value - 1)
+}
+
+const loadEvidenceUrls = async (queue, queueRequestId) => {
+  const paths = [...new Set(queue.flatMap(item => (
+    item.correctionEvidence.map(evidence => evidence.path)
+  )))].filter(path => !evidenceUrls.value[path] && !evidenceFailures.value[path])
+  if (!paths.length) return
+
+  const results = await Promise.allSettled(paths.map(path => (
+    createCorrectionEvidenceSignedUrl(supabase, path)
+  )))
+  if (!queueRequests.isCurrent(queueRequestId)) return
+
+  const nextUrls = { ...evidenceUrls.value }
+  const nextFailures = { ...evidenceFailures.value }
+  results.forEach((result, index) => {
+    const path = paths[index]
+    if (result.status === 'fulfilled' && result.value) nextUrls[path] = result.value
+    else nextFailures[path] = true
+  })
+  evidenceUrls.value = nextUrls
+  evidenceFailures.value = nextFailures
+}
 
 const setFormError = (itemId, message = '') => {
   formErrors.value = { ...formErrors.value, [itemId]: message }
@@ -155,7 +207,9 @@ const loadQueue = async ({ background = false } = {}) => {
     if (!queueRequests.isCurrent(requestId)) return
 
     items.value = queue
+    activeCardIndex.value = clampJuryCardIndex(activeCardIndex.value, queue.length)
     initializeCandidateForms(queue)
+    void loadEvidenceUrls(queue, requestId)
     if (needsSuitRows(queue)) {
       void loadSuits(requestId)
     } else {
@@ -252,17 +306,18 @@ const executeCandidateSubmission = async item => {
     setFormError(item.reReviewItemId, '所属套装必须选择已有套装，或明确选择“无关联套装（纯散件）”。')
     return
   }
-  const payload = buildJuryCandidatePayload(form, item.basePayload, item.issues)
+  const completePayload = buildJuryCandidatePayload(form, item.basePayload, item.issues)
+  const submissionPayload = buildJuryCandidateSubmissionPayload(item, completePayload)
   await runAction({
     key: `candidate:${item.reReviewItemId}`,
     item,
     action: signal => submitJuryCandidate(
       supabase,
       item.reReviewItemId,
-      payload,
+      submissionPayload,
       { signal }
     ),
-    onSuccess: result => applyCandidateResult(item, payload, result),
+    onSuccess: result => applyCandidateResult(item, completePayload, result),
     successMessage: () => '补充内容已提交，其他用户现在可以参与审核。'
   })
 }
@@ -368,7 +423,6 @@ const confirmPendingAction = () => {
   void action?.()
 }
 
-const issueGroups = item => describeJuryIssues(item.issues)
 const editableFields = item => getEditableJuryFields(item.issues)
 const itemSuitsById = item => {
   const names = new Map(suitsById.value)
@@ -388,6 +442,9 @@ const issueValue = (item, issue) => formatJuryFieldValue(
 )
 
 watch(() => props.isLoggedIn, () => loadQueue(), { immediate: true })
+watch(() => items.value.length, length => {
+  activeCardIndex.value = clampJuryCardIndex(activeCardIndex.value, length)
+})
 
 onBeforeUnmount(() => {
   queueRequests.invalidate()
@@ -448,10 +505,30 @@ onBeforeUnmount(() => {
     </section>
 
     <template v-else>
+      <nav class="jury-card-nav" aria-label="陪审事项切换">
+        <button
+          type="button"
+          aria-label="上一条审核事项"
+          :disabled="activeCardIndex === 0"
+          @click="moveToCard(activeCardIndex - 1)"
+        >
+          ‹
+        </button>
+        <span aria-live="polite">{{ activeCardIndex + 1 }} / {{ items.length }}</span>
+        <button
+          type="button"
+          aria-label="下一条审核事项"
+          :disabled="activeCardIndex >= items.length - 1"
+          @click="moveToCard(activeCardIndex + 1)"
+        >
+          ›
+        </button>
+      </nav>
+      <div class="jury-card-viewport" @touchstart.passive="handleSwipeStart" @touchend.passive="handleSwipeEnd">
       <article
-        v-for="item in items"
+        v-for="item in activeItem ? [activeItem] : []"
         :key="item.reReviewItemId"
-        class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
+        class="jury-card rounded-2xl border border-slate-100 bg-white p-5 shadow-sm"
       >
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -471,16 +548,21 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-4">
-          <p v-if="issueGroups(item).missing.length" class="text-sm font-black text-amber-800">
-            缺少：{{ issueGroups(item).missing.join('、') }}
-          </p>
-          <p v-if="issueGroups(item).conflicts.length" class="mt-1 text-sm font-black text-rose-700">
-            存在分歧：{{ issueGroups(item).conflicts.join('、') }}
-          </p>
-          <p class="mt-2 text-xs font-bold leading-relaxed text-slate-600">
-            下方只显示本次需要你核对的字段；请逐项确认后提交，其他资料会保持正式记录不变。
-          </p>
+        <div v-if="item.correctionEvidence.length" class="mt-4 rounded-xl border border-sky-100 bg-sky-50 p-4">
+          <div class="text-xs font-black text-sky-700">游戏内图鉴图片</div>
+          <div class="mt-2 grid gap-3 sm:grid-cols-2">
+            <figure v-for="evidence in item.correctionEvidence" :key="evidence.path" class="overflow-hidden rounded-lg bg-white">
+              <img
+                v-if="evidenceUrls[evidence.path]"
+                :src="evidenceUrls[evidence.path]"
+                :alt="`${JURY_FIELD_LABELS[evidence.fieldKey] || '资料'}的游戏内图鉴图片`"
+                class="block max-h-80 w-full object-contain"
+              />
+              <figcaption v-else class="p-3 text-xs font-bold text-slate-500">
+                {{ evidenceFailures[evidence.path] ? '图片暂时无法读取，请刷新后重试。' : '正在读取图片…' }}
+              </figcaption>
+            </figure>
+          </div>
         </div>
 
         <div v-if="item.canSubmitCandidate" class="mt-4 rounded-xl border border-purple-100 bg-purple-50/40 p-4">
@@ -589,6 +671,7 @@ onBeforeUnmount(() => {
           {{ formErrors[item.reReviewItemId] }}
         </p>
       </article>
+      </div>
     </template>
 
     <Teleport to="body">
@@ -614,3 +697,52 @@ onBeforeUnmount(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.jury-card-nav {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.jury-card-nav span {
+  color: #7c3aed;
+  font-size: 12px;
+  font-weight: 900;
+  text-align: center;
+}
+.jury-card-nav button {
+  height: 40px;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  background: #fff;
+  color: #7c3aed;
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1;
+}
+.jury-card-nav button:disabled { opacity: 0.35; }
+.jury-card-viewport { min-width: 0; touch-action: pan-y; }
+.jury-card { min-width: 0; }
+
+@media (max-width: 640px) {
+  .jury-card {
+    max-height: calc(100dvh - 11.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px;
+  }
+  .jury-card-nav {
+    position: sticky;
+    top: 8px;
+    z-index: 20;
+    margin-inline: 8px;
+    padding: 6px;
+    border: 1px solid #f3e8ff;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+  }
+}
+</style>

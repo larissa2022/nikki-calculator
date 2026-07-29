@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   buildJuryVoteUpdate,
   buildJuryCandidatePayload,
+  buildJuryCandidateSubmissionPayload,
   createJuryCandidateForm,
   describeJuryIssues,
   formatJuryFieldValue,
@@ -91,6 +92,18 @@ test('待补套装不会被误判为纯散件，明确选择后只修改套装�
   assert.equal(candidate.tags, basePayload.tags)
   assert.equal(candidate.suit_id, null)
   assert.equal(candidate.needs_suit_review, false)
+})
+
+test('历史待补套装只向数据库提交套装字段，避免被旧资料缺项阻断', () => {
+  const completePayload = { ...payload, suit_id: 'suit-1' }
+  assert.deepEqual(buildJuryCandidateSubmissionPayload({
+    reason: 'missing_suit',
+    issues: [{ field: 'suit', kind: 'missing' }]
+  }, completePayload), { suit_id: 'suit-1' })
+  assert.equal(buildJuryCandidateSubmissionPayload({
+    reason: 'field_conflict',
+    issues: [{ field: 'suit', kind: 'conflict' }]
+  }, completePayload), completePayload)
 })
 
 test('问题提示分别列出缺失项和冲突项', () => {

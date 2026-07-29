@@ -100,6 +100,7 @@ watch(
         v-if="currentTab === 'corrections'"
         :key="currentUser?.id || 'guest'"
         :isLoggedIn="Boolean(currentUser)"
+        :userId="currentUser?.id || ''"
         :wardrobe="fullWardrobeData"
       />
       <JuryReviewBoard

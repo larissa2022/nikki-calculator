@@ -52,6 +52,12 @@ const normalizeIssue = (issue) => ({
   kind: issue?.kind === 'missing' ? 'missing' : 'conflict'
 })
 
+const normalizeCorrectionEvidence = evidence => ({
+  requestId: String(evidence?.request_id || ''),
+  fieldKey: String(evidence?.field_key || ''),
+  path: String(evidence?.evidence_image_path || '')
+})
+
 export const normalizeQueueItem = (row) => ({
   reReviewItemId: String(row?.re_review_item_id || ''),
   reason: String(row?.reason || ''),
@@ -70,6 +76,9 @@ export const normalizeQueueItem = (row) => ({
   fieldOptions: row?.field_options && typeof row.field_options === 'object'
     ? row.field_options
     : {},
+  correctionEvidence: (Array.isArray(row?.correction_evidence) ? row.correction_evidence : [])
+    .map(normalizeCorrectionEvidence)
+    .filter(evidence => evidence.path),
   candidateId: row?.candidate_id ? String(row.candidate_id) : '',
   candidatePayload: row?.candidate_payload && typeof row.candidate_payload === 'object'
     ? row.candidate_payload
@@ -101,7 +110,7 @@ const callRpc = async (client, name, params = {}, options = {}) => {
 }
 
 export const fetchJuryReviewQueue = async (client, options = {}) => {
-  const data = await callRpc(client, 'get_jury_review_queue', {}, options)
+  const data = await callRpc(client, 'get_jury_review_queue_with_evidence', {}, options)
   return (Array.isArray(data) ? data : [])
     .map(normalizeQueueItem)
     .filter(item => item.reReviewItemId)

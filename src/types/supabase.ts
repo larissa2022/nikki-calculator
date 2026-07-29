@@ -148,6 +148,7 @@ export type Database = {
           clothes_id: string
           clothes_snapshot: Json
           created_at: string
+          evidence_image_path: string | null
           field_key: string
           id: string
           proposed_patch: Json
@@ -166,6 +167,7 @@ export type Database = {
           clothes_id: string
           clothes_snapshot: Json
           created_at?: string
+          evidence_image_path?: string | null
           field_key: string
           id?: string
           proposed_patch: Json
@@ -184,6 +186,7 @@ export type Database = {
           clothes_id?: string
           clothes_snapshot?: Json
           created_at?: string
+          evidence_image_path?: string | null
           field_key?: string
           id?: string
           proposed_patch?: Json
@@ -861,6 +864,7 @@ export type Database = {
       }
       get_correction_review_queue: { Args: never; Returns: Json }
       get_jury_review_queue: { Args: never; Returns: Json }
+      get_jury_review_queue_with_evidence: { Args: never; Returns: Json }
       get_my_correction_requests: { Args: never; Returns: Json }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
@@ -942,6 +946,14 @@ export type Database = {
       }
       submit_correction_request: {
         Args: { p_clothes_id: string; p_proposed_patch: Json; p_reason: string }
+        Returns: Json
+      }
+      submit_correction_request_with_evidence: {
+        Args: {
+          p_clothes_id: string
+          p_evidence_image_path: string
+          p_proposed_patch: Json
+        }
         Returns: Json
       }
       submit_jury_candidate: {

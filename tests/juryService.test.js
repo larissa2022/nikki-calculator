@@ -24,7 +24,7 @@ const createClient = (responses) => {
 
 test('陪审团队列规范化票数和权限状态', async () => {
   const client = createClient({
-    get_jury_review_queue: {
+    get_jury_review_queue_with_evidence: {
       data: [{
         re_review_item_id: 'item-1',
         reason: 'missing_suit',
@@ -40,6 +40,11 @@ test('陪审团队列规范化票数和权限状态', async () => {
           { field: 'suit', kind: 'conflict' }
         ],
         field_options: { stars: [4, 5] },
+        correction_evidence: [{
+          request_id: 'request-1',
+          field_key: 'stars',
+          evidence_image_path: 'user-1/evidence.png'
+        }],
         candidate_id: 'candidate-1',
         candidate_payload: { suit_id: 'suit-1' },
         candidate_suit_name: '星河梦境',
@@ -67,7 +72,12 @@ test('陪审团队列规范化票数和权限状态', async () => {
   ])
   assert.equal(queue[0].baseSuitName, '星河梦境')
   assert.equal(queue[0].candidateSuitName, '星河梦境')
-  assert.deepEqual(client.calls, [{ name: 'get_jury_review_queue', params: {} }])
+  assert.deepEqual(queue[0].correctionEvidence, [{
+    requestId: 'request-1',
+    fieldKey: 'stars',
+    path: 'user-1/evidence.png'
+  }])
+  assert.deepEqual(client.calls, [{ name: 'get_jury_review_queue_with_evidence', params: {} }])
 })
 
 test('完整补充内容、投票和管理员终审使用固定 RPC 参数', async () => {
@@ -140,7 +150,7 @@ test('超时和网络中断需要自动回读，数据库业务错误直接展�
 test('RPC 失败时保留数据库错误', async () => {
   const rpcError = { code: '42501', message: 'permission denied' }
   const client = createClient({
-    get_jury_review_queue: { data: null, error: rpcError }
+    get_jury_review_queue_with_evidence: { data: null, error: rpcError }
   })
 
   await assert.rejects(
