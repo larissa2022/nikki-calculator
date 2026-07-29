@@ -5,8 +5,15 @@ import {
   createCorrectionRequestGate,
   fetchMyCorrectionRequests,
   isCorrectionResultUncertain,
-  submitCorrectionRequest
+  submitCorrectionRequest,
+  withCorrectionRequestTimeout
 } from '../api/correctionService'
+import {
+  createCorrectionEvidencePath,
+  removeCorrectionEvidence,
+  uploadCorrectionEvidence,
+  validateCorrectionEvidenceFile
+} from '../api/correctionEvidenceService'
 import {
   CORRECTION_FIELDS,
   CORRECTION_OPTION_FIELDS,
@@ -26,6 +33,7 @@ import { createJuryCandidateForm } from '../utils/juryReview'
 
 const props = defineProps({
   isLoggedIn: Boolean,
+  userId: { type: String, default: '' },
   wardrobe: { type: Array, required: true }
 })
 
@@ -39,7 +47,10 @@ const proposalStars = ref(1)
 const proposalSuitId = ref('none')
 const proposalScoreForm = ref(createJuryCandidateForm())
 const changedScorePairIndexes = ref([])
-const reason = ref('')
+const evidenceFile = ref(null)
+const evidencePreviewUrl = ref('')
+const pendingEvidencePath = ref('')
+const evidenceInputKey = ref(0)
 const requests = ref([])
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -101,10 +112,44 @@ const canSubmit = computed(() => (
   && selectedClothes.value
   && proposalHasValue.value
   && proposalChanged.value
-  && reason.value.trim().length >= 10
-  && reason.value.trim().length <= 1000
+  && props.userId
+  && (evidenceFile.value || pendingEvidencePath.value)
   && !isSubmitting.value
 ))
+
+const revokeEvidencePreview = () => {
+  if (evidencePreviewUrl.value) URL.revokeObjectURL(evidencePreviewUrl.value)
+  evidencePreviewUrl.value = ''
+}
+
+const clearEvidence = () => {
+  revokeEvidencePreview()
+  evidenceFile.value = null
+  pendingEvidencePath.value = ''
+  evidenceInputKey.value += 1
+}
+
+const selectEvidenceFile = event => {
+  const file = event.target.files?.[0] || null
+  const validationError = validateCorrectionEvidenceFile(file)
+  if (validationError) {
+    notice.value = { type: 'error', message: validationError }
+    clearEvidence()
+    return
+  }
+  if (pendingEvidencePath.value) {
+    notice.value = {
+      type: 'warning',
+      message: '上一次提交结果仍待确认，请先用原图片重试，不要更换图片。'
+    }
+    evidenceInputKey.value += 1
+    return
+  }
+  revokeEvidencePreview()
+  evidenceFile.value = file
+  evidencePreviewUrl.value = URL.createObjectURL(file)
+  notice.value = null
+}
 
 const resetProposal = () => {
   const clothes = selectedClothes.value
@@ -134,6 +179,7 @@ const clearSelection = () => {
   selectedClothes.value = null
   searchQuery.value = ''
   proposalTextValue.value = ''
+  clearEvidence()
   notice.value = null
 }
 
@@ -174,14 +220,24 @@ const submitReport = async () => {
   isSubmitting.value = true
   notice.value = null
 
+  let evidencePath = pendingEvidencePath.value
   const payload = {
     clothesId: selectedClothes.value.id,
     fieldKey: fieldKey.value,
     proposedValue: proposedValue.value,
-    reason: reason.value.trim()
+    evidenceImagePath: evidencePath
   }
 
   try {
+    if (!evidencePath) {
+      evidencePath = createCorrectionEvidencePath(props.userId, evidenceFile.value)
+      pendingEvidencePath.value = evidencePath
+      payload.evidenceImagePath = evidencePath
+      await withCorrectionRequestTimeout(
+        () => uploadCorrectionEvidence(supabase, evidencePath, evidenceFile.value),
+        { signal: activeSubmitController.signal }
+      )
+    }
     const result = await submitCorrectionRequest(supabase, payload, {
       signal: activeSubmitController.signal
     })
@@ -192,7 +248,7 @@ const submitReport = async () => {
         : '报错已提交，并已直接转交陪审团。'
     }
     resetProposal()
-    reason.value = ''
+    clearEvidence()
     await loadRequests({ background: true })
   } catch (error) {
     if (error?.name === 'AbortError') return
@@ -209,9 +265,20 @@ const submitReport = async () => {
           message: '已从数据库确认报错提交成功，并已直接转交陪审团。'
         }
         resetProposal()
-        reason.value = ''
+        clearEvidence()
       }
     } else {
+      if (evidencePath) {
+        try {
+          await withCorrectionRequestTimeout(
+            () => removeCorrectionEvidence(supabase, evidencePath),
+            { signal: activeSubmitController.signal }
+          )
+          clearEvidence()
+        } catch (cleanupError) {
+          console.warn('清理未使用的图鉴图片失败:', cleanupError)
+        }
+      }
       notice.value = {
         type: 'error',
         message: error?.message || '报错提交失败，请稍后重试。'
@@ -260,6 +327,7 @@ onBeforeUnmount(() => {
   activeLoadController?.abort()
   activeSubmitController?.abort()
   loadGate.invalidate()
+  revokeEvidencePreview()
 })
 </script>
 
@@ -386,17 +454,23 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="form-section">
-            <label for="correction-reason">4. 为什么这样判断</label>
-            <textarea
-              id="correction-reason"
-              v-model="reason"
-              maxlength="1000"
-              rows="4"
-              placeholder="至少 10 个字，例如游戏内查看位置、截图内容或可核对的依据"
-            />
-            <span class="counter" :class="{ invalid: reason.trim().length > 0 && reason.trim().length < 10 }">
-              {{ reason.trim().length }} / 1000（至少 10 个字）
-            </span>
+            <label for="correction-evidence">4. 上传游戏内图鉴图片</label>
+            <p class="evidence-help">请上传能清楚看到这件服装及正确资料的游戏内图鉴截图，供陪审员核对。</p>
+            <label class="evidence-picker" for="correction-evidence">
+              <input
+                :key="evidenceInputKey"
+                id="correction-evidence"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                :disabled="isSubmitting"
+                @change="selectEvidenceFile"
+              />
+              <span>{{ evidenceFile ? '重新选择图片' : '选择图鉴图片' }}</span>
+              <small>JPG、PNG 或 WebP，最大 8 MB</small>
+            </label>
+            <div v-if="evidencePreviewUrl" class="evidence-preview">
+              <img :src="evidencePreviewUrl" alt="待提交的游戏内图鉴图片预览" />
+            </div>
           </div>
 
           <div v-if="notice" class="notice" :class="notice.type" role="status">{{ notice.message }}</div>
@@ -437,7 +511,7 @@ onBeforeUnmount(() => {
             <dl>
               <div><dt>问题字段</dt><dd>{{ getCorrectionFieldLabel(item.fieldKey) }}</dd></div>
               <div><dt>建议内容</dt><dd>{{ proposedText(item) }}</dd></div>
-              <div><dt>判断依据</dt><dd>{{ item.reason }}</dd></div>
+              <div><dt>图鉴图片</dt><dd>{{ item.evidenceImagePath ? '已上传' : '历史记录未附图片' }}</dd></div>
               <div v-if="item.resolutionNote"><dt>处理说明</dt><dd>{{ item.resolutionNote }}</dd></div>
             </dl>
             <time :datetime="item.createdAt || undefined">提交于 {{ formatDate(item.createdAt) }}</time>
@@ -485,6 +559,13 @@ input:focus, textarea:focus, select:focus { border-color: #f472b6; box-shadow: 0
 .score-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .counter { display: block; margin-top: 5px; color: #94a3b8; font-size: 10px; font-weight: 700; text-align: right; }
 .counter.invalid { color: #e11d48; }
+.evidence-help { margin: 0 0 9px; color: #64748b; font-size: 11px; font-weight: 750; line-height: 1.6; }
+.evidence-picker { position: relative; display: grid !important; gap: 4px; justify-items: center; padding: 16px; border: 1.5px dashed #f9a8d4; border-radius: 12px; background: #fdf2f8; color: #be185d !important; cursor: pointer; }
+.evidence-picker input { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }
+.evidence-picker span { margin: 0 !important; font-size: 13px; font-weight: 900; }
+.evidence-picker small { color: #64748b; font-size: 10px; font-weight: 700; }
+.evidence-preview { margin-top: 10px; overflow: hidden; border: 1px solid #fbcfe8; border-radius: 12px; background: #fff; }
+.evidence-preview img { display: block; width: 100%; max-height: 320px; object-fit: contain; }
 .primary-btn, .secondary-btn { border: 0; border-radius: 10px; font-weight: 900; cursor: pointer; }
 .primary-btn { width: 100%; padding: 12px; background: linear-gradient(135deg,#f472b6,#d946ef); color: #fff; box-shadow: 0 5px 15px rgba(244,114,182,0.25); }
 .secondary-btn { flex: 0 0 auto; padding: 9px 11px; background: #f1f5f9; color: #64748b; }

@@ -67,6 +67,7 @@ export const normalizeCorrectionRequest = row => ({
   category: String(row?.category || ''),
   fieldKey: String(row?.field_key || ''),
   reason: String(row?.reason || ''),
+  evidenceImagePath: String(row?.evidence_image_path || ''),
   proposedPatch: row?.proposed_patch && typeof row.proposed_patch === 'object'
     ? row.proposed_patch
     : {},
@@ -84,6 +85,7 @@ export const normalizeCorrectionReviewItem = row => ({
   category: String(row?.category || ''),
   fieldKey: String(row?.field_key || ''),
   reason: String(row?.reason || ''),
+  evidenceImagePath: String(row?.evidence_image_path || ''),
   proposedPatch: row?.proposed_patch && typeof row.proposed_patch === 'object'
     ? row.proposed_patch
     : {},
@@ -108,12 +110,12 @@ export const fetchMyCorrectionRequests = async (client, options = {}) => {
 
 export const submitCorrectionRequest = (
   client,
-  { clothesId, fieldKey, proposedValue, reason },
+  { clothesId, fieldKey, proposedValue, evidenceImagePath },
   options = {}
-) => callRpc(client, 'submit_correction_request', {
+) => callRpc(client, 'submit_correction_request_with_evidence', {
   p_clothes_id: clothesId,
-  p_reason: reason,
-  p_proposed_patch: { [fieldKey]: proposedValue }
+  p_proposed_patch: { [fieldKey]: proposedValue },
+  p_evidence_image_path: evidenceImagePath
 }, options)
 
 export const fetchCorrectionReviewQueue = async (client, options = {}) => {

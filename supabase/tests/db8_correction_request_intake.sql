@@ -72,16 +72,20 @@ begin
     raise exception 'DB8_CORRECTION_ASSERT: anonymous role can execute correction RPCs';
   end if;
 
-  if not pg_catalog.has_function_privilege(
+  if pg_catalog.has_function_privilege(
     'authenticated',
     'public.submit_correction_request(varchar,text,jsonb)',
+    'EXECUTE'
+  ) or not pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.submit_correction_request_with_evidence(varchar,jsonb,text)',
     'EXECUTE'
   ) or not pg_catalog.has_function_privilege(
     'authenticated',
     'public.get_my_correction_requests()',
     'EXECUTE'
   ) then
-    raise exception 'DB8_CORRECTION_ASSERT: authenticated role cannot execute correction RPCs';
+    raise exception 'DB8_CORRECTION_ASSERT: correction RPC exposure is incorrect';
   end if;
 
   if not exists (

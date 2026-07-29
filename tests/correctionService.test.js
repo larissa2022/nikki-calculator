@@ -25,6 +25,11 @@ import {
   correctionValuesMatch,
   validateCorrectionReview
 } from '../src/utils/correctionRules.js'
+import {
+  CORRECTION_EVIDENCE_MAX_BYTES,
+  createCorrectionEvidencePath,
+  validateCorrectionEvidenceFile
+} from '../src/api/correctionEvidenceService.js'
 
 const createClient = responses => {
   const calls = []
@@ -39,7 +44,7 @@ const createClient = responses => {
 
 test('报错提交和本人记录使用固定 RPC 参数', async () => {
   const client = createClient({
-    submit_correction_request: {
+    submit_correction_request_with_evidence: {
       data: { request_id: 'request-1', status: 'pending', idempotent: false },
       error: null
     },
@@ -53,6 +58,7 @@ test('报错提交和本人记录使用固定 RPC 参数', async () => {
         field_key: 'stars',
         reason: '游戏内显示为四星，请核对图鉴。',
         proposed_patch: { stars: '4' },
+        evidence_image_path: 'user-1/evidence-1.png',
         status: 'pending',
         resolution_note: null,
         created_at: '2026-07-28T00:00:00Z'
@@ -65,17 +71,17 @@ test('报错提交和本人记录使用固定 RPC 参数', async () => {
     clothesId: 'clothes-1',
     fieldKey: 'stars',
     proposedValue: '4',
-    reason: '游戏内显示为四星，请核对图鉴。'
+    evidenceImagePath: 'user-1/evidence-1.png'
   })
   const history = await fetchMyCorrectionRequests(client)
 
   assert.deepEqual(client.calls, [
     {
-      name: 'submit_correction_request',
+      name: 'submit_correction_request_with_evidence',
       params: {
         p_clothes_id: 'clothes-1',
-        p_reason: '游戏内显示为四星，请核对图鉴。',
-        p_proposed_patch: { stars: '4' }
+        p_proposed_patch: { stars: '4' },
+        p_evidence_image_path: 'user-1/evidence-1.png'
       }
     },
     { name: 'get_my_correction_requests', params: {} }
@@ -88,6 +94,7 @@ test('报错提交和本人记录使用固定 RPC 参数', async () => {
     category: '连衣裙',
     fieldKey: 'stars',
     reason: '游戏内显示为四星，请核对图鉴。',
+    evidenceImagePath: 'user-1/evidence-1.png',
     proposedPatch: { stars: '4' },
     status: 'pending',
     resolutionNote: '',
@@ -139,7 +146,7 @@ test('结果不确定时仅将内容完全一致的活动报错视为提交成�
     clothesId: 'clothes-1',
     fieldKey: 'stars',
     proposedValue: '4',
-    reason: '游戏内显示为四星，请核对图鉴。'
+    evidenceImagePath: 'user-1/evidence-1.png'
   }
   const matching = {
     ...payload,
@@ -149,7 +156,7 @@ test('结果不确定时仅将内容完全一致的活动报错视为提交成�
 
   assert.equal(hasMatchingActiveCorrectionRequest([matching], payload), true)
   assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, status: 'approved' }], payload), false)
-  assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, reason: '另一份依据说明' }], payload), false)
+  assert.equal(hasMatchingActiveCorrectionRequest([{ ...matching, evidenceImagePath: 'user-1/other.png' }], payload), false)
   assert.equal(hasMatchingActiveCorrectionRequest([], payload), false)
 })
 
@@ -163,7 +170,7 @@ test('结构化建议按深层内容确认幂等，转陪审状态仍视为活�
     clothesId: 'clothes-2',
     fieldKey: 'suit',
     proposedValue: suitValue,
-    reason: '游戏内套装归属与图鉴记录不一致。'
+    evidenceImagePath: 'user-1/evidence-2.webp'
   }
   const request = {
     clothesId: 'clothes-2',
@@ -175,7 +182,7 @@ test('结构化建议按深层内容确认幂等，转陪审状态仍视为活�
         suit_id: suitValue.suit_id
       }
     },
-    reason: payload.reason,
+    evidenceImagePath: payload.evidenceImagePath,
     status: 'converted_to_re_review'
   }
 
@@ -186,6 +193,20 @@ test('结构化建议按深层内容确认幂等，转陪审状态仍视为活�
     temp_suit_name: null,
     needs_suit_review: false
   })
+})
+
+test('图鉴图片只接受指定格式、大小，并按用户目录生成不可预测地址', () => {
+  const file = { type: 'image/png', size: 1024 }
+  assert.equal(validateCorrectionEvidenceFile(file), '')
+  assert.equal(validateCorrectionEvidenceFile({ type: 'image/gif', size: 1024 }), '图片仅支持 JPG、PNG 或 WebP 格式。')
+  assert.equal(
+    validateCorrectionEvidenceFile({ type: 'image/jpeg', size: CORRECTION_EVIDENCE_MAX_BYTES + 1 }),
+    '图片不能超过 8 MB。'
+  )
+  assert.equal(
+    createCorrectionEvidencePath('USER-1', file, () => '00000000-0000-4000-8000-000000000001'),
+    'user-1/00000000-0000-4000-8000-000000000001.png'
+  )
 })
 
 test('属性选项只重建用户改动的分组，其他历史分值保持不变', () => {
@@ -235,6 +256,7 @@ test('管理员报错队列与处理动作使用受控 RPC', async () => {
         field_key: 'stars',
         reason: '游戏内显示为四星，请核对图鉴。',
         proposed_patch: { stars: '4' },
+        evidence_image_path: 'user-1/evidence-1.png',
         base_payload: { stars: 5 },
         current_value: 5,
         reporter_name: '测试用户',
@@ -269,6 +291,7 @@ test('管理员报错队列与处理动作使用受控 RPC', async () => {
     fieldKey: 'stars',
     reason: '游戏内显示为四星，请核对图鉴。',
     proposedPatch: { stars: '4' },
+    evidenceImagePath: 'user-1/evidence-1.png',
     basePayload: { stars: 5 },
     currentValue: 5,
     reporterName: '测试用户',

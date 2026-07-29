@@ -22,6 +22,14 @@ begin
     'authenticated',
     'public.correction_proposed_value_is_valid(text,jsonb)',
     'EXECUTE'
+  ) or pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.submit_correction_request(varchar,text,jsonb)',
+    'EXECUTE'
+  ) or not pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.submit_correction_request_with_evidence(varchar,jsonb,text)',
+    'EXECUTE'
   ) then
     raise exception 'DB10_DIRECT_ASSERT: internal correction helpers are exposed';
   end if;

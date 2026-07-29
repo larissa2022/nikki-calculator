@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8 / DB-9 及后续直达陪审补丁，不能作为这些对象的当前事实。2026-07-28 已在 development 应用至 `20260728135701_route_corrections_directly_to_jury`；相关表、RPC、触发器、RLS、索引、约束、权限、UTF-8 正文和事务回滚已通过 live catalog、Advisor 与生成类型回读。因本补丁不要求覆盖全量 dump，migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-11，不能作为这些对象的当前事实。2026-07-29 已在 development 应用至 DB-11 图片权限加固补丁；相关表、RPC、Storage、RLS、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。因本补丁不要求覆盖全量 dump，migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -48,6 +48,7 @@
 | correction_requests | reviewed_at | timestamp with time zone | null | YES |
 | correction_requests | source_pending_id | bigint | null | YES |
 | correction_requests | re_review_item_id | uuid | null | YES |
+| correction_requests | evidence_image_path | text | null | YES |
 | correction_requests | created_at | timestamp with time zone | now() | NO |
 | correction_requests | updated_at | timestamp with time zone | now() | NO |
 | jury_admin_decisions | id | uuid | gen_random_uuid() | NO |
@@ -209,8 +210,20 @@
 | `review_correction_request(...)` | 保留处理遗留报错的原子分流能力；禁止自审、过期覆盖和不一致重试，不作为新报错前置步骤 |
 | 报错奖励 | 陪审最终资料精确采用报错建议后唯一 `+5`；仅提交、转陪审、退回或未采用均不奖励 |
 | 当前业务边界 | 新报错直接进入社区陪审，不直接修改正式资料；报错者和其他来源参与者不得自审，独立终审不奖励 |
-| 默认拒绝 | RLS 已启用且无 policy；anon / authenticated 无底表权限，authenticated 只能调用四个空 `search_path` 受控 RPC |
+| 默认拒绝 | `correction_requests` 启用 RLS 且不给 anon / authenticated 底表 policy 或 DML 权限，客户端只能通过受控 RPC 操作 |
 | 最小权限 | service_role 仅保留 SELECT / INSERT / UPDATE；DELETE / TRUNCATE / REFERENCES / TRIGGER 已由前向 patch 撤销 |
+
+## DB-11 报错图鉴图片与访问加固
+
+| 对象 | 当前规则 |
+| --- | --- |
+| `correction-evidence` | 私有 Storage bucket；单文件最大 8 MB，只允许 JPEG、PNG、WebP |
+| `correction_requests.evidence_image_path` | 保存私有图片路径；新专用 RPC 强制必填，历史记录允许为空；路径格式受约束且非空路径唯一 |
+| `submit_correction_request_with_evidence(...)` | 校验登录身份、本人目录、Storage owner 和 MIME 后复用原报错事务；相同报错与图片重试幂等 |
+| `get_jury_review_queue_with_evidence()` | 在原陪审队列上附加当前事项的报错图片路径，不扩大可参与事项范围 |
+| Storage 读取 | 报错者本人或当前有资格参与对应审核事项的陪审员可读；匿名用户及其他登录用户不可读 |
+| Storage 删除 | 仅上传者本人可删除尚未绑定任何报错记录的图片 |
+| 权限加固 | 旧 `submit_correction_request(...)` 不再向 authenticated 开放；Storage 判断函数位于非公开 `private` schema，客户端不能通过 public API 调用 |
 
 ## 主要约束与索引
 
@@ -299,6 +312,7 @@
 | complete_existing_clothes_from_pending(...) | RPC | DB-3 正式库空字段补全；函数内校验管理员，原子写贡献、每人 5 分、衣柜和 pending，并支持重试幂等 |
 | get_my_correction_requests() | RPC | DB-8 仅返回当前登录用户本人提交的正式服装报错和处理状态 |
 | get_correction_review_queue() | RPC | DB-9 管理员报错队列；返回正式资料、建议、本人报错和可执行分流 |
+| get_jury_review_queue_with_evidence() | RPC | DB-11 返回当前用户可参与的陪审队列，并附加相关私有图鉴图片路径 |
 | review_correction_request(...) | RPC | DB-9 原子执行不采纳、空字段补全或转全字段陪审，并结算直接采用奖励 |
 | sync_correction_requests_from_re_review() | trigger function | DB-9 在关联陪审结束后按最终是否采用核对结果结案并幂等结算报错奖励 |
 | deduct_user_quota(uuid) | function | 扣减用户 quota |
@@ -308,7 +322,8 @@
 | is_super_admin() | function | 判断当前用户是否为 super_admin |
 | normalize_known_clothing_tags(text) | function | 清洗已知服装标签 |
 | submit_clothing_contribution(...) | RPC | DB-5 缺失项提交与 5 位不同用户一致后自动入库；保留来源 pending，原子写前 5 位贡献、每人 10 分和衣柜 |
-| submit_correction_request(varchar, text, jsonb) | RPC | 登录用户提交单字段正式服装报错；数据库校验结构、正式服装、活动唯一性和幂等，并原子挂到唯一活动陪审项 |
+| submit_correction_request(varchar, text, jsonb) | internal RPC | DB-11 后仅 service_role 可执行的兼容核心；authenticated 必须走带图片的专用入口 |
+| submit_correction_request_with_evidence(varchar, jsonb, text) | RPC | DB-11 登录用户提交单字段正式图鉴报错；强制绑定本人上传的私有游戏内图鉴图片 |
 | route_correction_request_to_jury(uuid) | internal function | 将报错来源挂到该服装唯一活动审核项，合并报错字段与正式资料其他缺失字段；不对客户端开放 |
 | update_profile_username(text) | RPC | 登录用户更新自己的用户名 |
 | trigger_auto_link_shadow_suits | trigger | suits insert 后执行 auto_link_shadow_suits() |
@@ -347,6 +362,7 @@
 - DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。
 - DB-8 增强 fixture 已在 development 通过并 rollback 至 0 行；live catalog 确认 3 个外键均有索引、两个 `SECURITY DEFINER` RPC 均为空 `search_path` 且 anon 无执行权限，service_role 仅保留 SELECT / INSERT / UPDATE。原生 Advisor 命令受直连传输错误影响未返回，已用相同 catalog 检查逐项回读。
+- DB-11 fixture 已在 development 通过并 `ROLLBACK`；live catalog 确认私有 bucket、路径约束与索引、三条 Storage policy、专用提交和陪审队列 RPC、旧入口撤权及 `private` helper 的空 `search_path`。Performance Advisor 未发现 DB-11 新问题；Security Advisor 接口在补丁后连续传输失败，已保留为未取得的远端检查结果，未用 catalog 回读冒充 Advisor 通过。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
 - Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。

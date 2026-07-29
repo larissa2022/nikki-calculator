@@ -39,7 +39,7 @@ export const hasMatchingActiveCorrectionRequest = (requests, payload) => (
   (Array.isArray(requests) ? requests : []).some(item => (
     item.clothesId === payload.clothesId
     && item.fieldKey === payload.fieldKey
-    && item.reason === payload.reason
+    && item.evidenceImagePath === payload.evidenceImagePath
     && correctionValuesMatch(item.proposedPatch?.[payload.fieldKey], payload.proposedValue)
     && ['pending', 'reviewing', 'converted_to_re_review'].includes(item.status)
   ))

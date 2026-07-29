@@ -101,6 +101,16 @@ export const buildJuryCandidatePayload = (form, basePayload = {}, issues = []) =
   return payload
 }
 
+export const buildJuryCandidateSubmissionPayload = (item, completePayload) => {
+  const issues = Array.isArray(item?.issues) ? item.issues : []
+  const isLegacySuitOnly = item?.reason === 'missing_suit'
+    && issues.length === 1
+    && issues[0]?.field === 'suit'
+  return isLegacySuitOnly
+    ? { suit_id: completePayload?.suit_id ?? null }
+    : completePayload
+}
+
 export const getEditableJuryFields = issues => (
   [...new Set((issues || []).map(issue => issue.field).filter(Boolean))]
 )
