@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 export const PROTECTED_BRANCHES = new Set(['main', 'develop'])
 export const TASK_BRANCH_PATTERN = /^(?:codex|feature|fix|docs)\//
+export const REMOTE_REFRESH_ARGS = Object.freeze(['fetch', 'origin', '--prune'])
 
 export const classifyBranchForCleanup = ({
   name,
@@ -130,7 +131,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
     throw new Error('PR head 不是允许自动清理的任务分支')
   }
 
-  git(['fetch', 'origin', 'develop'], { cwd })
+  git(REMOTE_REFRESH_ARGS, { cwd })
   const current = getCurrentBranch(cwd)
   const worktrees = getWorktreeBranches(cwd)
   if (current === pr.headRefName || worktrees.has(pr.headRefName)) {
@@ -159,7 +160,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
 }
 
 const cleanupAllSafeBranches = cwd => {
-  git(['fetch', 'origin', 'develop', '--prune'], { cwd })
+  git(REMOTE_REFRESH_ARGS, { cwd })
   const audit = auditBranches(cwd)
   const grouped = new Map()
   audit.forEach(item => grouped.set(item.name, [...(grouped.get(item.name) || []), item]))
