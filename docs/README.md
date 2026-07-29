@@ -32,7 +32,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [开发文档](planning/开发文档.md) | 将已确认需求拆成阶段、暂停点和验收标准 | Final 决策、具体 SQL / RPC 实现 |
 | [技术实现文档](planning/技术实现文档.md) | 跨模块、RPC、RLS、schema、前端模块和测试方案 | 需求源头、未经确认的产品规则 |
 | [缺陷文档](planning/缺陷文档.md) | 全量缺陷索引、未结束事项和常驻详情；历史详情按索引定位到归档卷 | 新需求设计、当前任务事实源 |
-| [测试清单](ai/TEST_CHECKLIST.md) | Preview / production 人工回归或专项验证 | 自动生效的发布许可 |
+| 本地验收包 `tmp/验收清单.md` | 当前 Preview 人工验收的账号、密码、数据、最短步骤与预期结果；按 [`WORKFLOWS.md`](ai/WORKFLOWS.md#62-验收包) 生成 | 仓库事实、长期密码存储、自动生效的发布许可 |
 
 需求文档不等于执行单；未确认事项不得直接进入实现。大型业务任务通常按“Final 决策 → 需求 → 开发计划 → 技术实现 → 代码”的顺序核对，但实际读取范围仍由 `AGENTS.md` 根据任务路由。
 
@@ -47,7 +47,7 @@ AI / Codex 的唯一自动启动入口是仓库根目录 [`AGENTS.md`](../AGENTS
 | [schema 摘要](database/schema.md) | development 数据库结构相关任务 | production 实时事实 |
 | [Supabase Review](database/SUPABASE_REVIEW.md) | 专项 Supabase 审查背景和命令 | 默认数据库执行入口 |
 
-所有 database / Supabase 远端操作都必须遵守固定环境、一次任务授权、development 先验证和 rollback 门禁；不能只凭本目录索引直接执行 SQL 或 migration。
+所有 database / Supabase 远端操作都必须遵守固定环境、授权分级、development 先验证和 rollback 门禁；技术指纹由 Codex 自动核对，production 和破坏性数据仍需单独确认。
 
 ## 4. 复盘与历史材料
 
