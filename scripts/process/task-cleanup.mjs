@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 export const PROTECTED_BRANCHES = new Set(['main', 'develop'])
 export const TASK_BRANCH_PATTERN = /^(?:codex|feature|fix|docs)\//
 export const REMOTE_REFRESH_ARGS = Object.freeze(['fetch', 'origin', '--prune'])
+export const REMOTE_RETRY_LIMIT = 2
+export const isTransientRemoteError = value => (
+  /(?:TLS connect error|unexpected EOF|connection reset|failed to connect|could not resolve host)/i
+    .test(String(value || ''))
+)
 
 export const classifyBranchForCleanup = ({
   name,
@@ -24,14 +29,23 @@ export const classifyBranchForCleanup = ({
   return { category: 'safe', reason: '已合并任务分支' }
 }
 
-const run = (command, args, { cwd = process.cwd(), allowFailure = false } = {}) => {
-  const result = spawnSync(command, args, {
-    cwd,
-    encoding: 'utf8',
-    windowsHide: true
-  })
-  if (!allowFailure && result.status !== 0) {
-    throw new Error(`${command} ${args.join(' ')} 失败：${String(result.stderr || result.stdout).trim()}`)
+const run = (
+  command,
+  args,
+  { cwd = process.cwd(), allowFailure = false, retries = 0 } = {}
+) => {
+  let result
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    result = spawnSync(command, args, {
+      cwd,
+      encoding: 'utf8',
+      windowsHide: true
+    })
+    const failureText = String(result.stderr || result.stdout || result.error?.message || '').trim()
+    if (result.status === 0) return result
+    if (attempt < retries && isTransientRemoteError(failureText)) continue
+    if (!allowFailure) throw new Error(`${command} ${args.join(' ')} 失败：${failureText}`)
+    return result
   }
   return result
 }
@@ -66,7 +80,7 @@ const getWorktreeBranches = cwd => {
 const getOpenPrHeads = cwd => {
   const result = gh([
     'pr', 'list', '--state', 'open', '--limit', '200', '--json', 'headRefName'
-  ], { cwd, allowFailure: true })
+  ], { cwd, allowFailure: true, retries: REMOTE_RETRY_LIMIT })
   if (result.status !== 0) return null
   return new Set(JSON.parse(result.stdout).map(pr => pr.headRefName))
 }
@@ -86,7 +100,7 @@ export const remoteDeleteIsComplete = ({ deleteStatus, remoteExistsAfter }) => (
 const remoteBranchExists = (name, cwd) => {
   const result = git([
     'ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${name}`
-  ], { cwd, allowFailure: true })
+  ], { cwd, allowFailure: true, retries: REMOTE_RETRY_LIMIT })
   if (result.status === 0) return true
   if (result.status === 2) return false
   throw new Error(`无法确认远端分支状态，已停止：${name}`)
@@ -99,7 +113,11 @@ const deleteRemoteBranchIfPresent = (name, cwd) => {
     return
   }
 
-  const result = git(['push', 'origin', '--delete', name], { cwd, allowFailure: true })
+  const result = git(['push', 'origin', '--delete', name], {
+    cwd,
+    allowFailure: true,
+    retries: REMOTE_RETRY_LIMIT
+  })
   const remoteExistsAfter = result.status === 0 ? false : remoteBranchExists(name, cwd)
   if (!remoteDeleteIsComplete({ deleteStatus: result.status, remoteExistsAfter })) {
     throw new Error(`git push origin --delete ${name} 失败：${String(result.stderr || result.stdout).trim()}`)
@@ -151,7 +169,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
   const pr = JSON.parse(gh([
     'pr', 'view', String(prNumber),
     '--json', 'state,mergedAt,baseRefName,headRefName,mergeCommit,commits'
-  ], { cwd }).stdout)
+  ], { cwd, retries: REMOTE_RETRY_LIMIT }).stdout)
   if (pr.state !== 'MERGED' || !pr.mergedAt || pr.baseRefName !== 'develop') {
     throw new Error('只允许清理已经合并到 develop 的 PR 分支')
   }
@@ -159,7 +177,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
     throw new Error('PR head 不是允许自动清理的任务分支')
   }
 
-  git(REMOTE_REFRESH_ARGS, { cwd })
+  git(REMOTE_REFRESH_ARGS, { cwd, retries: REMOTE_RETRY_LIMIT })
   const current = getCurrentBranch(cwd)
   const worktrees = getWorktreeBranches(cwd)
   if (current === pr.headRefName || worktrees.has(pr.headRefName)) {
@@ -188,7 +206,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
 }
 
 const cleanupAllSafeBranches = cwd => {
-  git(REMOTE_REFRESH_ARGS, { cwd })
+  git(REMOTE_REFRESH_ARGS, { cwd, retries: REMOTE_RETRY_LIMIT })
   const audit = auditBranches(cwd)
   const grouped = new Map()
   audit.forEach(item => grouped.set(item.name, [...(grouped.get(item.name) || []), item]))

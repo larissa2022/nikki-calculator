@@ -8,7 +8,9 @@ import {
 } from '../scripts/process/validate-acceptance-pack.mjs'
 import {
   classifyBranchForCleanup,
+  isTransientRemoteError,
   REMOTE_REFRESH_ARGS,
+  REMOTE_RETRY_LIMIT,
   remoteDeleteIsComplete
 } from '../scripts/process/task-cleanup.mjs'
 
@@ -86,4 +88,12 @@ test('远端分支并发消失时按幂等成功处理', () => {
   assert.equal(remoteDeleteIsComplete({ deleteStatus: 0, remoteExistsAfter: false }), true)
   assert.equal(remoteDeleteIsComplete({ deleteStatus: 1, remoteExistsAfter: false }), true)
   assert.equal(remoteDeleteIsComplete({ deleteStatus: 1, remoteExistsAfter: true }), false)
+})
+
+test('仅对明确的临时网络错误进行有限重试', () => {
+  assert.equal(REMOTE_RETRY_LIMIT, 2)
+  assert.equal(isTransientRemoteError('TLS connect error: unexpected eof while reading'), true)
+  assert.equal(isTransientRemoteError('Could not resolve host: github.com'), true)
+  assert.equal(isTransientRemoteError('permission denied'), false)
+  assert.equal(isTransientRemoteError('branch is not fully merged'), false)
 })
