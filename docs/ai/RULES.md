@@ -2,7 +2,7 @@
 
 本文件只保存稳定的决策边界、安全门禁和环境规则。操作步骤放在 [`WORKFLOWS.md`](WORKFLOWS.md)，产品口径放在 [`DECISIONS.md`](DECISIONS.md)。冲突时以本文件为准。
 
-正式 Rule 只能由用户本人批准。用户已于 2026-07-27 批准项目切换为 Codex 单人开发模式。
+正式 Rule 只能由用户本人批准。用户已于 2026-07-27 批准项目切换为 Codex 单人开发模式，并于 2026-07-29 批准数据库授权分级、标准验收包和任务收尾清理原则。
 
 ## 1. 责任与事实源
 
@@ -19,19 +19,33 @@
 - 用户明确要求实现、修改或修复且未要求停在合并前时，授权包含：本地修改、相称验证、commit、push、创建或更新 PR，以及检查通过后合并普通 `develop` PR。
 - `develop` 合并不等于 production 授权。任何 `develop -> main`、production 或 hotfix 发布仍按独立发布门禁执行。
 - Vercel production 只能对应 `main`；preview / development 只能对应 `develop` 或短期任务分支。
+- 普通任务在业务验收通过后必须完成收尾：仅清理已经证明进入 `origin/develop`、没有开放 PR、不是当前分支且未被 worktree 使用的标准任务分支。`main`、`develop`、release / hotfix、未合并和状态不明分支不得自动删除。
 
-## 3. 必须单独确认的操作
+## 3. 授权分级
 
-以下操作必须由用户针对本次目标明确确认，不能从一般性开发指令推断：
+### 3.1 项目级常驻授权
+
+以下操作不要求负责人复制命令、project ref、migration 文件名或 SHA-256，也不逐次等待确认：
+
+- 所有只读查询、schema / 类型 / Advisor 回读，以及以 `ROLLBACK` 结束且无持久副作用的 fixture。
+- 固定 development 项目上的 schema、函数、索引、RLS、权限或 migration apply，前提是不回填、删除或改写现有业务数据，不处理真实账号 / 凭据，不改变环境绑定，并具备事务失败回滚和前向修正方案。
+- 为明确业务验收准备专用 development 测试账号和固定身份测试数据，前提是不操作真实账号、不删除投票 / 积分 / 审计事实，并在验收包中说明保留与清理方式。
+- 清理已合并到 `develop` 且满足第 2 节全部证明条件的 `codex/*`、`feature/*`、`fix/*`、`docs/*` 任务分支。
+
+Codex 必须在操作前自动核对目标环境和精确对象，在审计记录中保存 project ref、文件名、哈希、影响和结果。技术指纹是系统校验证据，不是负责人需要搬运的授权文本。
+
+### 3.2 必须单独确认
+
+以下操作必须由用户针对本次目标明确确认，不能从一般性开发指令或常驻授权推断：
 
 - 任何 `main`、production、production deployment 或 production rollback。
 - production 数据库操作，以及真实业务数据的删除、批量回填、批量改写或身份数据清理。
-- development database / Supabase / SQL / RPC / RLS / migration apply。可以在任务开始时一次授权固定 project ref、固定 migration 集合、验证和 rollback；目标与文件未变化时不重复确认同一批次的前检、apply、事务验证和后检。
-- env、凭据、Vercel 写配置或环境绑定变更。
-- force push、`reset --hard`、`git clean`、rebase、分支删除或其他历史改写。
+- development 中会删除 / 覆盖既有业务事实、批量回填、操作非专用测试账号，或修改真实身份 / 凭据的写入。
+- env、真实凭据、Vercel 写配置或环境绑定变更。
+- force push、`reset --hard`、`git clean`、rebase、未合并 / 状态不明分支删除或其他历史改写。
 - 修改本文件。
 
-范围、环境、project ref、migration 集合或 rollback 发生变化时，原授权失效并重新确认。普通 `develop` PR merge 不再作为独立确认点；用户明确要求停在合并前时必须遵守。
+单独确认使用自然语言授权卡，只说明环境、业务目的、会改变什么、不会改变什么和失败 / rollback。负责人回复“同意”即可；技术指纹仍由 Codex 自动绑定。普通 `develop` PR merge 不作为独立确认点；用户明确要求停在合并前时必须遵守。
 
 ## 4. 任务与 PR 隔离
 
@@ -52,6 +66,7 @@
 ## 6. 数据、权限与凭据安全
 
 - 不提交或传播 `.env*`、token、验证码、授权链接、keyring 信息、真实用户隐私数据、`tmp/**`、`supabase/.temp/**` 或 production 写库脚本。
+- 测试账号可以写入 Git 忽略的本地验收包；测试密码只能写入该本地文件，不得进入被 Git 跟踪的清单、PR、commit、聊天或日志。验收结束后删除本地凭据，或在下一批次前轮换。
 - migration 必须先在 development 验证；production 前必须确认环境、备份、前值、预计影响、事务方案、后检和 rollback。
 - database 和批量数据任务不得删除事务数量断言、提交后回读或 rollback 依据，但不得重复执行同一份无变化前检来制造证据。
 - 核心业务事实必须可追溯、可重算；错误积分等审计事实使用追加式反向记录，不删除历史。
