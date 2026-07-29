@@ -79,6 +79,34 @@ const refExists = (ref, cwd) => (
   git(['show-ref', '--verify', '--quiet', ref], { cwd, allowFailure: true }).status === 0
 )
 
+export const remoteDeleteIsComplete = ({ deleteStatus, remoteExistsAfter }) => (
+  deleteStatus === 0 || !remoteExistsAfter
+)
+
+const remoteBranchExists = (name, cwd) => {
+  const result = git([
+    'ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${name}`
+  ], { cwd, allowFailure: true })
+  if (result.status === 0) return true
+  if (result.status === 2) return false
+  throw new Error(`无法确认远端分支状态，已停止：${name}`)
+}
+
+const deleteRemoteBranchIfPresent = (name, cwd) => {
+  const trackingRef = `refs/remotes/origin/${name}`
+  if (!remoteBranchExists(name, cwd)) {
+    if (refExists(trackingRef, cwd)) git(['update-ref', '-d', trackingRef], { cwd })
+    return
+  }
+
+  const result = git(['push', 'origin', '--delete', name], { cwd, allowFailure: true })
+  const remoteExistsAfter = result.status === 0 ? false : remoteBranchExists(name, cwd)
+  if (!remoteDeleteIsComplete({ deleteStatus: result.status, remoteExistsAfter })) {
+    throw new Error(`git push origin --delete ${name} 失败：${String(result.stderr || result.stdout).trim()}`)
+  }
+  if (refExists(trackingRef, cwd)) git(['update-ref', '-d', trackingRef], { cwd })
+}
+
 export const auditBranches = (cwd = process.cwd()) => {
   const current = getCurrentBranch(cwd)
   const worktrees = getWorktreeBranches(cwd)
@@ -154,7 +182,7 @@ const cleanupMergedPrBranch = (prNumber, cwd) => {
     throw new Error('无法确认目标分支没有开放 PR')
   }
 
-  if (refExists(remoteRef, cwd)) git(['push', 'origin', '--delete', pr.headRefName], { cwd })
+  if (refExists(remoteRef, cwd)) deleteRemoteBranchIfPresent(pr.headRefName, cwd)
   if (refExists(localRef, cwd)) git(['branch', '-d', pr.headRefName], { cwd })
   console.log(`已清理 PR #${prNumber} 的任务分支：${pr.headRefName}`)
 }
@@ -188,7 +216,7 @@ const cleanupAllSafeBranches = cwd => {
     if (!shas.length || shas.some(sha => !isAncestor(sha, 'origin/develop', cwd))) {
       throw new Error(`无法证明分支提交已经进入 origin/develop，已停止：${name}`)
     }
-    if (refExists(remoteRef, cwd)) git(['push', 'origin', '--delete', name], { cwd })
+    if (refExists(remoteRef, cwd)) deleteRemoteBranchIfPresent(name, cwd)
     if (refExists(localRef, cwd)) git(['branch', '-d', name], { cwd })
     console.log(`已清理：${name}`)
   })
