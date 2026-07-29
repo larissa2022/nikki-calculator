@@ -210,6 +210,7 @@
 | `review_correction_request(...)` | 保留处理遗留报错的原子分流能力；禁止自审、过期覆盖和不一致重试，不作为新报错前置步骤 |
 | 报错奖励 | 陪审最终资料精确采用报错建议后唯一 `+5`；仅提交、转陪审、退回或未采用均不奖励 |
 | 当前业务边界 | 新报错直接进入社区陪审，不直接修改正式资料；报错者和其他来源参与者不得自审，独立终审不奖励 |
+| 投票中新增问题 | 新报错带来当前事项尚未包含的字段时，复用同一活动事项，将当前候选标记为 `returned` 并回到 `pending`；合并旧问题与新字段，保留历史票和 `+1` 参与积分，不修改正式资料 |
 | 默认拒绝 | `correction_requests` 启用 RLS 且不给 anon / authenticated 底表 policy 或 DML 权限，客户端只能通过受控 RPC 操作 |
 | 最小权限 | service_role 仅保留 SELECT / INSERT / UPDATE；DELETE / TRUNCATE / REFERENCES / TRIGGER 已由前向 patch 撤销 |
 
