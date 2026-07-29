@@ -22,7 +22,7 @@ const createStorage = (initialValue = null) => {
 test('刷新后恢复每个合法的主页面位置', () => {
   const storage = createStorage()
 
-  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'corrections', 'jury', 'profile']) {
+  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'leaderboard', 'corrections', 'jury', 'profile']) {
     assert.equal(writeMainTab(tab, storage), tab)
     assert.equal(readMainTab(storage), tab)
   }
@@ -45,6 +45,7 @@ test('本地存储不可用时页面切换仍然可用', () => {
 test('退出登录或未登录重进时受限页面回退到首页', () => {
   assert.equal(normalizeMainTabForSession('jury', false, false), 'jury')
   assert.equal(normalizeMainTabForSession('jury', false), DEFAULT_MAIN_TAB)
+  assert.equal(normalizeMainTabForSession('leaderboard', false), DEFAULT_MAIN_TAB)
   assert.equal(normalizeMainTabForSession('corrections', false), DEFAULT_MAIN_TAB)
   assert.equal(normalizeMainTabForSession('profile', false), DEFAULT_MAIN_TAB)
   assert.equal(normalizeMainTabForSession('jury', true), 'jury')

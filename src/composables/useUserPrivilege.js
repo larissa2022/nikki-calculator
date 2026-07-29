@@ -7,11 +7,11 @@ export const getDisplayUsername = (user) => {
 }
 
 // 2. 核心等级与特权计算器
-export const getUserRankAndPrivilege = (totalPoints, isMonthlyFirst = false) => {
+export const getUserRankAndPrivilege = (totalPoints) => {
   // 默认初始状态 (不到 500 分，无特权)
   let rank = { level: 0, title: '初级搭配师', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
 
-  if (totalPoints >= 10000 || isMonthlyFirst) {
+  if (totalPoints >= 10000) {
     rank = { level: 4, title: '奇迹编年史官', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
   } else if (totalPoints >= 5000) {
     rank = { level: 3, title: '图鉴守护者', pointMultiplier: 1.0, voteWeight: 1, adFree: false };
