@@ -8,7 +8,8 @@ import {
 } from '../scripts/process/validate-acceptance-pack.mjs'
 import {
   classifyBranchForCleanup,
-  REMOTE_REFRESH_ARGS
+  REMOTE_REFRESH_ARGS,
+  remoteDeleteIsComplete
 } from '../scripts/process/task-cleanup.mjs'
 
 const validPack = `# DB13 验收清单
@@ -79,4 +80,10 @@ test('只有已进入 develop 且无开放 PR 的任务分支可自动清理', (
 test('清理前刷新完整远端分支并移除过期引用', () => {
   assert.deepEqual(REMOTE_REFRESH_ARGS, ['fetch', 'origin', '--prune'])
   assert.equal(REMOTE_REFRESH_ARGS.includes('develop'), false)
+})
+
+test('远端分支并发消失时按幂等成功处理', () => {
+  assert.equal(remoteDeleteIsComplete({ deleteStatus: 0, remoteExistsAfter: false }), true)
+  assert.equal(remoteDeleteIsComplete({ deleteStatus: 1, remoteExistsAfter: false }), true)
+  assert.equal(remoteDeleteIsComplete({ deleteStatus: 1, remoteExistsAfter: true }), false)
 })
