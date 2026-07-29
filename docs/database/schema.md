@@ -153,6 +153,17 @@
 
 两个 public view 均为 `security_invoker + security_barrier` 且不可写。Data API exposed schemas 实测仅 `public, graphql_public`；`private_db2` 返回 `PGRST106`，不能直接作为 API schema / RPC 面访问。
 
+## DB-13 积分排行榜第一版只读面
+
+| 对象 | 对外字段 | 角色与约束 |
+| --- | --- | --- |
+| `public.points_leaderboard_total` | `leaderboard_rank`、`display_name`、`points`、`is_current_user` | 仅 authenticated SELECT；从全部 `awarded` 流水实时汇总 |
+| `public.points_leaderboard_current_month` | `leaderboard_rank`、`display_name`、`points`、`is_current_user` | 仅 authenticated SELECT；按 `Asia/Shanghai` 月初（含）至下月月初（不含）实时汇总 |
+| `private_db2.total_points_leaderboard()` | 内部 helper | `SECURITY DEFINER`、`STABLE`、空 `search_path`；仅 authenticated 可执行 |
+| `private_db2.current_month_points_leaderboard()` | 内部 helper | `SECURITY DEFINER`、`STABLE`、空 `search_path`；仅 authenticated 可执行 |
+
+两个 public view 均为 `security_invoker + security_barrier` 且不可写；同分使用 `dense_rank` 并列。公开结果不含 user ID、email 或积分流水；无 username 时只返回基于 UUID 哈希的不可逆化名。DB-13 不新增缓存、快照或索引，也不改变 `points_ledger` 的底表权限。
+
 ## DB-3 正式库补全写入闭环
 
 | 对象 / 规则 | 当前契约 |
@@ -359,6 +370,7 @@
 
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
+- DB-13 新增总榜和北京时间当月榜两个登录后只读面；fixture 在 development 通过并 `ROLLBACK`，原有 22 条积分流水数量不变且 fixture 无残留。随后为人工验收单独保留 2 条各 `+10` 的 development 测试流水，当前合计 24 条；测试账号和依赖只用于 DB-13 验收。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
 - DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。

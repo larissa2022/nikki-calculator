@@ -1,8 +1,8 @@
 export const MAIN_TAB_STORAGE_KEY = 'nikki-calculator:main-tab'
 export const DEFAULT_MAIN_TAB = 'calculator'
 
-const MAIN_TABS = new Set(['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'corrections', 'jury', 'profile'])
-const AUTH_REQUIRED_TABS = new Set(['corrections', 'jury', 'profile'])
+const MAIN_TABS = new Set(['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'leaderboard', 'corrections', 'jury', 'profile'])
+const AUTH_REQUIRED_TABS = new Set(['leaderboard', 'corrections', 'jury', 'profile'])
 
 export const normalizeMainTab = (tab) => (
   MAIN_TABS.has(tab) ? tab : DEFAULT_MAIN_TAB

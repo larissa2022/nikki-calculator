@@ -736,6 +736,24 @@ export type Database = {
         }
         Relationships: []
       }
+      points_leaderboard_current_month: {
+        Row: {
+          display_name: string | null
+          is_current_user: boolean | null
+          leaderboard_rank: number | null
+          points: number | null
+        }
+        Relationships: []
+      }
+      points_leaderboard_total: {
+        Row: {
+          display_name: string | null
+          is_current_user: boolean | null
+          leaderboard_rank: number | null
+          points: number | null
+        }
+        Relationships: []
+      }
       user_points_summary: {
         Row: {
           total_points: number | null

@@ -4003,6 +4003,28 @@ CREATE TABLE IF NOT EXISTS "public"."points_ledger" (
 ALTER TABLE "public"."points_ledger" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."points_leaderboard_current_month" WITH ("security_invoker"='true', "security_barrier"='true') AS
+ SELECT "leaderboard_rank",
+    "display_name",
+    "points",
+    "is_current_user"
+   FROM "private_db2"."current_month_points_leaderboard"() "result"("leaderboard_rank", "display_name", "points", "is_current_user");
+
+
+ALTER VIEW "public"."points_leaderboard_current_month" OWNER TO "postgres";
+
+
+CREATE OR REPLACE VIEW "public"."points_leaderboard_total" WITH ("security_invoker"='true', "security_barrier"='true') AS
+ SELECT "leaderboard_rank",
+    "display_name",
+    "points",
+    "is_current_user"
+   FROM "private_db2"."total_points_leaderboard"() "result"("leaderboard_rank", "display_name", "points", "is_current_user");
+
+
+ALTER VIEW "public"."points_leaderboard_total" OWNER TO "postgres";
+
+
 COMMENT ON COLUMN "public"."points_ledger"."re_review_candidate_id" IS '重审候选通过产生的积分来源；与 clothing_contribution 来源互斥。';
 
 
@@ -4930,6 +4952,14 @@ GRANT ALL ON TABLE "public"."pending_suits" TO "service_role";
 
 
 GRANT SELECT,INSERT ON TABLE "public"."points_ledger" TO "service_role";
+
+
+
+GRANT SELECT ON TABLE "public"."points_leaderboard_current_month" TO "authenticated";
+
+
+
+GRANT SELECT ON TABLE "public"."points_leaderboard_total" TO "authenticated";
 
 
 
