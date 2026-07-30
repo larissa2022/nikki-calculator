@@ -4014,6 +4014,17 @@ CREATE OR REPLACE VIEW "public"."points_leaderboard_current_month" WITH ("securi
 ALTER VIEW "public"."points_leaderboard_current_month" OWNER TO "postgres";
 
 
+CREATE OR REPLACE VIEW "public"."points_leaderboard_last_month" WITH ("security_invoker"='true', "security_barrier"='true') AS
+ SELECT "leaderboard_rank",
+    "display_name",
+    "points",
+    "is_current_user"
+   FROM "private_db2"."last_month_points_leaderboard"() "result"("leaderboard_rank", "display_name", "points", "is_current_user");
+
+
+ALTER VIEW "public"."points_leaderboard_last_month" OWNER TO "postgres";
+
+
 CREATE OR REPLACE VIEW "public"."points_leaderboard_total" WITH ("security_invoker"='true', "security_barrier"='true') AS
  SELECT "leaderboard_rank",
     "display_name",
@@ -4956,6 +4967,9 @@ GRANT SELECT,INSERT ON TABLE "public"."points_ledger" TO "service_role";
 
 
 GRANT SELECT ON TABLE "public"."points_leaderboard_current_month" TO "authenticated";
+
+
+GRANT SELECT ON TABLE "public"."points_leaderboard_last_month" TO "authenticated";
 
 
 

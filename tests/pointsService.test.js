@@ -109,9 +109,23 @@ test('读取当月榜并丢弃不完整的返回行', async () => {
   )
 })
 
+test('读取上月冻结榜并沿用安全公开字段', async () => {
+  const client = createLeaderboardClient('points_leaderboard_last_month', [{
+    data: [
+      { leaderboard_rank: '1', display_name: ' 上月玩家 ', points: '12', is_current_user: false }
+    ],
+    error: null
+  }])
+
+  assert.deepEqual(
+    await fetchPointsLeaderboard(client, 'last_month'),
+    [{ rank: 1, displayName: '上月玩家', points: 12, isCurrentUser: false }]
+  )
+})
+
 test('排行榜周期和返回值校验保持默认拒绝', async () => {
   await assert.rejects(
-    () => fetchPointsLeaderboard({}, 'last_month'),
+    () => fetchPointsLeaderboard({}, 'future_month'),
     /不支持的排行榜周期/
   )
   assert.equal(normalizeLeaderboardRow({ leaderboard_rank: 0, display_name: '甲', points: 1 }), null)
