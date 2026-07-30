@@ -5,7 +5,8 @@ import { fetchPointsLeaderboard } from '../api/pointsService'
 
 const PERIODS = [
   { key: 'total', label: '总榜', description: '统计全部已生效积分' },
-  { key: 'current_month', label: '当月榜', description: '按北京时间统计本月已生效积分' }
+  { key: 'current_month', label: '当月榜', description: '按北京时间统计本月已生效积分' },
+  { key: 'last_month', label: '上月榜', description: '展示上一完整自然月冻结的积分与名次' }
 ]
 const PAGE_SIZE = 20
 
@@ -13,7 +14,8 @@ const activePeriod = ref('total')
 const currentPage = ref(1)
 const states = reactive({
   total: { rows: [], isLoading: false, loadError: false, loaded: false },
-  current_month: { rows: [], isLoading: false, loadError: false, loaded: false }
+  current_month: { rows: [], isLoading: false, loadError: false, loaded: false },
+  last_month: { rows: [], isLoading: false, loadError: false, loaded: false }
 })
 
 const activeState = computed(() => states[activePeriod.value])
@@ -21,6 +23,11 @@ const activeDefinition = computed(() => (
   PERIODS.find(period => period.key === activePeriod.value) || PERIODS[0]
 ))
 const totalPages = computed(() => Math.max(1, Math.ceil(activeState.value.rows.length / PAGE_SIZE)))
+const emptyDescription = computed(() => (
+  activePeriod.value === 'last_month'
+    ? '上一个完整自然月没有已生效积分。'
+    : '新的有效贡献和审核积分生效后会显示在这里。'
+))
 const visibleRows = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE
   return activeState.value.rows.slice(start, start + PAGE_SIZE)
@@ -111,7 +118,7 @@ onMounted(() => loadLeaderboard())
     <div v-else-if="activeState.rows.length === 0" class="state-card">
       <span class="state-icon">🌱</span>
       <strong>这个榜单还没有积分记录</strong>
-      <span>新的有效贡献和审核积分生效后会显示在这里。</span>
+      <span>{{ emptyDescription }}</span>
     </div>
 
     <template v-else>

@@ -5,7 +5,8 @@ const normalizeTotalPoints = (value) => {
 
 const LEADERBOARD_TABLES = {
   total: 'points_leaderboard_total',
-  current_month: 'points_leaderboard_current_month'
+  current_month: 'points_leaderboard_current_month',
+  last_month: 'points_leaderboard_last_month'
 }
 
 const DEFAULT_LEADERBOARD_PAGE_SIZE = 1000

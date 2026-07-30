@@ -164,6 +164,19 @@
 
 两个 public view 均为 `security_invoker + security_barrier` 且不可写；同分使用 `dense_rank` 并列。公开结果不含 user ID、email 或积分流水；无 username 时只返回基于 UUID 哈希的不可逆化名。DB-13 不新增缓存、快照或索引，也不改变 `points_ledger` 的底表权限。
 
+## DB-14 上月榜冻结
+
+| 对象 | 当前契约 |
+| --- | --- |
+| `private_db2.points_leaderboard_months` | 以北京时间自然月首日为主键，记录冻结时间与行数；空月份同样保留标记 |
+| `private_db2.points_leaderboard_monthly_snapshots` | 只保存目标月份、用户、冻结积分、dense rank 名次和冻结时间；用户删除时 `user_id` 置空 |
+| `private_db2.freeze_points_leaderboard_month(date)` | 仅 postgres 执行；只接受已结束自然月，事务 advisory lock 与月份唯一标记保证只冻结一次 |
+| `private_db2.freeze_previous_month_if_due(timestamptz)` | 仅 postgres 执行；每日 UTC 16:05 由 `pg_cron` 调用，只在北京时间每月 1 日冻结上月 |
+| `private_db2.last_month_points_leaderboard()` | 仅 authenticated 执行；积分与名次读取快照，名称和注销状态读取当前 profile / 用户事实 |
+| `public.points_leaderboard_last_month` | `security_invoker + security_barrier`；仅 authenticated SELECT，字段与 DB-13 榜单一致 |
+
+两张私有表均启用并强制 RLS，不向 anon、authenticated 或 service_role 授予底表权限。快照不保存展示名称，改名后显示新名称，账号删除后显示“已注销用户”。首次启用补冻最近一个已结束自然月；冻结后的积分流水变化不追改快照，也不自动授予首页鸣谢、广告免除或 Lv4 体验。
+
 ## DB-3 正式库补全写入闭环
 
 | 对象 / 规则 | 当前契约 |
@@ -371,6 +384,7 @@
 - DB-1 两张基础事实表当前均为 0 行；anon、authenticated 仍无底表权限，admin / super_admin 通过相同的 authenticated 数据库角色也不能直接操作；`service_role` 仅保留 SELECT / INSERT。
 - DB-2 只开放两个结果面：匿名用户不能读取积分，所有登录角色只能读取自己的积分；公开贡献者不返回 user_id、email、完整 UUID、pending 或积分流水。
 - DB-13 新增总榜和北京时间当月榜两个登录后只读面；fixture 在 development 通过并 `ROLLBACK`，原有 22 条积分流水数量不变且 fixture 无残留。随后为人工验收单独保留 2 条各 `+10` 的 development 测试流水，当前合计 24 条；测试账号和依赖只用于 DB-13 验收。
+- DB-14 新增上一完整北京时间自然月冻结榜；fixture 在 development 通过并 `ROLLBACK`，没有新增或改写积分流水。因 `2026-06` 无真实积分，development 为人工验收仅在派生快照中保留 `DB13验收甲`、`DB13验收乙` 两条 10 分并列第 1 的专用测试行，月标记与快照均为 2 行口径。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
 - DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
 - DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。
