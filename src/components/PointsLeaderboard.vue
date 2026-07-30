@@ -6,7 +6,7 @@ import { fetchPointsLeaderboard } from '../api/pointsService'
 const PERIODS = [
   { key: 'total', label: '总榜', description: '统计全部已生效积分' },
   { key: 'current_month', label: '当月榜', description: '按北京时间统计本月已生效积分' },
-  { key: 'last_month', label: '上月榜', description: '展示上一完整自然月冻结的积分与名次' }
+  { key: 'last_month', label: '上月榜', description: '这里展示上个月最终确定的积分和排名' }
 ]
 const PAGE_SIZE = 20
 
@@ -86,7 +86,7 @@ onMounted(() => loadLeaderboard())
       <div>
         <p class="eyebrow">社区贡献积分</p>
         <h2 id="points-leaderboard-title">积分排行榜</h2>
-        <p class="description">{{ activeDefinition.description }}；同分玩家并列同一名次。</p>
+        <p class="description">{{ activeDefinition.description }}；积分相同的玩家会并列显示。</p>
       </div>
       <div class="period-tabs" role="tablist" aria-label="排行榜周期">
         <button
