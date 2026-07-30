@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url'
 
 const REQUIRED_TEXT = [
   '验收批次',
-  '目标版本',
+  '目标 PR',
+  '目标提交',
   '测试入口',
   '## 账号与密码',
   '## 已准备数据',
@@ -39,6 +40,14 @@ export const validateAcceptancePackText = text => {
 
   if (!/账号\s*[:：]|\|\s*账号\s*\|/u.test(source)) {
     errors.push('本地验收包必须明确测试账号')
+  }
+
+  if (!/^目标 PR\s*[:：]\s*(?:#\d+|https:\/\/github\.com\/[^\s]+\/pull\/\d+)\s*$/mu.test(source)) {
+    errors.push('本地验收包必须绑定目标 PR 编号或 GitHub PR 链接')
+  }
+
+  if (!/^目标提交\s*[:：]\s*[0-9a-f]{7,40}\s*$/imu.test(source)) {
+    errors.push('本地验收包必须绑定目标 PR 的精确 head commit')
   }
 
   return errors

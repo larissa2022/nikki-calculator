@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -14,10 +14,15 @@ import {
   remoteDeleteIsComplete
 } from '../scripts/process/task-cleanup.mjs'
 
+const agentsText = readFileSync(new URL('../AGENTS.md', import.meta.url), 'utf8')
+const rulesText = readFileSync(new URL('../docs/ai/RULES.md', import.meta.url), 'utf8')
+const workflowsText = readFileSync(new URL('../docs/ai/WORKFLOWS.md', import.meta.url), 'utf8')
+
 const validPack = `# DB13 验收清单
 
 验收批次：DB13-20260729
-目标版本：develop abc123
+目标 PR：#123
+目标提交：abcdef1234567890
 测试入口：https://example.invalid
 
 ## 账号与密码
@@ -51,6 +56,8 @@ test('本地验收包必须包含账号密码、预置数据、最短流程和�
   assert.deepEqual(validateAcceptancePackText(validPack), [])
   assert.ok(validateAcceptancePackText(validPack.replace('统一密码：local-test-password', '统一密码：待填写')).length > 0)
   assert.ok(validateAcceptancePackText(validPack.replace('一次登录', '分步登录')).length > 0)
+  assert.ok(validateAcceptancePackText(validPack.replace('目标 PR：#123', '目标 PR：待创建')).length > 0)
+  assert.ok(validateAcceptancePackText(validPack.replace('目标提交：abcdef1234567890', '目标提交：develop')).length > 0)
 })
 
 test('验收包必须位于 Git 忽略路径且不能被跟踪', () => {
@@ -96,4 +103,12 @@ test('仅对明确的临时网络错误进行有限重试', () => {
   assert.equal(isTransientRemoteError('Could not resolve host: github.com'), true)
   assert.equal(isTransientRemoteError('permission denied'), false)
   assert.equal(isTransientRemoteError('branch is not fully merged'), false)
+})
+
+test('用户可见功能必须绑定最新版本验收后再合并', () => {
+  assert.match(agentsText, /用户可见功能还必须已经通过对应版本的业务验收，才可合并/)
+  assert.match(rulesText, /目标 PR 最新 head commit 对应的 Preview \/ development 版本完成业务验收后，才可合并到 `develop`/)
+  assert.match(workflowsText, /验收反馈直接提交到原分支并更新原 PR/)
+  assert.doesNotMatch(agentsText, /PR 检查通过后，普通 `develop` PR 可直接合并/)
+  assert.doesNotMatch(workflowsText, /普通 `develop` PR 检查通过后直接合并/)
 })
