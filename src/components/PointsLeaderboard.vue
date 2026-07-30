@@ -96,11 +96,6 @@ onMounted(() => loadLeaderboard())
       </div>
     </header>
 
-    <div class="scope-note">
-      <strong>第一版只展示排名</strong>
-      <span>不会自动发放首页鸣谢、广告免除或月榜首 Lv4 权益。</span>
-    </div>
-
     <div v-if="activeState.isLoading" class="state-card" aria-live="polite">
       <span class="state-icon">⏳</span>
       <strong>正在汇总积分…</strong>
@@ -153,8 +148,6 @@ h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 900; }
 .period-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: #f5f3ff; }
 .period-tabs button { border: 0; border-radius: 9px; padding: 8px 13px; background: transparent; color: #7c3aed; font-size: 11px; font-weight: 900; cursor: pointer; }
 .period-tabs button.active { background: white; box-shadow: 0 3px 10px rgba(124, 58, 237, 0.12); color: #5b21b6; }
-.scope-note { display: flex; gap: 8px; margin-bottom: 16px; padding: 11px 13px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf5ff; color: #6d28d9; font-size: 11px; line-height: 1.6; }
-.scope-note strong { flex: 0 0 auto; }
 .ranking-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .ranking-list li { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 13px 15px; border: 1px solid #f1f5f9; border-radius: 14px; background: rgba(255, 255, 255, 0.92); }
 .ranking-list li.current-user { border-color: #c4b5fd; background: #f5f3ff; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.08); }
@@ -178,7 +171,6 @@ h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 900; }
   .leaderboard-header { align-items: stretch; flex-direction: column; }
   .period-tabs { align-self: stretch; }
   .period-tabs button { flex: 1; }
-  .scope-note { flex-direction: column; gap: 2px; }
   .ranking-list li { grid-template-columns: 36px minmax(0, 1fr) auto; gap: 9px; padding: 12px; }
   .rank { width: 30px; height: 30px; }
 }
