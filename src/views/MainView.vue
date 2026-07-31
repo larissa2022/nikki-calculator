@@ -11,13 +11,13 @@ import CorrectionRequestBoard from '../components/CorrectionRequestBoard.vue'
 import JuryReviewBoard from '../components/JuryReviewBoard.vue'
 import UserProfile from '../components/UserProfile.vue'
 import { normalizeMainTabForSession, readMainTab, writeMainTab } from '../utils/navigationState'
-import { isSuperAdminRole } from '../utils/roles'
 
 const props = defineProps({
   currentUser: Object,
   authInitialized: Boolean,
   userProfile: Object, // 🌟 接收全局档案数据
   isAdmin: Boolean, 
+  adminCapabilities: { type: Object, default: () => ({}) },
   userQuota: Number,
   fullWardrobeData: Array, 
   myWardrobeIds: Array, 
@@ -62,6 +62,10 @@ watch(
       @open-profile="switchTab('profile')"
       @signed-out="handleSignedOut"
     />
+
+    <div v-if="adminCapabilities.show_grant_notice" class="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-sm font-black text-purple-800" role="status">
+      {{ adminCapabilities.term_source === 'monthly' ? '您已自动获得本期受限管理员权限' : (adminCapabilities.term_source === 'legacy_transition' ? '您的旧管理员权限已转换为本期受限任期' : '您已获得本期受限管理员权限') }}，可在“图鉴管理”中处理新增服装多数审核。
+    </div>
 
     <header>
       <h1>✨ 奇迹暖暖极速搭配器 ✨</h1>
@@ -112,12 +116,13 @@ watch(
       <JuryReviewBoard
         v-if="currentTab === 'jury'"
         :isLoggedIn="Boolean(currentUser)"
-        :isSuperAdmin="isSuperAdminRole(userProfile)"
+        :isSuperAdmin="adminCapabilities.is_super_admin === true"
       />
       
       <UserProfile 
         v-if="currentTab === 'profile'" 
         :profileData="userProfile" 
+        :adminCapabilities="adminCapabilities"
         @refresh-data="emit('refresh-profile')" 
         @profile-updated="emit('profile-updated', $event)"
       />

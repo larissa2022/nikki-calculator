@@ -1,14 +1,12 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { adminService } from '../api/adminService'
 import { getDisplayUsername, getUserRankAndPrivilege, isActiveUser } from '../composables/useUserPrivilege'
-import { getRoleKey, getRoleLabel, isAdminRole, isSuperAdminRole, ROLE_KEY } from '../utils/roles'
+import { getRoleKey, getRoleLabel, isAdminRole, isSuperAdminRole } from '../utils/roles'
 
 const props = defineProps({
   allUsersList: { type: Array, required: true },
   currentUserId: { type: String, required: true }
 })
-const emit = defineEmits(['refresh-data'])
 
 // ==========================================
 // 全站大盘逻辑
@@ -24,14 +22,6 @@ const paginatedRegularUsers = computed(() => {
 })
 const totalUserPages = computed(() => Math.ceil(regularUsers.value.length / userPageSize))
 
-const changeUserRole = async (uId, role) => {
-  try {
-    await adminService.updateUserRole(uId, role);
-    alert('权限更新成功！'); 
-    emit('refresh-data'); 
-  } catch(err) { alert(err.message); }
-}
-
 const formatDate = (ds) => new Date(ds).toLocaleString();
 </script>
 
@@ -45,22 +35,18 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
       <div class="users-table-container">
         <table class="users-table">
           <thead>
-            <tr><th>注册时间</th><th>玩家代号 (邮箱)</th><th>系统身份</th><th>当前积分</th><th>权限变更</th></tr>
+            <tr><th>注册时间</th><th>玩家代号</th><th>系统身份</th><th>当前积分</th><th>权限状态</th></tr>
           </thead>
           <tbody>
             <tr v-for="u in adminUsers" :key="u.id" :class="{ 'is-me': u.id === currentUserId }">
               <td class="time-col">{{ formatDate(u.created_at) }}</td>
               <td class="email-col">
-                <strong>{{ getDisplayUsername(u) }}</strong><br>
-                <span class="text-[10px] text-slate-400">{{ u.email }}</span>
+                <strong>{{ getDisplayUsername(u) }}</strong>
               </td>
               <td><span class="role-badge" :class="getRoleKey(u)">{{ isSuperAdminRole(u) ? '👑 ' : '🛡️ ' }}{{ getRoleLabel(u) }}</span></td>
               <td><span class="contrib-tag">✨ {{ u.total_points || 0 }} 分</span></td>
               <td>
-                <select v-if="!isSuperAdminRole(u)" class="role-select" :value="getRoleKey(u)" @change="changeUserRole(u.id, $event.target.value)">
-                  <option :value="ROLE_KEY.USER">降级为玩家</option><option :value="ROLE_KEY.ADMIN">维持管理员</option>
-                </select>
-                <span v-else class="protected-text">权限锁定</span>
+                <span class="protected-text">超级管理员固定权限</span>
               </td>
             </tr>
           </tbody>
@@ -76,7 +62,7 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
       <div class="users-table-container">
         <table class="users-table">
           <thead>
-            <tr><th>玩家代号</th><th>头衔等级</th><th>累计积分</th><th>本月状态</th><th>设为管理</th></tr>
+            <tr><th>玩家代号</th><th>头衔等级</th><th>累计积分</th><th>本月状态</th><th>管理员制度</th></tr>
           </thead>
           <tbody>
             <tr v-for="u in paginatedRegularUsers" :key="u.id">
@@ -93,7 +79,7 @@ const formatDate = (ds) => new Date(ds).toLocaleString();
                 <span v-else class="text-xs font-bold text-slate-400">潜水</span>
               </td>
               <td>
-                <button class="btn-promote" @click="changeUserRole(u.id, ROLE_KEY.ADMIN)">🛡️ 提拔为管理员</button>
+                <span class="text-xs font-bold text-purple-600">请在“任期治理”创建手动任期</span>
               </td>
             </tr>
           </tbody>

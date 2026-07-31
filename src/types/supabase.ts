@@ -14,6 +14,182 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_candidate_exclusions: {
+        Row: {
+          created_at: string
+          created_by: string
+          ends_at: string
+          id: string
+          reason: string
+          revoked_at: string | null
+          revoked_by: string | null
+          starts_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          ends_at: string
+          id?: string
+          reason: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          starts_at: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          ends_at?: string
+          id?: string
+          reason?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          starts_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_review_decision_sources: {
+        Row: {
+          decision_id: string
+          is_adopted: boolean
+          pending_id: number
+        }
+        Insert: {
+          decision_id: string
+          is_adopted: boolean
+          pending_id: number
+        }
+        Update: {
+          decision_id?: string
+          is_adopted?: boolean
+          pending_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_review_decision_sources_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "admin_review_decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_review_decision_sources_pending_id_fkey"
+            columns: ["pending_id"]
+            isOneToOne: false
+            referencedRelation: "pending_clothes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_review_decisions: {
+        Row: {
+          action: string
+          admin_term_id: string | null
+          adopted_payload: Json
+          adopted_pending_ids: number[]
+          all_source_pending_ids: number[]
+          candidate_key: string
+          created_at: string
+          id: string
+          reason: string | null
+          reviewer_user_id: string | null
+        }
+        Insert: {
+          action: string
+          admin_term_id?: string | null
+          adopted_payload: Json
+          adopted_pending_ids: number[]
+          all_source_pending_ids: number[]
+          candidate_key: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reviewer_user_id?: string | null
+        }
+        Update: {
+          action?: string
+          admin_term_id?: string | null
+          adopted_payload?: Json
+          adopted_pending_ids?: number[]
+          all_source_pending_ids?: number[]
+          candidate_key?: string
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reviewer_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_review_decisions_admin_term_id_fkey"
+            columns: ["admin_term_id"]
+            isOneToOne: false
+            referencedRelation: "admin_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_terms: {
+        Row: {
+          candidate_order: number | null
+          created_at: string
+          end_reason: string | null
+          ended_at: string | null
+          ended_by: string | null
+          frozen_points: number | null
+          granted_by: string | null
+          id: string
+          qualifying_action_count: number | null
+          reason: string | null
+          scheduled_end_at: string
+          service_month: string | null
+          source: string
+          source_month: string | null
+          starts_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          candidate_order?: number | null
+          created_at?: string
+          end_reason?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          frozen_points?: number | null
+          granted_by?: string | null
+          id?: string
+          qualifying_action_count?: number | null
+          reason?: string | null
+          scheduled_end_at: string
+          service_month?: string | null
+          source: string
+          source_month?: string | null
+          starts_at: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          candidate_order?: number | null
+          created_at?: string
+          end_reason?: string | null
+          ended_at?: string | null
+          ended_by?: string | null
+          frozen_points?: number | null
+          granted_by?: string | null
+          id?: string
+          qualifying_action_count?: number | null
+          reason?: string | null
+          scheduled_end_at?: string
+          service_month?: string | null
+          source?: string
+          source_month?: string | null
+          starts_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_errors: {
         Row: {
           action_name: string | null
@@ -872,7 +1048,24 @@ export type Database = {
         Args: { p_field: string; p_value: Json }
         Returns: boolean
       }
+      create_admin_candidate_exclusion: {
+        Args: {
+          p_ends_at: string
+          p_reason: string
+          p_starts_at: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      create_manual_admin_term: {
+        Args: { p_ends_at: string; p_reason: string; p_user_id: string }
+        Returns: string
+      }
       deduct_user_quota: { Args: { user_id_param: string }; Returns: boolean }
+      end_admin_term: {
+        Args: { p_reason: string; p_term_id: string }
+        Returns: boolean
+      }
       ensure_full_jury_review_item: {
         Args: {
           p_clothes_id?: string
@@ -890,9 +1083,22 @@ export type Database = {
         Returns: string
       }
       get_correction_review_queue: { Args: never; Returns: Json }
+      get_current_admin_capabilities: { Args: never; Returns: Json }
       get_jury_review_queue: { Args: never; Returns: Json }
       get_jury_review_queue_with_evidence: { Args: never; Returns: Json }
       get_my_correction_requests: { Args: never; Returns: Json }
+      get_my_rejected_clothing_submissions: {
+        Args: never
+        Returns: {
+          can_resubmit: boolean
+          category: string
+          game_id: string
+          name: string
+          pending_id: number
+          reason: string
+          rejected_at: string
+        }[]
+      }
       is_admin_or_super_admin: { Args: never; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
       jury_clothes_payload: { Args: { p_clothes_id: string }; Returns: Json }
@@ -921,6 +1127,9 @@ export type Database = {
         Returns: Json
       }
       jury_scores_are_complete: { Args: { p_scores: Json }; Returns: boolean }
+      leave_current_admin_term: { Args: never; Returns: boolean }
+      list_admin_governance: { Args: never; Returns: Json }
+      list_low_risk_clothes_review_candidates: { Args: never; Returns: Json }
       normalize_known_clothing_tags: {
         Args: { p_tags: string }
         Returns: string
@@ -938,6 +1147,18 @@ export type Database = {
           p_resolution_note?: string
         }
         Returns: Json
+      }
+      review_low_risk_clothes_candidate: {
+        Args: {
+          p_action: string
+          p_reason?: string
+          p_representative_pending_id: number
+        }
+        Returns: Json
+      }
+      revoke_admin_candidate_exclusion: {
+        Args: { p_exclusion_id: string }
+        Returns: boolean
       }
       route_correction_request_to_jury: {
         Args: { p_request_id: string }

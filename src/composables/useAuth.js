@@ -1,17 +1,24 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
-import { isAdminRole } from '../utils/roles'
+import {
+  fetchAdminCapabilities
+} from '../api/adminCapabilitiesService'
+import {
+  EMPTY_ADMIN_CAPABILITIES,
+  normalizeAdminCapabilities
+} from '../utils/adminCapabilities'
 
 // 🌟 1. 【核心修复】将状态提升到函数外部！
 // 这样全站无论调用多少次 useAuth()，读写的都是这一份真实的数据（单例模式）
 const currentUser = ref(null)
 const userProfile = ref(null)
+const adminCapabilities = ref(normalizeAdminCapabilities())
 const isAuthInitialized = ref(false)
 let authListenerRegistered = false
 
 // 🌟 让 isAdmin 逻辑同时兼容“普通管理”和“超级管理”
 const isAdmin = computed(() => {
-  return isAdminRole(userProfile.value)
+  return adminCapabilities.value.can_review_low_risk === true
 })
 
 export function useAuth() {
@@ -29,6 +36,18 @@ export function useAuth() {
         
       if (error) throw error
       userProfile.value = data // 更新全局档案
+
+      try {
+        adminCapabilities.value = await fetchAdminCapabilities()
+      } catch (capabilityError) {
+        console.error('获取管理员能力失败:', capabilityError.message)
+        adminCapabilities.value = normalizeAdminCapabilities({
+          is_super_admin: data?.role === 'super_admin' || Number(data?.role_level) === 2,
+          can_review_low_risk: data?.role === 'super_admin' || Number(data?.role_level) === 2,
+          can_manage_admin_terms: data?.role === 'super_admin' || Number(data?.role_level) === 2,
+          can_review_high_risk: data?.role === 'super_admin' || Number(data?.role_level) === 2
+        })
+      }
     } catch (err) {
       console.error('获取全局用户档案失败:', err.message)
     }
@@ -38,6 +57,7 @@ export function useAuth() {
   const resetState = (clearAuth = true) => {
     if (clearAuth) currentUser.value = null
     userProfile.value = null
+    adminCapabilities.value = { ...EMPTY_ADMIN_CAPABILITIES }
   }
 
   // 🌟 初始化鉴权系统与监听
@@ -71,5 +91,5 @@ export function useAuth() {
   }
 
   // 🌟 移除了 userQuota，并暴露必要的全局状态和方法
-  return { currentUser, userProfile, isAdmin, isAuthInitialized, fetchProfile, initAuth }
+  return { currentUser, userProfile, adminCapabilities, isAdmin, isAuthInitialized, fetchProfile, initAuth }
 }

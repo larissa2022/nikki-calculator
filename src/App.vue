@@ -6,9 +6,10 @@ import { useWardrobe } from './composables/useWardrobe'
 import AuthModal from './components/AuthModal.vue'
 import MainView from './views/MainView.vue'
 import AdminView from './views/AdminView.vue'
+import LowRiskAdminView from './views/LowRiskAdminView.vue'
 
 // 🌟 1. 核心修复：在这里把 userProfile 提取出来
-const { currentUser, userProfile, isAdmin, isAuthInitialized, userQuota, initAuth, fetchProfile } = useAuth()
+const { currentUser, userProfile, adminCapabilities, isAdmin, isAuthInitialized, userQuota, initAuth, fetchProfile } = useAuth()
 const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadingDebugMessage, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
@@ -62,10 +63,16 @@ const handleProfileUpdated = (updatedProfile) => {
   <div class="root-wrapper">
     <AuthModal v-if="isAuthModalOpen" @close="isAuthModalOpen = false" />
     
-    <AdminView 
-      v-if="currentMode === 'admin' && isAdmin" 
+    <AdminView
+      v-if="currentMode === 'admin' && adminCapabilities.is_super_admin"
       :fullWardrobeData="fullWardrobeData"
       @back-to-main="currentMode = 'main'" 
+    />
+
+    <LowRiskAdminView
+      v-else-if="currentMode === 'admin' && isAdmin"
+      :admin-capabilities="adminCapabilities"
+      @back-to-main="currentMode = 'main'"
     />
 
     <MainView 
@@ -74,6 +81,7 @@ const handleProfileUpdated = (updatedProfile) => {
       :authInitialized="isAuthInitialized"
       :userProfile="userProfile" 
       :isAdmin="isAdmin"
+      :adminCapabilities="adminCapabilities"
       :userQuota="userQuota"
       :fullWardrobeData="fullWardrobeData"
       :myWardrobeIds="myWardrobeIds"

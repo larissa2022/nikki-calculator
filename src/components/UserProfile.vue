@@ -3,10 +3,15 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { supabase } from '../api/supabase'
 import { fetchCurrentUserPoints } from '../api/pointsService.js'
 import { getDisplayUsername, getUserRankAndPrivilege } from '../composables/useUserPrivilege'
+import {
+  fetchMyRejectedClothingSubmissions,
+  leaveCurrentAdminTerm
+} from '../api/adminCapabilitiesService'
 
 // 🌟 1. 严格的代码管理：只接收父组件传来的 profileData
 const props = defineProps({
-  profileData: { type: Object, default: () => ({}) }
+  profileData: { type: Object, default: () => ({}) },
+  adminCapabilities: { type: Object, default: () => ({}) }
 })
 // 🌟 2. 严格的代码管理：不越级请求数据，只向父组件汇报“我要刷新数据”
 const emit = defineEmits(['refresh-data', 'profile-updated'])
@@ -22,6 +27,7 @@ const myRank = computed(() => (
 const newUsername = ref('')
 const isUpdatingName = ref(false)
 const isModalOpen = ref(false)
+const rejectedSubmissions = ref([])
 let pointsRequestId = 0
 
 watch(
@@ -58,7 +64,31 @@ const loadPoints = async () => {
   }
 }
 
+const loadRejectedSubmissions = async () => {
+  if (!props.profileData?.id) {
+    rejectedSubmissions.value = []
+    return
+  }
+  try {
+    rejectedSubmissions.value = await fetchMyRejectedClothingSubmissions()
+  } catch (error) {
+    console.error('获取驳回原因失败:', error)
+    rejectedSubmissions.value = []
+  }
+}
+
+const leaveAdminTerm = async () => {
+  if (!window.confirm('确认退出当前普通管理员任期吗？退出后系统会按月初候选顺序补位。')) return
+  try {
+    await leaveCurrentAdminTerm()
+    emit('refresh-data')
+  } catch (error) {
+    window.alert(error.message || '退出任期失败')
+  }
+}
+
 watch(() => props.profileData?.id, loadPoints, { immediate: true })
+watch(() => props.profileData?.id, loadRejectedSubmissions, { immediate: true })
 onBeforeUnmount(() => { pointsRequestId++ })
 
 const updateUsername = async () => {
@@ -104,6 +134,29 @@ const openEditModal = () => {
 
 <template>
   <div class="space-y-6" v-if="displayProfile">
+    <section v-if="adminCapabilities.term_id" class="rounded-2xl border border-purple-100 bg-purple-50 p-5 shadow-sm">
+      <div class="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <h3 class="font-black text-purple-900">当前普通管理员任期</h3>
+          <p class="mt-1 text-sm font-bold text-purple-700">
+            {{ adminCapabilities.term_source === 'monthly' ? '月度轮值' : (adminCapabilities.term_source === 'manual' ? '手动授予' : '旧管理员过渡') }}
+            · 至 {{ new Date(adminCapabilities.term_ends_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) }}
+          </p>
+        </div>
+        <button class="rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-black text-purple-700" @click="leaveAdminTerm">退出任期</button>
+      </div>
+    </section>
+
+    <section v-if="rejectedSubmissions.length" class="rounded-2xl border border-amber-100 bg-amber-50 p-5 shadow-sm">
+      <h3 class="font-black text-amber-900">需要重新提交的服装资料</h3>
+      <p class="mt-1 text-xs font-bold text-amber-700">以下申请已被可逆驳回。请按原因修正后，从录入入口重新提交；历史记录不会删除。</p>
+      <div class="mt-4 space-y-3">
+        <article v-for="item in rejectedSubmissions" :key="item.pending_id" class="rounded-xl bg-white p-4">
+          <div class="font-black text-slate-800">{{ item.name || '未命名服装' }} · {{ item.category }} · {{ item.game_id }}</div>
+          <div class="mt-1 text-sm font-bold text-rose-600">驳回原因：{{ item.reason }}</div>
+        </article>
+      </div>
+    </section>
     <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
       <div class="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-pink-400 to-purple-500"></div>
       <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
