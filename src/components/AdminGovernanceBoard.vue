@@ -7,6 +7,10 @@ import {
   fetchAdminGovernance,
   revokeAdminCandidateExclusion
 } from '../api/adminCapabilitiesService'
+import {
+  CANDIDATE_EXCLUSION_STATUS,
+  groupCandidateExclusions
+} from '../utils/adminGovernance'
 
 const props = defineProps({ users: { type: Array, default: () => [] } })
 
@@ -16,12 +20,29 @@ const errorMessage = ref('')
 const activeSection = ref('terms')
 const manualForm = reactive({ userId: '', reason: '', endsAt: '' })
 const exclusionForm = reactive({ userId: '', reason: '', startsAt: '', endsAt: '' })
+const actionNotice = ref('')
 
 const activeTerms = computed(() => data.value.terms.filter(term => term.status === 'active' && new Date(term.scheduled_end_at) > new Date()))
-const activeExclusions = computed(() => data.value.exclusions.filter(item => !item.revoked_at && new Date(item.ends_at) > new Date()))
+const groupedExclusions = computed(() => groupCandidateExclusions(data.value.exclusions))
+const currentExclusions = computed(() => groupedExclusions.value.current)
+const exclusionHistory = computed(() => groupedExclusions.value.history)
 
 const formatTime = (value) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—'
 const sourceLabel = (source) => ({ monthly: '月度轮值', manual: '手动任期', legacy_transition: '旧管理员过渡' }[source] || source)
+const exclusionStatusLabel = (status) => ({
+  [CANDIDATE_EXCLUSION_STATUS.ACTIVE]: '生效中',
+  [CANDIDATE_EXCLUSION_STATUS.SCHEDULED]: '待生效',
+  [CANDIDATE_EXCLUSION_STATUS.EXPIRED]: '已过期',
+  [CANDIDATE_EXCLUSION_STATUS.REVOKED]: '已撤销',
+  [CANDIDATE_EXCLUSION_STATUS.INVALID]: '时间异常'
+}[status] || '状态未知')
+const exclusionStatusClass = (status) => ({
+  [CANDIDATE_EXCLUSION_STATUS.ACTIVE]: 'bg-emerald-50 text-emerald-700',
+  [CANDIDATE_EXCLUSION_STATUS.SCHEDULED]: 'bg-sky-50 text-sky-700',
+  [CANDIDATE_EXCLUSION_STATUS.EXPIRED]: 'bg-slate-100 text-slate-600',
+  [CANDIDATE_EXCLUSION_STATUS.REVOKED]: 'bg-amber-50 text-amber-700',
+  [CANDIDATE_EXCLUSION_STATUS.INVALID]: 'bg-rose-50 text-rose-700'
+}[status] || 'bg-slate-100 text-slate-600')
 
 const load = async () => {
   isLoading.value = true
@@ -63,15 +84,20 @@ const stopTerm = async (term) => {
 
 const submitExclusion = async () => {
   if (!exclusionForm.userId.trim() || !exclusionForm.reason.trim() || !exclusionForm.startsAt || !exclusionForm.endsAt) return window.alert('请完整填写候选排除信息。')
+  const startsAt = new Date(exclusionForm.startsAt)
+  const endsAt = new Date(exclusionForm.endsAt)
+  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || endsAt <= startsAt) return window.alert('排除结束时间必须晚于开始时间。')
+  if (endsAt <= new Date()) return window.alert('排除结束时间必须晚于当前时间。')
   try {
     await createAdminCandidateExclusion({
       userId: exclusionForm.userId.trim(),
       reason: exclusionForm.reason.trim(),
-      startsAt: new Date(exclusionForm.startsAt).toISOString(),
-      endsAt: new Date(exclusionForm.endsAt).toISOString()
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString()
     })
     Object.assign(exclusionForm, { userId: '', reason: '', startsAt: '', endsAt: '' })
     await load()
+    actionNotice.value = '候选排除已创建，可在下方“当前及待生效排除”中撤销。'
   } catch (error) {
     window.alert(error.message || '候选排除创建失败')
   }
@@ -82,6 +108,7 @@ const revokeExclusion = async (item) => {
   try {
     await revokeAdminCandidateExclusion(item.id)
     await load()
+    actionNotice.value = '候选排除已撤销，记录已保留在历史中。'
   } catch (error) {
     window.alert(error.message || '候选排除撤销失败')
   }
@@ -132,15 +159,37 @@ onMounted(load)
           <option value="">选择用户</option>
           <option v-for="user in props.users" :key="user.id" :value="user.id">{{ user.username || user.nickname || '未命名用户' }}</option>
         </select>
-        <input v-model="exclusionForm.startsAt" type="datetime-local" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-        <input v-model="exclusionForm.endsAt" type="datetime-local" class="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+        <label class="text-xs font-black text-slate-600">开始时间<input v-model="exclusionForm.startsAt" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
+        <label class="text-xs font-black text-slate-600">结束时间<input v-model="exclusionForm.endsAt" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
         <input v-model="exclusionForm.reason" class="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="排除原因（必填）" />
         <button class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-black text-white md:col-span-2">新增候选排除</button>
       </form>
-      <article v-for="item in activeExclusions" :key="item.id" class="mb-3 flex flex-col justify-between gap-3 rounded-xl border border-slate-100 p-4 md:flex-row md:items-center">
-        <div><div class="font-black text-slate-800">{{ item.display_name }}</div><div class="mt-1 text-xs font-bold text-slate-500">{{ item.reason }} · {{ formatTime(item.starts_at) }} 至 {{ formatTime(item.ends_at) }}</div></div>
-        <button class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600" @click="revokeExclusion(item)">撤销排除</button>
-      </article>
+      <p v-if="actionNotice" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{{ actionNotice }}</p>
+
+      <div class="mb-6">
+        <h4 class="mb-3 text-sm font-black text-slate-700">当前及待生效排除（{{ currentExclusions.length }}）</h4>
+        <div class="space-y-3">
+          <article v-for="item in currentExclusions" :key="item.id" class="flex flex-col justify-between gap-3 rounded-xl border border-slate-100 p-4 md:flex-row md:items-center">
+            <div>
+              <div class="flex flex-wrap items-center gap-2"><span class="font-black text-slate-800">{{ item.display_name }}</span><span class="rounded-full px-2 py-1 text-[11px] font-black" :class="exclusionStatusClass(item.view_status)">{{ exclusionStatusLabel(item.view_status) }}</span></div>
+              <div class="mt-1 text-xs font-bold text-slate-500">{{ item.reason }} · {{ formatTime(item.starts_at) }} 至 {{ formatTime(item.ends_at) }}</div>
+            </div>
+            <button class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600" @click="revokeExclusion(item)">撤销排除</button>
+          </article>
+          <p v-if="currentExclusions.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无可撤销的候选排除。</p>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="mb-3 text-sm font-black text-slate-700">排除历史（{{ exclusionHistory.length }}）</h4>
+        <div class="space-y-3">
+          <article v-for="item in exclusionHistory" :key="item.id" class="rounded-xl border border-slate-100 p-4">
+            <div class="flex flex-wrap items-center gap-2"><span class="font-black text-slate-700">{{ item.display_name }}</span><span class="rounded-full px-2 py-1 text-[11px] font-black" :class="exclusionStatusClass(item.view_status)">{{ exclusionStatusLabel(item.view_status) }}</span></div>
+            <div class="mt-1 text-xs font-bold text-slate-500">{{ item.reason }} · {{ formatTime(item.starts_at) }} 至 {{ formatTime(item.ends_at) }}</div>
+          </article>
+          <p v-if="exclusionHistory.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无已过期或已撤销记录。</p>
+        </div>
+      </div>
     </template>
 
     <div v-else-if="activeSection === 'candidates'" class="overflow-x-auto">

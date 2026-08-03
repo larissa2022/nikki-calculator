@@ -399,7 +399,7 @@
 
 - `admin_terms`：普通管理员月度、手动和旧管理员过渡任期的唯一权限事实；按起止时间和状态实时复核。
 - `private_db2.admin_rotation_candidates`：按服务月冻结候选积分、有效行为数、并列时间、顺序及跳过原因。
-- `admin_candidate_exclusions`：超级管理员维护的带原因、起止时间和撤销事实的候选排除。
+- `admin_candidate_exclusions`：超级管理员维护的带原因、起止时间和撤销事实的候选排除；受控创建 RPC 拒绝结束时间不晚于当前时间的记录，治理读模型同时保留当前、待生效、已过期和已撤销历史。
 - `admin_review_decisions` / `admin_review_decision_sources`：不可由客户端修改或删除的低风险审核决定、采用资料和全部来源 pending 审计。
 - 月度定时任务北京时间每月 1 日 00:10 执行；缺少 DB-14 上月冻结标记时失败关闭，部署当月不追授。
 - 普通管理员只通过 `get_current_admin_capabilities()`、`list_low_risk_clothes_review_candidates()` 和 `review_low_risk_clothes_candidate(...)` 获取或执行受限能力；套装、补全、重审、报错、永久驳回和治理仍只属于超级管理员。
