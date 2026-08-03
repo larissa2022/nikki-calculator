@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { supabase } from '@/api/supabase'
 
 const props = defineProps(['user', 'profile'])
@@ -9,6 +9,10 @@ const emit = defineEmits(['open-login', 'open-profile', 'signed-out'])
 const displayName = computed(() => props.profile?.username || props.user?.email || '个人中心')
 const isSigningOut = ref(false)
 const authNotice = ref('')
+
+watch(() => props.user?.id, (userId, previousUserId) => {
+  if (userId && userId !== previousUserId) authNotice.value = ''
+})
 
 const withLogoutTimeout = promise => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(new Error('退出请求等待时间过长')), 15000)
