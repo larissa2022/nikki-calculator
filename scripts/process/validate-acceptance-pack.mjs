@@ -8,14 +8,46 @@ const REQUIRED_TEXT = [
   '目标 PR',
   '目标提交',
   '测试入口',
-  '## 账号与密码',
+  '## 验收范围',
   '## 已准备数据',
   '## 最短验收流程',
   '预期结果',
   '总通过标准',
   '## 异常反馈',
-  '## 数据保留与清理'
+  '## 数据保留与清理',
+  '## Rollback'
 ]
+
+const SIMPLE_PASSWORD = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,16}$/u
+const INVALID_ACCOUNT = /^(?:<.*>|待填写|沿用|见.*|无|已清除.*)$/u
+
+const getSection = (source, heading) => {
+  const headingMatch = new RegExp(`^## ${heading}\\s*$`, 'mu').exec(source)
+  if (!headingMatch) return ''
+
+  const sectionStart = headingMatch.index + headingMatch[0].length
+  const remaining = source.slice(sectionStart)
+  const nextSection = /^##\s+/mu.exec(remaining)
+  return nextSection ? remaining.slice(0, nextSection.index) : remaining
+}
+
+const getTestModules = source => {
+  const flow = getSection(source, '最短验收流程')
+  const headings = [...flow.matchAll(/^###\s+(.+)\s*$/gmu)]
+
+  return headings.map((match, index) => {
+    const bodyStart = match.index + match[0].length
+    const bodyEnd = headings[index + 1]?.index ?? flow.length
+    return {
+      heading: match[1].trim(),
+      body: flow.slice(bodyStart, bodyEnd)
+    }
+  })
+}
+
+const getCredentialValues = (source, label) => [
+  ...source.matchAll(new RegExp(`^${label}\\s*[:：]\\s*(\\S+)\\s*$`, 'gmu'))
+].map(match => match[1])
 
 export const validateAcceptancePackText = text => {
   const errors = []
@@ -29,17 +61,45 @@ export const validateAcceptancePackText = text => {
     if (!source.includes(required)) errors.push(`缺少必填内容：${required}`)
   })
 
-  if (!source.includes('一次登录')) {
-    errors.push('最短流程必须按账号分组，并明确每个账号一次登录')
+  if (/^##\s+账号与密码(?:\s|$)/mu.test(source)) {
+    errors.push('不得设置“账号与密码”二级总表或放置规则模块')
   }
 
-  const passwordMatch = source.match(/(?:统一密码|密码)\s*[:：]\s*(\S+)/)
-  if (!passwordMatch || /^(?:<.*>|待填写|沿用|见.*|无)$/u.test(passwordMatch[1])) {
-    errors.push('本地验收包必须明确可用的测试密码')
+  if (/^统一密码\s*[:：]/mu.test(source)) {
+    errors.push('不得使用统一密码；每个测试模块必须单独写明密码')
   }
 
-  if (!/账号\s*[:：]|\|\s*账号\s*\|/u.test(source)) {
-    errors.push('本地验收包必须明确测试账号')
+  const modules = getTestModules(source)
+  if (!modules.length) {
+    errors.push('最短验收流程必须至少包含一个“###”测试模块')
+  }
+
+  modules.forEach(module => {
+    const accounts = getCredentialValues(module.body, '账号')
+    const passwords = getCredentialValues(module.body, '密码')
+
+    if (!module.heading.includes('一次登录')) {
+      errors.push(`测试模块“${module.heading}”必须明确一次登录`)
+    }
+
+    if (accounts.length !== 1 || INVALID_ACCOUNT.test(accounts[0] || '')) {
+      errors.push(`测试模块“${module.heading}”必须且只能填写一个明确账号`)
+    }
+
+    if (passwords.length !== 1) {
+      errors.push(`测试模块“${module.heading}”必须且只能填写一个密码`)
+    } else if (!SIMPLE_PASSWORD.test(passwords[0])) {
+      errors.push(`测试模块“${module.heading}”的密码必须为 8 至 16 位英文字母和数字，并同时包含字母与数字`)
+    }
+  })
+
+  const allAccounts = getCredentialValues(source, '账号')
+  const allPasswords = getCredentialValues(source, '密码')
+  const moduleAccountCount = modules.reduce((total, module) => total + getCredentialValues(module.body, '账号').length, 0)
+  const modulePasswordCount = modules.reduce((total, module) => total + getCredentialValues(module.body, '密码').length, 0)
+
+  if (allAccounts.length !== moduleAccountCount || allPasswords.length !== modulePasswordCount) {
+    errors.push('账号和密码只能写在各自对应的测试模块内')
   }
 
   if (!/^目标 PR\s*[:：]\s*(?:#\d+|https:\/\/github\.com\/[^\s]+\/pull\/\d+)\s*$/mu.test(source)) {
