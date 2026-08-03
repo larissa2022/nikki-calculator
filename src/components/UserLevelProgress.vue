@@ -94,7 +94,7 @@ const getLevelState = (level) => {
 .level-progress-track { height: 9px; margin-top: 16px; overflow: hidden; border-radius: 999px; background: rgba(203, 213, 225, 0.7); }
 .level-progress-track span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #c084fc, #f472b6, #fb923c); transition: width 0.35s ease; }
 .level-progress-labels { display: flex; justify-content: space-between; margin-top: 5px; color: #64748b; font-size: 10px; font-weight: 800; }
-.level-milestones { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.level-milestones { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
 .level-milestone { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; padding: 10px; border: 1px solid #e2e8f0; border-radius: 12px; background: rgba(255, 255, 255, 0.82); }
 .level-milestone > div:nth-child(2) { min-width: 0; }
 .level-milestone strong, .level-milestone span, .level-milestone small { display: block; }
@@ -113,7 +113,6 @@ const getLevelState = (level) => {
 @media (max-width: 760px) {
   .level-growth-summary { grid-template-columns: auto minmax(0, 1fr); }
   .level-next-copy { grid-column: 1 / -1; align-items: flex-start; text-align: left; }
-  .level-milestones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 480px) {
