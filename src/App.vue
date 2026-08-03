@@ -25,7 +25,8 @@ const showCloudSaveNotice = (type, message) => {
   }, 5000)
 }
 
-watch(currentUser, (newUser) => {
+watch(currentUser, (newUser, previousUser) => {
+  if (newUser?.id !== previousUser?.id) currentMode.value = 'main'
   if (newUser) syncWardrobeFromCloud(newUser.id)
   else myWardrobeIds.value = []
 })
