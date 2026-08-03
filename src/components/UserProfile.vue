@@ -3,6 +3,7 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { supabase } from '../api/supabase'
 import { fetchCurrentUserPoints } from '../api/pointsService.js'
 import { getDisplayUsername, getUserRankAndPrivilege } from '../composables/useUserPrivilege'
+import UserLevelProgress from './UserLevelProgress.vue'
 import {
   fetchMyRejectedClothingSubmissions,
   leaveCurrentAdminTerm
@@ -200,6 +201,8 @@ const openEditModal = () => {
           </template>
         </div>
       </div>
+
+      <UserLevelProgress v-if="totalPoints !== null" :total-points="totalPoints" />
     </section>
 
     <Teleport to="body">
