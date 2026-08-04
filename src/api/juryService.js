@@ -58,6 +58,12 @@ const normalizeCorrectionEvidence = evidence => ({
   path: String(evidence?.evidence_image_path || '')
 })
 
+const normalizeReviewOpinion = opinion => ({
+  voterLevel: Math.min(4, Math.max(0, Number(opinion?.voter_level) || 0)),
+  vote: opinion?.vote === 'reject' ? 'reject' : 'approve',
+  reviewNote: String(opinion?.review_note || '').trim()
+})
+
 export const normalizeQueueItem = (row) => ({
   reReviewItemId: String(row?.re_review_item_id || ''),
   reason: String(row?.reason || ''),
@@ -88,9 +94,16 @@ export const normalizeQueueItem = (row) => ({
   candidateCreatedAt: row?.candidate_created_at || null,
   approveCount: Number(row?.approve_count) || 0,
   rejectCount: Number(row?.reject_count) || 0,
+  approveWeight: Number(row?.approve_weight) || 0,
+  rejectWeight: Number(row?.reject_weight) || 0,
+  reviewOpinions: (Array.isArray(row?.review_opinions) ? row.review_opinions : [])
+    .map(normalizeReviewOpinion)
+    .filter(opinion => opinion.reviewNote),
+  currentUserLevel: Math.min(4, Math.max(0, Number(row?.current_user_level) || 0)),
   myVote: row?.my_vote ? String(row.my_vote) : '',
   canSubmitCandidate: Boolean(row?.can_submit_candidate),
   canVote: Boolean(row?.can_vote),
+  canSubmitReviewNote: Boolean(row?.can_submit_review_note),
   isCandidateAuthor: Boolean(row?.is_candidate_author),
   canAdminReject: Boolean(row?.can_admin_reject)
 })
@@ -126,10 +139,17 @@ export const submitJuryCandidate = async (
   p_payload: payload
 }, options)
 
-export const castJuryVote = async (client, candidateId, vote, options = {}) => (
+export const castJuryVote = async (
+  client,
+  candidateId,
+  vote,
+  reviewNote = '',
+  options = {}
+) => (
   callRpc(client, 'cast_jury_vote', {
     p_candidate_id: candidateId,
-    p_vote: vote
+    p_vote: vote,
+    p_review_note: String(reviewNote || '').trim() || null
   }, options)
 )
 

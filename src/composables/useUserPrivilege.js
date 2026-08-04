@@ -7,11 +7,11 @@ export const getDisplayUsername = (user) => {
 }
 
 export const USER_LEVELS = Object.freeze([
-  { level: 0, title: '初级搭配师', threshold: 0, badgeName: '尚未解锁等级徽章', badgeIcon: '✨' },
-  { level: 1, title: '见习搭配师', threshold: 500, badgeName: '铜色新星徽章', badgeIcon: '✦' },
-  { level: 2, title: '资深收集者', threshold: 2000, badgeName: '银色放大镜徽章', badgeIcon: '🔍' },
-  { level: 3, title: '图鉴守护者', threshold: 5000, badgeName: '金色流光盾牌徽章', badgeIcon: '🛡️' },
-  { level: 4, title: '奇迹编年史官', threshold: 10000, badgeName: '至尊皇冠徽章', badgeIcon: '👑' }
+  { level: 0, title: '初级搭配师', threshold: 0, badgeName: '尚未解锁等级徽章', badgeIcon: '✨', bonusPoints: 0, voteWeight: 1 },
+  { level: 1, title: '见习搭配师', threshold: 500, badgeName: '铜色新星徽章', badgeIcon: '✦', bonusPoints: 1, voteWeight: 1 },
+  { level: 2, title: '资深收集者', threshold: 2000, badgeName: '银色放大镜徽章', badgeIcon: '🔍', bonusPoints: 2, voteWeight: 2 },
+  { level: 3, title: '图鉴守护者', threshold: 5000, badgeName: '金色流光盾牌徽章', badgeIcon: '🛡️', bonusPoints: 3, voteWeight: 2 },
+  { level: 4, title: '奇迹编年史官', threshold: 10000, badgeName: '至尊皇冠徽章', badgeIcon: '👑', bonusPoints: 5, voteWeight: 3 }
 ].map(level => Object.freeze(level)));
 
 const normalizeTotalPoints = (totalPoints) => {
@@ -35,7 +35,10 @@ export const getUserRankAndPrivilege = (totalPoints) => {
     ...currentLevel,
     totalPoints: points,
     pointMultiplier: 1.0,
-    voteWeight: 1,
+    bonusPoints: currentLevel.bonusPoints,
+    voteWeight: currentLevel.voteWeight,
+    canSubmitReviewNote: currentLevel.level >= 2,
+    adminCandidateEligible: currentLevel.level >= 2,
     adFree: false,
     nextLevel: nextLevel?.level ?? null,
     nextTitle: nextLevel?.title ?? null,

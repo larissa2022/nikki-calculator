@@ -174,10 +174,17 @@ export const formatJuryFieldValue = (payload = {}, field, suitsById = new Map())
 export const buildJuryVoteUpdate = (result = {}, fallbackVote = '') => {
   const approveCount = Number(result.approve_count)
   const rejectCount = Number(result.reject_count)
+  const approveWeight = Number(result.approve_weight)
+  const rejectWeight = Number(result.reject_weight)
   return {
     approveCount: Number.isFinite(approveCount) ? approveCount : null,
     rejectCount: Number.isFinite(rejectCount) ? rejectCount : null,
+    approveWeight: Number.isFinite(approveWeight) ? approveWeight : null,
+    rejectWeight: Number.isFinite(rejectWeight) ? rejectWeight : null,
     myVote: String(result.my_vote || fallbackVote || ''),
+    myVoteWeight: Number(result.my_vote_weight) || 1,
+    myVoterLevel: Number(result.my_voter_level) || 0,
+    myReviewNote: String(result.my_review_note || ''),
     status: String(result.status || 'voting'),
     pointsAwarded: Number(result.points_awarded) === 1 ? 1 : 0
   }

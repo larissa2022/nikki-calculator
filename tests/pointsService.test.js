@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 
 import {
   fetchCurrentUserPoints,
+  fetchMyLevelBenefits,
   fetchPointsLeaderboard,
-  normalizeLeaderboardRow
+  normalizeLeaderboardRow,
+  normalizeLevelBenefits
 } from '../src/api/pointsService.js'
 
 const createClient = (response) => ({
@@ -46,13 +48,52 @@ test('查询失败时保留错误供界面处理', async () => {
   )
 })
 
+test('等级权益 RPC 规范化分级数据', async () => {
+  const client = {
+    rpc(name) {
+      assert.equal(name, 'get_my_level_benefits')
+      return Promise.resolve({
+        data: {
+          level: 2,
+          total_points: 2200,
+          bonus_per_event: 2,
+          vote_weight: 2,
+          can_submit_review_note: true,
+          admin_candidate_eligible: true,
+          points_entries: [{ delta: 2 }],
+          contributions: [],
+          votes: [],
+          community_stats: [],
+          governance_stats: null
+        },
+        error: null
+      })
+    }
+  }
+
+  assert.deepEqual(await fetchMyLevelBenefits(client), {
+    level: 2,
+    totalPoints: 2200,
+    bonusPerEvent: 2,
+    voteWeight: 2,
+    canSubmitReviewNote: true,
+    adminCandidateEligible: true,
+    pointsEntries: [{ delta: 2 }],
+    contributions: [],
+    votes: [],
+    communityStats: [],
+    governanceStats: null
+  })
+  assert.equal(normalizeLevelBenefits({ level: 99 }).level, 4)
+})
+
 const createLeaderboardClient = (expectedTable, pages) => ({
   from(table) {
     assert.equal(table, expectedTable)
 
     const query = {
       select(columns) {
-        assert.equal(columns, 'leaderboard_rank, display_name, points, is_current_user')
+        assert.equal(columns, 'leaderboard_rank, display_name, points, current_level, is_current_user')
         return query
       },
       order(column, options) {
@@ -73,11 +114,11 @@ const createLeaderboardClient = (expectedTable, pages) => ({
 
 test('分页读取总榜并规范化数据库字段', async () => {
   const firstPage = [
-    { leaderboard_rank: 1, display_name: '甲', points: 20, is_current_user: false },
-    { leaderboard_rank: 2, display_name: '乙', points: 10, is_current_user: true }
+    { leaderboard_rank: 1, display_name: '甲', points: 20, current_level: 3, is_current_user: false },
+    { leaderboard_rank: 2, display_name: '乙', points: 10, current_level: 2, is_current_user: true }
   ]
   const secondPage = [
-    { leaderboard_rank: 3, display_name: '丙', points: 5, is_current_user: false }
+    { leaderboard_rank: 3, display_name: '丙', points: 5, current_level: 1, is_current_user: false }
   ]
   const client = createLeaderboardClient('points_leaderboard_total', [
     { data: firstPage, error: null },
@@ -87,9 +128,9 @@ test('分页读取总榜并规范化数据库字段', async () => {
   assert.deepEqual(
     await fetchPointsLeaderboard(client, 'total', { pageSize: 2 }),
     [
-      { rank: 1, displayName: '甲', points: 20, isCurrentUser: false },
-      { rank: 2, displayName: '乙', points: 10, isCurrentUser: true },
-      { rank: 3, displayName: '丙', points: 5, isCurrentUser: false }
+      { rank: 1, displayName: '甲', points: 20, level: 3, isCurrentUser: false },
+      { rank: 2, displayName: '乙', points: 10, level: 2, isCurrentUser: true },
+      { rank: 3, displayName: '丙', points: 5, level: 1, isCurrentUser: false }
     ]
   )
 })
@@ -97,7 +138,7 @@ test('分页读取总榜并规范化数据库字段', async () => {
 test('读取当月榜并丢弃不完整的返回行', async () => {
   const client = createLeaderboardClient('points_leaderboard_current_month', [{
     data: [
-      { leaderboard_rank: '1', display_name: ' 本月玩家 ', points: '8', is_current_user: true },
+      { leaderboard_rank: '1', display_name: ' 本月玩家 ', points: '8', current_level: 4, is_current_user: true },
       { leaderboard_rank: null, display_name: '', points: null, is_current_user: false }
     ],
     error: null
@@ -105,7 +146,7 @@ test('读取当月榜并丢弃不完整的返回行', async () => {
 
   assert.deepEqual(
     await fetchPointsLeaderboard(client, 'current_month'),
-    [{ rank: 1, displayName: '本月玩家', points: 8, isCurrentUser: true }]
+    [{ rank: 1, displayName: '本月玩家', points: 8, level: 4, isCurrentUser: true }]
   )
 })
 
@@ -119,7 +160,7 @@ test('读取上月冻结榜并沿用安全公开字段', async () => {
 
   assert.deepEqual(
     await fetchPointsLeaderboard(client, 'last_month'),
-    [{ rank: 1, displayName: '上月玩家', points: 12, isCurrentUser: false }]
+    [{ rank: 1, displayName: '上月玩家', points: 12, level: 0, isCurrentUser: false }]
   )
 })
 

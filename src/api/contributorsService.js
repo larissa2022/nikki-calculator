@@ -1,5 +1,14 @@
 const DEFAULT_PAGE_SIZE = 1000
 
+export const getContributorPresentation = (level) => {
+  const normalizedLevel = Math.min(4, Math.max(0, Number(level) || 0))
+  return {
+    level: normalizedLevel,
+    showSignature: normalizedLevel >= 1,
+    highlighted: normalizedLevel >= 2
+  }
+}
+
 const normalizeContributor = (row) => {
   const rank = Number(row?.contribution_rank)
   const clothesId = row?.clothes_id ? String(row.clothes_id) : ''
@@ -10,7 +19,8 @@ const normalizeContributor = (row) => {
     clothesId,
     rank,
     displayName: String(row?.display_name || '匿名贡献者'),
-    contributedAt: row?.contributed_at || null
+    contributedAt: row?.contributed_at || null,
+    level: getContributorPresentation(row?.contributor_level).level
   }
 }
 
@@ -26,7 +36,7 @@ export const fetchPublicClothingContributors = async (
   while (true) {
     const { data, error } = await client
       .from('clothing_contributors_public')
-      .select('clothes_id, contribution_rank, display_name, contributed_at')
+      .select('clothes_id, contribution_rank, display_name, contributed_at, contributor_level')
       .order('clothes_id', { ascending: true })
       .order('contribution_rank', { ascending: true })
       .range(from, from + pageSize - 1)

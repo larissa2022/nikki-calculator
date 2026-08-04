@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { supabase } from '../api/supabase'
 import {
   buildContributorEntries,
-  fetchPublicClothingContributors
+  fetchPublicClothingContributors,
+  getContributorPresentation
 } from '../api/contributorsService'
 
 const props = defineProps({
@@ -118,9 +119,16 @@ onMounted(loadContributors)
           </header>
 
           <ol class="contributor-list" aria-label="前 3 位贡献者">
-            <li v-for="contributor in entry.contributors" :key="`${entry.clothesId}-${contributor.rank}`">
+            <li
+              v-for="contributor in entry.contributors"
+              :key="`${entry.clothesId}-${contributor.rank}`"
+              :class="[`contributor-level-${contributor.level}`, { 'level-highlight': getContributorPresentation(contributor.level).highlighted }]"
+            >
               <span class="rank-badge" :class="`rank-${contributor.rank}`">{{ contributor.rank }}</span>
-              <span class="contributor-name">{{ contributor.displayName }}</span>
+              <span class="contributor-name">
+                {{ contributor.displayName }}
+                <small v-if="getContributorPresentation(contributor.level).showSignature" class="signature-badge">Lv{{ contributor.level }} · 贡献者署名</small>
+              </span>
               <time :datetime="contributor.contributedAt || undefined">
                 {{ formatDate(contributor.contributedAt) }}
               </time>
@@ -154,12 +162,17 @@ h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 900; }
 .category-tag { display: inline-flex; padding: 2px 7px; border-radius: 999px; background: #fdf2f8; color: #db2777; font-size: 9px; font-weight: 900; }
 .game-id { color: #94a3b8; font-family: monospace; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .contributor-list { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 0; padding: 0; list-style: none; }
-.contributor-list li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.contributor-list li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 9px; }
+.contributor-list li.level-highlight { border: 1px solid #e9d5ff; background: linear-gradient(90deg, #faf5ff, #fff); }
 .rank-badge { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #f1f5f9; color: #64748b; font-size: 10px; font-weight: 900; }
 .rank-1 { background: #fef3c7; color: #b45309; }
 .rank-2 { background: #f1f5f9; color: #475569; }
 .rank-3 { background: #ffedd5; color: #c2410c; }
 .contributor-name { color: #475569; font-size: 12px; font-weight: 800; overflow-wrap: anywhere; }
+.signature-badge { display: inline-flex; margin-left: 5px; padding: 1px 5px; border-radius: 999px; background: #ffedd5; color: #9a3412; font-size: 8px; font-weight: 900; vertical-align: middle; }
+.contributor-level-2 .contributor-name { color: #475569; text-shadow: 0 0 10px rgba(148, 163, 184, 0.25); }
+.contributor-level-3 .contributor-name { color: #a16207; text-shadow: 0 0 10px rgba(234, 179, 8, 0.22); }
+.contributor-level-4 .contributor-name { color: #7e22ce; text-shadow: 0 0 12px rgba(168, 85, 247, 0.24); }
 time { color: #94a3b8; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .state-card { display: flex; min-height: 190px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; border: 1px dashed #f9a8d4; border-radius: 18px; background: rgba(255, 255, 255, 0.75); color: #64748b; text-align: center; }
 .state-card strong { color: #334155; font-size: 15px; }

@@ -122,13 +122,23 @@ test('投票结果可立即驱动计数、退回状态和积分提示', () => {
   assert.deepEqual(buildJuryVoteUpdate({
     approve_count: 2,
     reject_count: 3,
+    approve_weight: 3,
+    reject_weight: 5,
     my_vote: 'reject',
+    my_vote_weight: 2,
+    my_voter_level: 2,
+    my_review_note: '证据不足',
     status: 'returned',
     points_awarded: 1
   }), {
     approveCount: 2,
     rejectCount: 3,
+    approveWeight: 3,
+    rejectWeight: 5,
     myVote: 'reject',
+    myVoteWeight: 2,
+    myVoterLevel: 2,
+    myReviewNote: '证据不足',
     status: 'returned',
     pointsAwarded: 1
   })

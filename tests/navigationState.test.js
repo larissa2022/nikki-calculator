@@ -22,7 +22,7 @@ const createStorage = (initialValue = null) => {
 test('刷新后恢复每个合法的主页面位置', () => {
   const storage = createStorage()
 
-  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'leaderboard', 'corrections', 'jury', 'profile']) {
+  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'leaderboard', 'corrections', 'jury', 'profile', 'about', 'donate']) {
     assert.equal(writeMainTab(tab, storage), tab)
     assert.equal(readMainTab(storage), tab)
   }
@@ -50,4 +50,9 @@ test('退出登录或未登录重进时受限页面回退到首页', () => {
   assert.equal(normalizeMainTabForSession('profile', false), DEFAULT_MAIN_TAB)
   assert.equal(normalizeMainTabForSession('jury', true), 'jury')
   assert.equal(normalizeMainTabForSession('wardrobe', false), 'wardrobe')
+})
+
+test('关于项目和打赏支持允许未登录访问', () => {
+  assert.equal(normalizeMainTabForSession('about', false), 'about')
+  assert.equal(normalizeMainTabForSession('donate', false), 'donate')
 })

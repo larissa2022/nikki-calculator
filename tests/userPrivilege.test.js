@@ -14,12 +14,14 @@ test('积分等级使用已确认的四级门槛', () => {
   assert.equal(getUserRankAndPrivilege(499).level, 0)
 })
 
-test('所有等级都按一人一票且不改变积分倍率', () => {
-  for (const points of [0, 500, 2000, 5000, 10000]) {
-    const privilege = getUserRankAndPrivilege(points)
-    assert.equal(privilege.voteWeight, 1)
-    assert.equal(privilege.pointMultiplier, 1)
-  }
+test('等级使用均衡档额外积分和陪审票权', () => {
+  assert.deepEqual(
+    [0, 500, 2000, 5000, 10000].map(points => {
+      const privilege = getUserRankAndPrivilege(points)
+      return [privilege.bonusPoints, privilege.voteWeight]
+    }),
+    [[0, 1], [1, 1], [2, 2], [3, 2], [5, 3]]
+  )
 })
 
 test('等级本身不直接授予广告免除权', () => {
@@ -53,9 +55,12 @@ test('升级进度按当前等级区间计算并给出下一门槛', () => {
       threshold: 500,
       badgeName: '铜色新星徽章',
       badgeIcon: '✦',
+      bonusPoints: 1,
       totalPoints: 1250,
       pointMultiplier: 1,
       voteWeight: 1,
+      canSubmitReviewNote: false,
+      adminCandidateEligible: false,
       adFree: false,
       nextLevel: 2,
       nextTitle: '资深收集者',

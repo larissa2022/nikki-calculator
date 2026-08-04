@@ -50,6 +50,11 @@ test('陪审团队列规范化票数和权限状态', async () => {
         candidate_suit_name: '星河梦境',
         approve_count: '4',
         reject_count: 1,
+        approve_weight: 7,
+        reject_weight: 2,
+        current_user_level: 2,
+        can_submit_review_note: true,
+        review_opinions: [{ voter_level: 3, vote: 'reject', review_note: '字段证据不足' }],
         my_vote: null,
         can_submit_candidate: false,
         can_vote: true,
@@ -63,9 +68,15 @@ test('陪审团队列规范化票数和权限状态', async () => {
   const queue = await fetchJuryReviewQueue(client)
   assert.equal(queue.length, 1)
   assert.deepEqual(
-    [queue[0].approveCount, queue[0].rejectCount, queue[0].canVote, queue[0].canAdminReject],
-    [4, 1, true, true]
+    [queue[0].approveCount, queue[0].rejectCount, queue[0].approveWeight, queue[0].rejectWeight],
+    [4, 1, 7, 2]
   )
+  assert.equal(queue[0].canSubmitReviewNote, true)
+  assert.deepEqual(queue[0].reviewOpinions, [{
+    voterLevel: 3,
+    vote: 'reject',
+    reviewNote: '字段证据不足'
+  }])
   assert.deepEqual(queue[0].issues, [
     { field: 'stars', kind: 'missing' },
     { field: 'suit', kind: 'conflict' }
@@ -99,7 +110,7 @@ test('完整补充内容、投票和管理员终审使用固定 RPC 参数', asy
     needs_suit_review: false
   }
   await submitJuryCandidate(client, 'item-1', payload)
-  await castJuryVote(client, 'candidate-1', 'reject')
+  await castJuryVote(client, 'candidate-1', 'reject', '字段证据不足')
   await rejectJuryCandidateAsAdmin(client, 'candidate-1', '资料无法核实')
 
   assert.deepEqual(client.calls, [
@@ -109,7 +120,11 @@ test('完整补充内容、投票和管理员终审使用固定 RPC 参数', asy
     },
     {
       name: 'cast_jury_vote',
-      params: { p_candidate_id: 'candidate-1', p_vote: 'reject' }
+      params: {
+        p_candidate_id: 'candidate-1',
+        p_vote: 'reject',
+        p_review_note: '字段证据不足'
+      }
     },
     {
       name: 'admin_reject_jury_candidate',

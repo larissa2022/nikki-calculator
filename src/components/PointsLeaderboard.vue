@@ -129,8 +129,9 @@ onMounted(() => loadLeaderboard())
           :class="{ 'current-user': row.isCurrentUser }"
         >
           <span class="rank" :class="`rank-${Math.min(row.rank, 4)}`">{{ rankBadge(row.rank) }}</span>
-          <div class="player">
+          <div class="player" :class="`level-${row.level}`">
             <strong>{{ row.displayName }}</strong>
+            <small class="level-chip">Lv{{ row.level }}</small>
             <span v-if="row.isCurrentUser">这是你</span>
           </div>
           <span class="points">{{ formatPoints(row.points) }} 分</span>
@@ -163,6 +164,11 @@ h2 { margin: 0; color: #1e293b; font-size: 24px; font-weight: 900; }
 .player { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .player strong { overflow: hidden; color: #334155; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .player span { flex: 0 0 auto; padding: 2px 7px; border-radius: 999px; background: #ede9fe; color: #6d28d9; font-size: 9px; font-weight: 900; }
+.level-chip { flex: 0 0 auto; padding: 2px 6px; border-radius: 999px; background: #f1f5f9; color: #64748b; font-size: 8px; font-weight: 900; }
+.player.level-1 strong { color: #9a3412; }
+.player.level-2 strong { color: #475569; text-shadow: 0 0 10px rgba(148,163,184,.28); }
+.player.level-3 strong { color: #a16207; text-shadow: 0 0 10px rgba(234,179,8,.24); }
+.player.level-4 strong { color: #7e22ce; text-shadow: 0 0 12px rgba(168,85,247,.28); }
 .points { color: #7c3aed; font-size: 13px; font-weight: 900; white-space: nowrap; }
 .state-card { display: flex; min-height: 190px; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; border: 1px dashed #c4b5fd; border-radius: 18px; background: rgba(255, 255, 255, 0.75); color: #64748b; text-align: center; }
 .state-card strong { color: #334155; font-size: 15px; }
