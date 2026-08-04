@@ -3,8 +3,8 @@ import { reactive } from 'vue'
 
 const imageFailures = reactive({ wechat: false, alipay: false })
 const channels = [
-  { key: 'wechat', name: '微信', image: '/donation/wechat-qr.png', accent: 'wechat' },
-  { key: 'alipay', name: '支付宝', image: '/donation/alipay-qr.png', accent: 'alipay' }
+  { key: 'wechat', name: '微信', image: '/donation/wechat-qr.jpg', accent: 'wechat' },
+  { key: 'alipay', name: '支付宝', image: '/donation/alipay-qr.jpg', accent: 'alipay' }
 ]
 </script>
 
