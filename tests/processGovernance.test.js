@@ -93,6 +93,23 @@ test('验收包要求每个账号测试模块各自填写账号和简单密码',
   assert.ok(validateAcceptancePackText(missingSecondPassword).length > 0)
 })
 
+test('验收包允许匿名模块且禁止在其中填写账号密码', () => {
+  const anonymousModule = `### 匿名访问（无需登录）
+
+1. 打开公开页面。
+   - 预期结果：无需登录即可查看。
+
+`
+  const anonymousPack = validPack.replace('### A：一次登录完成全部提交', `${anonymousModule}### A：一次登录完成全部提交`)
+  assert.deepEqual(validateAcceptancePackText(anonymousPack), [])
+
+  const credentialsInAnonymousModule = anonymousPack.replace(
+    '1. 打开公开页面。',
+    '账号：anonymous@example.invalid\n密码：Anon1234\n\n1. 打开公开页面。'
+  )
+  assert.ok(validateAcceptancePackText(credentialsInAnonymousModule).length > 0)
+})
+
 test('统一验收清单模板保留业务模块且不包含账号密码规则模块', () => {
   const headings = [...acceptanceTemplateText.matchAll(/^##\s+(.+)\s*$/gmu)].map(match => match[1].trim())
   assert.deepEqual(headings, [
@@ -105,6 +122,7 @@ test('统一验收清单模板保留业务模块且不包含账号密码规则�
     'Rollback'
   ])
   assert.doesNotMatch(acceptanceTemplateText, /^##\s+账号与密码/mu)
+  assert.match(acceptanceTemplateText, /^### 匿名访问（无需登录）$/mu)
   assert.match(acceptanceTemplateText, /^### .+（一次登录）$/mu)
   assert.ok(acceptanceTemplateText.indexOf('账号：') > acceptanceTemplateText.indexOf('### '))
   assert.ok(acceptanceTemplateText.indexOf('密码：') > acceptanceTemplateText.indexOf('### '))

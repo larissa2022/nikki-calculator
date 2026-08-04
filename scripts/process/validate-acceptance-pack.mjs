@@ -77,6 +77,19 @@ export const validateAcceptancePackText = text => {
   modules.forEach(module => {
     const accounts = getCredentialValues(module.body, '账号')
     const passwords = getCredentialValues(module.body, '密码')
+    const isAnonymousModule = module.heading.includes('匿名')
+
+    if (isAnonymousModule) {
+      if (module.heading.includes('一次登录')) {
+        errors.push(`匿名测试模块“${module.heading}”不得标记为一次登录`)
+      }
+
+      if (accounts.length || passwords.length) {
+        errors.push(`匿名测试模块“${module.heading}”不得填写账号或密码`)
+      }
+
+      return
+    }
 
     if (!module.heading.includes('一次登录')) {
       errors.push(`测试模块“${module.heading}”必须明确一次登录`)
