@@ -3,8 +3,8 @@ import { reactive } from 'vue'
 
 const imageFailures = reactive({ wechat: false, alipay: false })
 const channels = [
-  { key: 'wechat', name: '微信', image: '/donation/wechat-qr.jpg', accent: 'wechat' },
-  { key: 'alipay', name: '支付宝', image: '/donation/alipay-qr.jpg', accent: 'alipay' }
+  { key: 'wechat', name: '微信', image: '/donation/wechat-qr.png', accent: 'wechat' },
+  { key: 'alipay', name: '支付宝', image: '/donation/alipay-qr.png', accent: 'alipay' }
 ]
 </script>
 
@@ -44,7 +44,6 @@ const channels = [
         <strong>付款异常如何处理？</strong>
         <p>网站不接收支付回调，也不会自动确认是否到账。请不要在公开问题中提交交易号、付款截图或个人信息。</p>
       </div>
-      <a href="https://github.com/larissa2022/nikki-calculator/issues" target="_blank" rel="noopener noreferrer">前往 GitHub Issues</a>
     </aside>
   </section>
 </template>
@@ -71,10 +70,8 @@ article.alipay { border-top: 4px solid #0ea5e9; }
 .qr-missing span { color: #64748b; font-size: 13px; font-weight: 900; }
 .qr-missing small { color: #94a3b8; font-size: 10px; font-weight: 700; line-height: 1.6; }
 article > p { margin: 12px 0 0; color: #64748b; font-size: 10px; font-weight: 700; text-align: center; }
-aside { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 18px; padding: 16px 18px; border: 1px solid #fef3c7; border-radius: 16px; background: #fffbeb; }
+aside { margin-top: 18px; padding: 16px 18px; border: 1px solid #fef3c7; border-radius: 16px; background: #fffbeb; }
 aside strong { color: #92400e; font-size: 12px; font-weight: 900; }
 aside p { max-width: 600px; margin: 4px 0 0; color: #78716c; font-size: 10px; font-weight: 700; line-height: 1.6; }
-aside a { flex: 0 0 auto; color: #7c3aed; font-size: 11px; font-weight: 900; text-decoration: none; }
 @media (max-width: 680px) { .channel-grid { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { aside { align-items: flex-start; flex-direction: column; } }
 </style>
