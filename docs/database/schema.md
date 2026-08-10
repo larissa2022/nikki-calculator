@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-16，不能作为这些对象的当前事实。2026-08-04 已在 development 应用 DB-16 等级功能权益；相关表、RPC、RLS、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-17，不能作为这些对象的当前事实。2026-08-10 已在 development 应用 DB-17 报错推翻原资料后的积分扣回；相关列、函数、触发器、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -90,6 +90,7 @@
 | points_ledger | source_id | uuid | null | YES |
 | points_ledger | re_review_candidate_id | uuid | null | YES |
 | points_ledger | correction_request_id | uuid | null | YES |
+| points_ledger | reversal_correction_request_id | uuid | null | YES |
 | points_ledger | reversal_of | uuid | null | YES |
 | points_ledger | occurred_at | timestamp with time zone | now() | NO |
 | points_ledger | created_at | timestamp with time zone | now() | NO |
@@ -176,6 +177,13 @@
 | `public.points_leaderboard_last_month` | `security_invoker + security_barrier`；仅 authenticated SELECT，字段与 DB-13 榜单一致 |
 
 两张私有表均启用并强制 RLS，不向 anon、authenticated 或 service_role 授予底表权限。快照不保存展示名称，改名后显示新名称，账号删除后显示“已注销用户”。首次启用补冻最近一个已结束自然月；冻结后的积分流水变化不追改快照，也不自动授予首页鸣谢、广告免除或 Lv4 体验。
+
+## DB-17 报错推翻原资料后的积分扣回
+
+- `points_ledger.reversal_correction_request_id` 只允许出现在负数 `reversal` 流水，必须同时存在 `reversal_of`，并以外键关联最终批准的 `correction_requests`；部分索引支持按报错追踪扣回。
+- `private_db2.append_overturned_contribution_reversals()` 由 `correction_requests` 首次转为 `approved` 的 AFTER UPDATE 触发。函数只处理非空旧值被不同采纳值替换的场景，并要求原贡献来源 pending 在被修正字段上的快照等于旧值。
+- 命中的 `clothing_contribution` 基础正向流水按原分值追加负数流水；`private_db2.append_level_bonus_or_reversal()` 同步把关联报错写入等级奖励负数流水。`reversal_of` 的唯一约束保证重试不重复扣回。
+- 两个内部函数均为 `SECURITY DEFINER`、空 `search_path`，且 public、anon、authenticated、service_role 均无 EXECUTE；`points_ledger` 继续不向客户端开放 INSERT。补丁不回填历史报错，不修改原流水、贡献记录或公开贡献者归属。
 
 ## DB-3 正式库补全写入闭环
 

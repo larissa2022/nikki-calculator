@@ -580,6 +580,7 @@ export type Database = {
           level_snapshot: number | null
           occurred_at: string
           re_review_candidate_id: string | null
+          reversal_correction_request_id: string | null
           reversal_of: string | null
           source_id: string | null
           source_type: string
@@ -596,6 +597,7 @@ export type Database = {
           level_snapshot?: number | null
           occurred_at?: string
           re_review_candidate_id?: string | null
+          reversal_correction_request_id?: string | null
           reversal_of?: string | null
           source_id?: string | null
           source_type: string
@@ -612,6 +614,7 @@ export type Database = {
           level_snapshot?: number | null
           occurred_at?: string
           re_review_candidate_id?: string | null
+          reversal_correction_request_id?: string | null
           reversal_of?: string | null
           source_id?: string | null
           source_type?: string
@@ -645,6 +648,13 @@ export type Database = {
             columns: ["re_review_candidate_id"]
             isOneToOne: false
             referencedRelation: "re_review_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "points_ledger_reversal_correction_request_id_fkey"
+            columns: ["reversal_correction_request_id"]
+            isOneToOne: false
+            referencedRelation: "correction_requests"
             referencedColumns: ["id"]
           },
           {
