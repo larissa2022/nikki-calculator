@@ -64,4 +64,5 @@ test('打赏页使用裁切二维码且不提供 GitHub 跳转', () => {
   assert.match(donationSupportText, /\/donation\/wechat-qr\.png/u)
   assert.match(donationSupportText, /\/donation\/alipay-qr\.png/u)
   assert.doesNotMatch(donationSupportText, /GitHub Issues|github\.com\/.*\/issues/iu)
+  assert.doesNotMatch(donationSupportText, /付款异常如何处理|网站不接收支付回调/u)
 })

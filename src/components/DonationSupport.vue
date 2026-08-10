@@ -39,12 +39,6 @@ const channels = [
       </article>
     </div>
 
-    <aside>
-      <div>
-        <strong>付款异常如何处理？</strong>
-        <p>网站不接收支付回调，也不会自动确认是否到账。请不要在公开问题中提交交易号、付款截图或个人信息。</p>
-      </div>
-    </aside>
   </section>
 </template>
 
@@ -70,8 +64,5 @@ article.alipay { border-top: 4px solid #0ea5e9; }
 .qr-missing span { color: #64748b; font-size: 13px; font-weight: 900; }
 .qr-missing small { color: #94a3b8; font-size: 10px; font-weight: 700; line-height: 1.6; }
 article > p { margin: 12px 0 0; color: #64748b; font-size: 10px; font-weight: 700; text-align: center; }
-aside { margin-top: 18px; padding: 16px 18px; border: 1px solid #fef3c7; border-radius: 16px; background: #fffbeb; }
-aside strong { color: #92400e; font-size: 12px; font-weight: 900; }
-aside p { max-width: 600px; margin: 4px 0 0; color: #78716c; font-size: 10px; font-weight: 700; line-height: 1.6; }
 @media (max-width: 680px) { .channel-grid { grid-template-columns: 1fr; } }
 </style>
