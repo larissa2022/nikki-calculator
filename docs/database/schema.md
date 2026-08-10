@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-11，不能作为这些对象的当前事实。2026-07-29 已在 development 应用至 DB-11 图片权限加固补丁；相关表、RPC、Storage、RLS、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。因本补丁不要求覆盖全量 dump，migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-16，不能作为这些对象的当前事实。2026-08-04 已在 development 应用 DB-16 等级功能权益；相关表、RPC、RLS、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -386,7 +386,7 @@
 - DB-13 新增总榜和北京时间当月榜两个登录后只读面；fixture 在 development 通过并 `ROLLBACK`，原有 22 条积分流水数量不变且 fixture 无残留。随后为人工验收单独保留 2 条各 `+10` 的 development 测试流水，当前合计 24 条；测试账号和依赖只用于 DB-13 验收。
 - DB-14 新增上一完整北京时间自然月冻结榜；fixture 在 development 通过并 `ROLLBACK`，没有新增或改写积分流水。因 `2026-06` 无真实积分，development 为人工验收仅在派生快照中保留 `DB13验收甲`、`DB13验收乙` 两条 10 分并列第 1 的专用测试行，月标记与快照均为 2 行口径。
 - DB-3 已形成 1 条 development 人工验收贡献和 1 条 `+5` 积分流水；DB-4 事务 fixture 全部回滚，未新增持久贡献或积分数据。
-- DB-6 三张表及 DB-7 两张新增事实表当前均为 0 行；候选提交、一人一票、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证，回滚后无测试数据残留。
+- DB-6 / DB-7 事实表保留 development 验收数据；DB-16 应用时已有 17 条陪审票，统一冻结为 Lv0 / 1 票且不追改。候选提交、一人一条不可改票、加权人数门槛、通过、退回重审、独立终审、审计字段防伪、防自审和匿名拒绝已在事务内验证。
 - DB-7 Security Advisor 对 `jury_votes`、`jury_admin_decisions` 的 RLS 无 policy 仅报告预期 INFO；两表不给客户端底表权限，authenticated 只通过受控 RPC 操作。Performance Advisor 首次发现终审管理员外键缺索引，`20260727124555_db7_index_admin_user_fk` 生效后目标告警已消失。
 - DB-8 增强 fixture 已在 development 通过并 rollback 至 0 行；live catalog 确认 3 个外键均有索引、两个 `SECURITY DEFINER` RPC 均为空 `search_path` 且 anon 无执行权限，service_role 仅保留 SELECT / INSERT / UPDATE。原生 Advisor 命令受直连传输错误影响未返回，已用相同 catalog 检查逐项回读。
 - DB-11 fixture 已在 development 通过并 `ROLLBACK`；live catalog 确认私有 bucket、路径约束与索引、三条 Storage policy、专用提交和陪审队列 RPC、旧入口撤权及 `private` helper 的空 `search_path`。Performance Advisor 未发现 DB-11 新问题；Security Advisor 接口在补丁后连续传输失败，已保留为未取得的远端检查结果，未用 catalog 回读冒充 Advisor 通过。
@@ -403,4 +403,14 @@
 - `admin_review_decisions` / `admin_review_decision_sources`：不可由客户端修改或删除的低风险审核决定、采用资料和全部来源 pending 审计。
 - 月度定时任务北京时间每月 1 日 00:10 执行；缺少 DB-14 上月冻结标记时失败关闭，部署当月不追授。
 - 普通管理员只通过 `get_current_admin_capabilities()`、`list_low_risk_clothes_review_candidates()` 和 `review_low_risk_clothes_candidate(...)` 获取或执行受限能力；套装、补全、重审、报错、永久驳回和治理仍只属于超级管理员。
+
+## DB-16 等级功能权益
+
+- `points_ledger.bonus_of / level_snapshot`：基础奖励保存发生前等级，等级奖励以唯一 `bonus_of` 关联基础流水；扣回继续使用追加负数 `reversal`，不修改历史。
+- `private_db2.user_points_state`：按用户串行计算奖励前等级的私有辅助状态，强制 RLS、无客户端 grants，可从 `points_ledger` 重建；当前 17 个用户状态与 29 条权威流水汇总完全一致。
+- `jury_votes.voter_level / vote_weight / review_note`：历史票默认 Lv0 / 1 票；新票冻结等级和权重，Lv2 以上可在首次投票附不超过 200 字的不可改复核意见。
+- `cast_jury_vote(uuid,text,text)`：至少 5 位不同用户赞成且加权领先才通过；至少 3 位不同用户反对且加权反对差达到 3 才退回。二参数兼容 RPC 保留，内部转发到三参数实现。
+- `admin_rotation_candidates.level_at_snapshot`：候选冻结时必须达到 Lv2；`level_bonus` 计入冻结积分但不重复计为有效行为，既有任期不会因当前等级下降而提前撤销。
+- `get_my_level_benefits()`：Lv0 返回本人总积分，Lv1 增加本人流水，Lv2 增加本人贡献 / 投票和本月匿名统计，Lv3 扩展为最近 12 个月匿名统计，Lv4 增加匿名任期、低风险决定和积压统计。RPC 不返回其他用户 ID、邮箱、手机号或私密证据。
+- `clothing_contributors_public` 增加 `contributor_level`，排序仍只按既有贡献时间与名次；三个积分榜增加 `current_level`，不改变周期积分和名次。
 - `pending_clothes` 底表只允许用户读取本人申请、超级管理员读取全部并直接更新状态；普通管理员不再获得整表 RLS 能力。

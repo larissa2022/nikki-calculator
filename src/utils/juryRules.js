@@ -9,12 +9,19 @@ export const JURY_OUTCOME = {
   VOTING: 'voting'
 }
 
-export const getJuryOutcome = (approveCount, rejectCount) => {
+export const getJuryOutcome = (
+  approveCount,
+  rejectCount,
+  approveWeight = approveCount,
+  rejectWeight = rejectCount
+) => {
   const approvals = Number(approveCount) || 0
   const rejections = Number(rejectCount) || 0
+  const weightedApprovals = Number(approveWeight) || 0
+  const weightedRejections = Number(rejectWeight) || 0
 
-  if (approvals >= 5 && approvals > rejections) return JURY_OUTCOME.APPROVED
-  if (rejections - approvals >= 3) return JURY_OUTCOME.RETURNED
+  if (approvals >= 5 && weightedApprovals > weightedRejections) return JURY_OUTCOME.APPROVED
+  if (rejections >= 3 && weightedRejections - weightedApprovals >= 3) return JURY_OUTCOME.RETURNED
   return JURY_OUTCOME.VOTING
 }
 

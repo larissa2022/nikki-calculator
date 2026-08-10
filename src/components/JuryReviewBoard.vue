@@ -36,6 +36,7 @@ const suits = ref([])
 const candidateForms = ref({})
 const suitSearchTexts = ref({})
 const adminReasons = ref({})
+const reviewNotes = ref({})
 const formErrors = ref({})
 const activeActions = ref({})
 const isLoading = ref(false)
@@ -291,6 +292,9 @@ const applyCandidateResult = (item, payload, result) => {
     candidateStatus: 'voting',
     approveCount: 0,
     rejectCount: 0,
+    approveWeight: 0,
+    rejectWeight: 0,
+    reviewOpinions: [],
     myVote: '',
     canSubmitCandidate: false,
     canVote: false,
@@ -323,14 +327,19 @@ const executeCandidateSubmission = async item => {
 }
 
 const executeVote = async (item, vote) => {
+  const reviewNote = item.canSubmitReviewNote
+    ? String(reviewNotes.value[item.candidateId] || '').trim()
+    : ''
   await runAction({
     key: `vote:${item.candidateId}`,
     item,
-    action: signal => castJuryVote(supabase, item.candidateId, vote, { signal }),
+    action: signal => castJuryVote(supabase, item.candidateId, vote, reviewNote, { signal }),
     onSuccess: result => {
       const update = buildJuryVoteUpdate(result, vote)
       if (update.approveCount !== null) item.approveCount = update.approveCount
       if (update.rejectCount !== null) item.rejectCount = update.rejectCount
+      if (update.approveWeight !== null) item.approveWeight = update.approveWeight
+      if (update.rejectWeight !== null) item.rejectWeight = update.rejectWeight
       if (update.status === 'approved') {
         items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
       } else if (update.status === 'returned') {
@@ -342,6 +351,9 @@ const executeVote = async (item, vote) => {
           candidateSuitName: '',
           approveCount: 0,
           rejectCount: 0,
+          approveWeight: 0,
+          rejectWeight: 0,
+          reviewOpinions: [],
           myVote: '',
           canSubmitCandidate: true,
           canVote: false,
@@ -352,6 +364,13 @@ const executeVote = async (item, vote) => {
       } else {
         item.itemStatus = 'voting'
         item.myVote = update.myVote
+        if (update.myReviewNote) {
+          item.reviewOpinions = [...item.reviewOpinions, {
+            voterLevel: update.myVoterLevel,
+            vote: update.myVote,
+            reviewNote: update.myReviewNote
+          }]
+        }
         item.canVote = false
         item.canAdminReject = false
       }
@@ -395,7 +414,7 @@ const askVoteConfirmation = (item, vote) => {
   const label = vote === JURY_VOTE.APPROVE ? '赞同' : '反对'
   confirmation.value = {
     title: `确认投“${label}”`,
-    message: `你正在审核《${item.clothesName}》。投票提交后不能修改。`,
+    message: `你正在审核《${item.clothesName}》。投票和复核意见提交后不能修改。`,
     confirmText: `确认${label}`,
     tone: vote === JURY_VOTE.APPROVE ? 'green' : 'rose',
     action: () => executeVote(item, vote)
@@ -463,7 +482,7 @@ onBeforeUnmount(() => {
         <div>
           <h2 class="text-xl font-black text-slate-800">⚖️ 陪审团</h2>
           <p class="mt-1 text-xs font-bold leading-relaxed text-slate-500">
-            每人一票。赞同票至少 5 且多于反对票时通过；反对票领先至少 3 时要求重新补充；其他情况继续投票。
+            每位用户只能提交一次投票；等级决定票权。至少 5 位用户赞同且加权赞同领先时通过；至少 3 位用户反对且加权反对领先 3 票时退回重审。
           </p>
         </div>
         <button
@@ -543,8 +562,8 @@ onBeforeUnmount(() => {
             </p>
           </div>
           <div class="flex gap-2 text-xs font-black">
-            <span class="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-600">赞同 {{ item.approveCount }}</span>
-            <span class="rounded-lg bg-rose-50 px-3 py-2 text-rose-600">反对 {{ item.rejectCount }}</span>
+            <span class="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-600">赞同 {{ item.approveCount }} 人 / {{ item.approveWeight }} 票</span>
+            <span class="rounded-lg bg-rose-50 px-3 py-2 text-rose-600">反对 {{ item.rejectCount }} 人 / {{ item.rejectWeight }} 票</span>
           </div>
         </div>
 
@@ -617,13 +636,38 @@ onBeforeUnmount(() => {
             本轮投票期间内容不会变化；如果需要修改，会开启新一轮投票。
           </p>
 
+          <div v-if="item.reviewOpinions.length" class="mt-4 rounded-xl border border-indigo-100 bg-white p-3">
+            <div class="text-xs font-black text-indigo-700">匿名复核意见</div>
+            <ul class="mt-2 space-y-2">
+              <li v-for="(opinion, index) in item.reviewOpinions" :key="`${item.candidateId}-${index}`" class="rounded-lg bg-indigo-50 px-3 py-2 text-xs text-slate-600">
+                <strong class="text-indigo-700">Lv{{ opinion.voterLevel }} · {{ opinion.vote === JURY_VOTE.APPROVE ? '赞同' : '反对' }}</strong>
+                <p class="mt-1 whitespace-pre-wrap break-words">{{ opinion.reviewNote }}</p>
+              </li>
+            </ul>
+          </div>
+
           <div v-if="item.myVote" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-purple-600">
             你已投：{{ item.myVote === JURY_VOTE.APPROVE ? '赞同' : '反对' }}
           </div>
           <div v-else-if="item.isCandidateAuthor" class="mt-4 rounded-lg bg-white px-3 py-2 text-sm font-black text-slate-500">
             这是你补充的内容，不能参与本轮投票。
           </div>
-          <div v-else class="mt-4 grid grid-cols-2 gap-3">
+          <div v-else class="mt-4 space-y-3">
+            <label v-if="item.canSubmitReviewNote" class="block rounded-xl border border-indigo-100 bg-white p-3">
+              <span class="text-xs font-black text-indigo-700">复核意见（选填，提交后不可修改）</span>
+              <textarea
+                v-model="reviewNotes[item.candidateId]"
+                maxlength="200"
+                rows="3"
+                class="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-400"
+                placeholder="写明判断依据，不要填写个人联系方式或其他隐私信息"
+              ></textarea>
+              <small class="mt-1 block text-right text-[10px] font-bold text-slate-400">{{ String(reviewNotes[item.candidateId] || '').length }} / 200</small>
+            </label>
+            <p v-else class="rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-500">
+              当前 Lv{{ item.currentUserLevel }}，达到 Lv2 后可在投票时附匿名复核意见。
+            </p>
+            <div class="grid grid-cols-2 gap-3">
             <button
               type="button"
               class="rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
@@ -640,6 +684,7 @@ onBeforeUnmount(() => {
             >
               需要修改
             </button>
+            </div>
           </div>
 
           <div v-if="isSuperAdmin" class="mt-5 border-t border-slate-200 pt-4">

@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { supabase } from '../api/supabase'
-import { fetchCurrentUserPoints } from '../api/pointsService.js'
+import { fetchMyLevelBenefits } from '../api/pointsService.js'
 import { getDisplayUsername, getUserRankAndPrivilege } from '../composables/useUserPrivilege'
 import UserLevelProgress from './UserLevelProgress.vue'
+import LevelBenefitsPanel from './LevelBenefitsPanel.vue'
 import {
   fetchMyRejectedClothingSubmissions,
   leaveCurrentAdminTerm
@@ -20,6 +21,7 @@ const emit = defineEmits(['refresh-data', 'profile-updated'])
 const localProfile = ref(null)
 const displayProfile = computed(() => localProfile.value || props.profileData)
 const totalPoints = ref(null)
+const levelBenefits = ref(null)
 const isPointsLoading = ref(false)
 const pointsLoadError = ref(false)
 const myRank = computed(() => (
@@ -43,6 +45,7 @@ const loadPoints = async () => {
 
   if (!props.profileData?.id) {
     totalPoints.value = null
+    levelBenefits.value = null
     isPointsLoading.value = false
     pointsLoadError.value = false
     return
@@ -52,13 +55,15 @@ const loadPoints = async () => {
   pointsLoadError.value = false
 
   try {
-    const points = await fetchCurrentUserPoints(supabase)
+    const benefits = await fetchMyLevelBenefits(supabase)
     if (requestId !== pointsRequestId) return
-    totalPoints.value = points
+    levelBenefits.value = benefits
+    totalPoints.value = benefits.totalPoints
   } catch (error) {
     if (requestId !== pointsRequestId) return
     console.error('获取当前用户积分汇总失败:', error)
     totalPoints.value = null
+    levelBenefits.value = null
     pointsLoadError.value = true
   } finally {
     if (requestId === pointsRequestId) isPointsLoading.value = false
@@ -182,7 +187,7 @@ const openEditModal = () => {
           <div v-else-if="pointsLoadError" class="text-lg font-black text-slate-400">暂不可用</div>
           <template v-else>
             <div class="text-lg font-black text-slate-700">{{ myRank?.title }}</div>
-            <div class="mt-1 text-[11px] font-bold text-slate-500">陪审团计票：每人 1 票；等级仅用于展示</div>
+            <div class="mt-1 text-[11px] font-bold text-slate-500">陪审票权：{{ myRank?.voteWeight || 1 }} 票；有效业务奖励额外 +{{ myRank?.bonusPoints || 0 }} 分</div>
           </template>
         </div>
         
@@ -203,6 +208,7 @@ const openEditModal = () => {
       </div>
 
       <UserLevelProgress v-if="totalPoints !== null" :total-points="totalPoints" />
+      <LevelBenefitsPanel v-if="levelBenefits" :benefits="levelBenefits" />
     </section>
 
     <Teleport to="body">

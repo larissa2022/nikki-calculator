@@ -450,22 +450,31 @@ export type Database = {
           candidate_id: string
           created_at: string
           id: string
+          review_note: string | null
           user_id: string | null
           vote: string
+          vote_weight: number
+          voter_level: number
         }
         Insert: {
           candidate_id: string
           created_at?: string
           id?: string
+          review_note?: string | null
           user_id?: string | null
           vote: string
+          vote_weight?: number
+          voter_level?: number
         }
         Update: {
           candidate_id?: string
           created_at?: string
           id?: string
+          review_note?: string | null
           user_id?: string | null
           vote?: string
+          vote_weight?: number
+          voter_level?: number
         }
         Relationships: [
           {
@@ -562,11 +571,13 @@ export type Database = {
       }
       points_ledger: {
         Row: {
+          bonus_of: string | null
           correction_request_id: string | null
           created_at: string
           delta: number
           id: string
           jury_vote_id: string | null
+          level_snapshot: number | null
           occurred_at: string
           re_review_candidate_id: string | null
           reversal_of: string | null
@@ -576,11 +587,13 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          bonus_of?: string | null
           correction_request_id?: string | null
           created_at?: string
           delta: number
           id?: string
           jury_vote_id?: string | null
+          level_snapshot?: number | null
           occurred_at?: string
           re_review_candidate_id?: string | null
           reversal_of?: string | null
@@ -590,11 +603,13 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          bonus_of?: string | null
           correction_request_id?: string | null
           created_at?: string
           delta?: number
           id?: string
           jury_vote_id?: string | null
+          level_snapshot?: number | null
           occurred_at?: string
           re_review_candidate_id?: string | null
           reversal_of?: string | null
@@ -604,6 +619,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "points_ledger_bonus_of_fkey"
+            columns: ["bonus_of"]
+            isOneToOne: false
+            referencedRelation: "points_ledger"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "points_ledger_correction_request_id_fkey"
             columns: ["correction_request_id"]
@@ -908,12 +930,14 @@ export type Database = {
           clothes_id: string | null
           contributed_at: string | null
           contribution_rank: number | null
+          contributor_level: number | null
           display_name: string | null
         }
         Relationships: []
       }
       points_leaderboard_current_month: {
         Row: {
+          current_level: number | null
           display_name: string | null
           is_current_user: boolean | null
           leaderboard_rank: number | null
@@ -923,6 +947,7 @@ export type Database = {
       }
       points_leaderboard_last_month: {
         Row: {
+          current_level: number | null
           display_name: string | null
           is_current_user: boolean | null
           leaderboard_rank: number | null
@@ -932,6 +957,7 @@ export type Database = {
       }
       points_leaderboard_total: {
         Row: {
+          current_level: number | null
           display_name: string | null
           is_current_user: boolean | null
           leaderboard_rank: number | null
@@ -998,10 +1024,16 @@ export type Database = {
         Args: { p_clothes_id?: string; p_pending_ids: number[] }
         Returns: Json
       }
-      cast_jury_vote: {
-        Args: { p_candidate_id: string; p_vote: string }
-        Returns: Json
-      }
+      cast_jury_vote:
+        | { Args: { p_candidate_id: string; p_vote: string }; Returns: Json }
+        | {
+            Args: {
+              p_candidate_id: string
+              p_review_note: string
+              p_vote: string
+            }
+            Returns: Json
+          }
       complete_existing_clothes_from_pending: {
         Args: {
           p_category: string
@@ -1087,6 +1119,7 @@ export type Database = {
       get_jury_review_queue: { Args: never; Returns: Json }
       get_jury_review_queue_with_evidence: { Args: never; Returns: Json }
       get_my_correction_requests: { Args: never; Returns: Json }
+      get_my_level_benefits: { Args: never; Returns: Json }
       get_my_rejected_clothing_submissions: {
         Args: never
         Returns: {

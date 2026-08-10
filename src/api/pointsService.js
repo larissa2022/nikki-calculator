@@ -11,6 +11,14 @@ const LEADERBOARD_TABLES = {
 
 const DEFAULT_LEADERBOARD_PAGE_SIZE = 1000
 
+const levelForPoints = points => {
+  if (points >= 10000) return 4
+  if (points >= 5000) return 3
+  if (points >= 2000) return 2
+  if (points >= 500) return 1
+  return 0
+}
+
 export const normalizeLeaderboardRow = (row) => {
   const rank = Number(row?.leaderboard_rank)
   const points = Number(row?.points)
@@ -24,6 +32,9 @@ export const normalizeLeaderboardRow = (row) => {
     rank,
     displayName,
     points,
+    level: Number.isInteger(Number(row?.current_level))
+      ? Math.min(4, Math.max(0, Number(row.current_level)))
+      : levelForPoints(points),
     isCurrentUser: row?.is_current_user === true
   }
 }
@@ -39,6 +50,29 @@ export const fetchCurrentUserPoints = async (client) => {
   if (error) throw error
 
   return normalizeTotalPoints(data?.[0]?.total_points)
+}
+
+export const normalizeLevelBenefits = (data = {}) => ({
+  level: Math.min(4, Math.max(0, Number(data?.level) || 0)),
+  totalPoints: normalizeTotalPoints(data?.total_points),
+  bonusPerEvent: Math.max(0, Number(data?.bonus_per_event) || 0),
+  voteWeight: Math.max(1, Number(data?.vote_weight) || 1),
+  canSubmitReviewNote: data?.can_submit_review_note === true,
+  adminCandidateEligible: data?.admin_candidate_eligible === true,
+  pointsEntries: Array.isArray(data?.points_entries) ? data.points_entries : null,
+  contributions: Array.isArray(data?.contributions) ? data.contributions : null,
+  votes: Array.isArray(data?.votes) ? data.votes : null,
+  communityStats: Array.isArray(data?.community_stats) ? data.community_stats : null,
+  governanceStats: data?.governance_stats && typeof data.governance_stats === 'object'
+    ? data.governance_stats
+    : null
+})
+
+export const fetchMyLevelBenefits = async (client) => {
+  if (!client) throw new Error('缺少等级权益查询客户端')
+  const { data, error } = await client.rpc('get_my_level_benefits')
+  if (error) throw error
+  return normalizeLevelBenefits(data)
 }
 
 export const fetchPointsLeaderboard = async (
@@ -57,7 +91,7 @@ export const fetchPointsLeaderboard = async (
   while (true) {
     const { data, error } = await client
       .from(table)
-      .select('leaderboard_rank, display_name, points, is_current_user')
+      .select('leaderboard_rank, display_name, points, current_level, is_current_user')
       .order('leaderboard_rank', { ascending: true })
       .order('display_name', { ascending: true })
       .range(from, from + pageSize - 1)

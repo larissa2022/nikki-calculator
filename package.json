@@ -17,6 +17,8 @@
     "db:types:prod": "supabase gen types typescript --schema public --project-id fopyjewbsvusftpqbtml > src/types/supabase.ts",
     "db:types:local": "supabase gen types typescript --local --schema public > src/types/supabase.ts",
     "db:types:safe": "npm run db:check && npm run db:types:dev",
+    "db:push:local": "supabase migration up --local",
+    "db:reset:local": "supabase db reset --local",
     "db:push:dev": "npm run db:check && supabase db push",
     "verify:db": "npm run db:check && npm run db:types:dev && npm run build",
     "db:diff": "supabase db diff --schema public",

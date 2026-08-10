@@ -193,7 +193,7 @@ onMounted(load)
     </template>
 
     <div v-else-if="activeSection === 'candidates'" class="overflow-x-auto">
-      <table class="w-full text-left text-xs"><thead><tr class="border-b text-slate-400"><th class="p-2">服务月/顺序</th><th class="p-2">用户</th><th class="p-2">积分/行为</th><th class="p-2">结果</th></tr></thead><tbody><tr v-for="item in data.candidates" :key="`${item.service_month}-${item.candidate_order}`" class="border-b border-slate-50"><td class="p-2 font-bold">{{ item.service_month }} · #{{ item.candidate_order }}</td><td class="p-2">{{ item.display_name }}</td><td class="p-2">{{ item.frozen_points }} / {{ item.qualifying_action_count }}</td><td class="p-2">{{ item.skip_reason || '符合条件' }}</td></tr></tbody></table>
+      <table class="w-full text-left text-xs"><thead><tr class="border-b text-slate-400"><th class="p-2">服务月/顺序</th><th class="p-2">用户</th><th class="p-2">等级/积分/行为</th><th class="p-2">结果</th></tr></thead><tbody><tr v-for="item in data.candidates" :key="`${item.service_month}-${item.candidate_order}`" class="border-b border-slate-50"><td class="p-2 font-bold">{{ item.service_month }} · #{{ item.candidate_order }}</td><td class="p-2">{{ item.display_name }}</td><td class="p-2">Lv{{ item.level_at_snapshot ?? '-' }} · {{ item.frozen_points }} / {{ item.qualifying_action_count }}</td><td class="p-2">{{ item.skip_reason || '符合条件' }}</td></tr></tbody></table>
     </div>
 
     <div v-else class="space-y-3">

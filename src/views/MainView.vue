@@ -10,6 +10,8 @@ import PointsLeaderboard from '../components/PointsLeaderboard.vue'
 import CorrectionRequestBoard from '../components/CorrectionRequestBoard.vue'
 import JuryReviewBoard from '../components/JuryReviewBoard.vue'
 import UserProfile from '../components/UserProfile.vue'
+import AboutProject from '../components/AboutProject.vue'
+import DonationSupport from '../components/DonationSupport.vue'
 import { normalizeMainTabForSession, readMainTab, writeMainTab } from '../utils/navigationState'
 
 const props = defineProps({
@@ -126,7 +128,17 @@ watch(
         @refresh-data="emit('refresh-profile')" 
         @profile-updated="emit('profile-updated', $event)"
       />
+      <AboutProject v-if="currentTab === 'about'" @open-donate="switchTab('donate')" />
+      <DonationSupport v-if="currentTab === 'donate'" />
     </main>
+
+    <footer class="site-footer">
+      <span>奇迹暖暖极速搭配器将继续免费使用</span>
+      <nav aria-label="项目说明">
+        <button type="button" @click="switchTab('about')">关于项目</button>
+        <button type="button" @click="switchTab('donate')">打赏</button>
+      </nav>
+    </footer>
   </div>
 </template>
 
@@ -135,6 +147,11 @@ watch(
 header { text-align: center; margin-bottom: 25px; animation: slideDown 0.5s ease-out; }
 h1 { color: #f472b6; font-size: 24px; margin-bottom: 20px; font-weight: 900; letter-spacing: 1px; text-shadow: 0 2px 4px rgba(244, 114, 182, 0.2); }
 .tabs { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.site-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 28px; padding: 16px 4px 4px; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 10px; font-weight: 700; }
+.site-footer nav { display: flex; gap: 8px; }
+.site-footer button { border: 0; background: transparent; color: #7c3aed; font-size: 11px; font-weight: 900; cursor: pointer; }
+.site-footer button:hover { color: #db2777; }
+@media (max-width: 540px) { .site-footer { align-items: flex-start; flex-direction: column; } }
 .tabs button { background: rgba(255, 255, 255, 0.6); border: 2px solid #fbcfe8; padding: 10px 18px; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: bold; color: #db2777; transition: all 0.3s; }
 .tabs button.active { background: linear-gradient(135deg, #f472b6 0%, #d946ef 100%); color: white; border-color: transparent; box-shadow: 0 4px 15px rgba(244, 114, 182, 0.3); transform: translateY(-2px); }
 .tabs button:hover:not(.active) { background: #fdf2f8; transform: translateY(-1px); }

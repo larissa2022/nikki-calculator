@@ -101,7 +101,7 @@ with source_month as (
 insert into public.points_ledger (id, user_id, delta, source_type, source_id, occurred_at)
 select
   (pg_catalog.substr(h.hash,1,8)||'-'||pg_catalog.substr(h.hash,9,4)||'-'||pg_catalog.substr(h.hash,13,4)||'-'||pg_catalog.substr(h.hash,17,4)||'-'||pg_catalog.substr(h.hash,21,12))::uuid,
-  contributions.user_id, 1, 'clothing_contribution', contributions.id,
+  contributions.user_id, 400, 'clothing_contribution', contributions.id,
   contributions.source_created_at
 from contributions
 cross join lateral (select pg_catalog.md5('db15-ledger-' || contributions.id::text) as hash) h;
@@ -168,12 +168,12 @@ begin
   insert into private_db2.admin_rotation_candidates (
     service_month, source_month, user_id, frozen_points,
     qualifying_action_count, tie_break_at, candidate_order,
-    eligibility_status, skip_reason
+    eligibility_status, skip_reason, level_at_snapshot
   )
   select
     v_service_month, v_source_month,
     ('db150000-0000-4000-8000-' || pg_catalog.lpad(value::text, 12, '0'))::uuid,
-    10, 5, pg_catalog.now(), value - 4, 'eligible', null
+    10, 5, pg_catalog.now(), value - 4, 'eligible', null, 2
   from pg_catalog.generate_series(5, 7) as fixture(value);
 
   if private_db2.fill_monthly_admin_vacancies(v_service_month) <> 3 then
@@ -246,6 +246,20 @@ begin
           'db150000-0000-4000-8000-000000000004'::uuid
         )
     );
+  end if;
+  if exists (
+    select 1
+    from private_db2.admin_rotation_candidates
+    where service_month = v_service_month
+      and eligibility_status = 'eligible'
+      and level_at_snapshot < 2
+  ) or (
+    select level_at_snapshot
+    from private_db2.admin_rotation_candidates
+    where service_month = v_service_month
+      and user_id = 'db150000-0000-4000-8000-000000000004'::uuid
+  ) >= 2 then
+    raise exception 'DB15_ASSERT: Lv2 candidate boundary was not frozen correctly';
   end if;
   if (select candidate_order from private_db2.admin_rotation_candidates where service_month = v_service_month and user_id = 'db150000-0000-4000-8000-000000000005'::uuid)
     >= (select candidate_order from private_db2.admin_rotation_candidates where service_month = v_service_month and user_id = 'db150000-0000-4000-8000-000000000006'::uuid) then
