@@ -400,6 +400,160 @@ export type Database = {
           },
         ]
       }
+      feature_request_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          duplicate_of: string | null
+          event_type: string
+          feature_request_id: string
+          from_status: string | null
+          from_visibility: string | null
+          id: number
+          public_response: string | null
+          reason: string | null
+          to_status: string | null
+          to_visibility: string | null
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          duplicate_of?: string | null
+          event_type: string
+          feature_request_id: string
+          from_status?: string | null
+          from_visibility?: string | null
+          id?: never
+          public_response?: string | null
+          reason?: string | null
+          to_status?: string | null
+          to_visibility?: string | null
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          duplicate_of?: string | null
+          event_type?: string
+          feature_request_id?: string
+          from_status?: string | null
+          from_visibility?: string | null
+          id?: never
+          public_response?: string | null
+          reason?: string | null
+          to_status?: string | null
+          to_visibility?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_request_events_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feature_request_events_feature_request_id_fkey"
+            columns: ["feature_request_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_request_likes: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          feature_request_id: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          feature_request_id: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          feature_request_id?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_request_likes_feature_request_id_fkey"
+            columns: ["feature_request_id"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_requests: {
+        Row: {
+          content_fingerprint: string
+          created_at: string
+          description: string
+          duplicate_of: string | null
+          handled_at: string | null
+          handled_by: string | null
+          id: string
+          public_response: string | null
+          status: string
+          submitted_by: string | null
+          title: string
+          updated_at: string
+          visibility: string
+        }
+        Insert: {
+          content_fingerprint: string
+          created_at?: string
+          description: string
+          duplicate_of?: string | null
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          public_response?: string | null
+          status?: string
+          submitted_by?: string | null
+          title: string
+          updated_at?: string
+          visibility?: string
+        }
+        Update: {
+          content_fingerprint?: string
+          created_at?: string
+          description?: string
+          duplicate_of?: string | null
+          handled_at?: string | null
+          handled_by?: string | null
+          id?: string
+          public_response?: string | null
+          status?: string
+          submitted_by?: string | null
+          title?: string
+          updated_at?: string
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_requests_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "feature_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jury_admin_decisions: {
         Row: {
           admin_user_id: string | null
@@ -1137,6 +1291,7 @@ export type Database = {
       get_jury_review_queue: { Args: never; Returns: Json }
       get_jury_review_queue_with_evidence: { Args: never; Returns: Json }
       get_my_correction_requests: { Args: never; Returns: Json }
+      get_my_feature_requests: { Args: never; Returns: Json }
       get_my_level_benefits: { Args: never; Returns: Json }
       get_my_rejected_clothing_submissions: {
         Args: never
@@ -1180,7 +1335,22 @@ export type Database = {
       jury_scores_are_complete: { Args: { p_scores: Json }; Returns: boolean }
       leave_current_admin_term: { Args: never; Returns: boolean }
       list_admin_governance: { Args: never; Returns: Json }
+      list_feature_requests: {
+        Args: { p_filter?: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      list_feature_requests_for_admin: { Args: never; Returns: Json }
       list_low_risk_clothes_review_candidates: { Args: never; Returns: Json }
+      moderate_feature_request: {
+        Args: {
+          p_action: string
+          p_duplicate_of?: string
+          p_public_response?: string
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       normalize_known_clothing_tags: {
         Args: { p_tags: string }
         Returns: string
@@ -1214,6 +1384,10 @@ export type Database = {
       route_correction_request_to_jury: {
         Args: { p_request_id: string }
         Returns: string
+      }
+      set_feature_request_like: {
+        Args: { p_liked: boolean; p_request_id: string }
+        Returns: Json
       }
       submit_clothing_contribution: {
         Args: {
@@ -1255,6 +1429,10 @@ export type Database = {
         }
         Returns: Json
       }
+      submit_feature_request: {
+        Args: { p_description: string; p_title: string }
+        Returns: Json
+      }
       submit_jury_candidate: {
         Args: { p_payload: Json; p_re_review_item_id: string }
         Returns: Json
@@ -1281,6 +1459,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      withdraw_feature_request: {
+        Args: { p_request_id: string }
+        Returns: Json
       }
     }
     Enums: {

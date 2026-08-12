@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useAudit } from '../composables/useAudit'
 import UserManageBoard from '../components/UserManageBoard.vue'
 import CorrectionReviewBoard from '../components/CorrectionReviewBoard.vue'
+import FeatureRequestAdminBoard from '../components/FeatureRequestAdminBoard.vue'
 import AdminGovernanceBoard from '../components/AdminGovernanceBoard.vue'
 import { supabase } from '../api/supabase' // 🌟 新增这一行：引入数据库实例
 import ClothesEntryForm from '../components/ClothesEntryForm.vue'
@@ -183,6 +184,7 @@ const rejectSelectedPendingClothes = async () => {
         <button @click="activeTab = 'audit'" :class="activeTab === 'audit' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">👗 散件仲裁</button>
         <button @click="activeTab = 'suits'" :class="activeTab === 'suits' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📦 套装审核</button>
         <button @click="activeTab = 'corrections'" :class="activeTab === 'corrections' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📝 图鉴报错</button>
+        <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'suggestions'" :class="activeTab === 'suggestions' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">💡 优化建议</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'users'" :class="activeTab === 'users' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🛡️ 权限大盘</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'governance'" :class="activeTab === 'governance' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🗓️ 任期治理</button>
       </div>
@@ -340,6 +342,10 @@ const rejectSelectedPendingClothes = async () => {
 
     <div v-show="activeTab === 'corrections'">
       <CorrectionReviewBoard :suit-list="suitList" />
+    </div>
+
+    <div v-show="activeTab === 'suggestions'">
+      <FeatureRequestAdminBoard />
     </div>
 
     <div v-show="activeTab === 'governance' && isSuperAdminRole(currentUserRole)">

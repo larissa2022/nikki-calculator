@@ -13,6 +13,7 @@ import UserProfile from '../components/UserProfile.vue'
 import AboutProject from '../components/AboutProject.vue'
 import DonationSupport from '../components/DonationSupport.vue'
 import HomepageMonthlyThanks from '../components/HomepageMonthlyThanks.vue'
+import FeatureRequestBoard from '../components/FeatureRequestBoard.vue'
 import { normalizeMainTabForSession, readMainTab, writeMainTab } from '../utils/navigationState'
 
 const props = defineProps({
@@ -78,6 +79,7 @@ watch(
         <button :class="{ active: currentTab === 'wardrobe' }" @click="switchTab('wardrobe')">我的衣柜</button>
         <button :class="{ active: currentTab === 'suits' }" @click="switchTab('suits')">套装图鉴</button>
         <button :class="{ active: currentTab === 'contributors' }" @click="switchTab('contributors')">贡献名录</button>
+        <button :class="{ active: currentTab === 'suggestions' }" @click="switchTab('suggestions')">优化建议</button>
         <button v-if="currentUser" :class="{ active: currentTab === 'leaderboard' }" @click="switchTab('leaderboard')">积分排行</button>
         <button v-if="currentUser" :class="{ active: currentTab === 'corrections' }" @click="switchTab('corrections')">图鉴报错</button>
         <button v-if="currentUser" :class="{ active: currentTab === 'jury' }" @click="switchTab('jury')">陪审团</button>
@@ -106,6 +108,12 @@ watch(
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
       <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-catalog="emit('refresh-catalog')" />
       <ContributorGallery v-if="currentTab === 'contributors'" :wardrobe="fullWardrobeData" />
+      <FeatureRequestBoard
+        v-if="currentTab === 'suggestions'"
+        :key="currentUser?.id || 'guest'"
+        :is-logged-in="Boolean(currentUser)"
+        :user-id="currentUser?.id || ''"
+      />
       <PointsLeaderboard
         v-if="currentTab === 'leaderboard'"
         :key="currentUser?.id || 'guest'"
