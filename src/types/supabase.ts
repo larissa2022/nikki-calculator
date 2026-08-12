@@ -945,6 +945,14 @@ export type Database = {
         }
         Relationships: []
       }
+      homepage_monthly_thanks: {
+        Row: {
+          display_name: string | null
+          display_order: number | null
+          month_start: string | null
+        }
+        Relationships: []
+      }
       points_leaderboard_current_month: {
         Row: {
           current_level: number | null
