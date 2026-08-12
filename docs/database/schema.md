@@ -231,6 +231,19 @@
 | `admin_reject_jury_candidate(...)` | 只有超级管理员可独立永久驳回；已参投、候选提交者、原提交者或来源参与者均不得终审，旧轮次不能覆盖当前候选 |
 | 默认拒绝 | `jury_votes`、`jury_admin_decisions` 启用 RLS 且不给 authenticated 底表 policy / DML；四个公开 RPC 均为空 `search_path`、仅授权 authenticated / service_role，并在函数内复核身份和状态 |
 
+## DB-20 优化建议留言板与点赞排序
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `feature_requests` | 保存不可编辑建议、当前业务状态与可见性；作者 / 处理人账号删除后置空，事实匿名保留 |
+| `feature_request_likes` | 每个用户每个建议最多一条活动点赞；取消保存取消时间，再点赞新增活动事实，历史可重算 |
+| `feature_request_events` | 追加保存提交、计划中、技术无法实现、重新评估、撤回、重复归档、隐藏和恢复 |
+| 公开读取 | `list_feature_requests(...)` 向 anon / authenticated 返回正文、安全状态、公开说明、点赞数和时间，不返回作者身份 |
+| 本人能力 | 登录用户经 RPC 提交、点赞 / 取消、读取本人记录和撤回自己的待评估公开建议；每天北京时间最多 5 条 |
+| 治理能力 | 只有超级管理员经受控 RPC 读取内部作者 ID / 公开名和变更状态 / 可见性；普通任期管理员无权限 |
+| 默认拒绝 | 三张 public 底表启用并强制 RLS，anon / authenticated 无底表权限；客户端只执行精确授权 RPC |
+| Rollback | 已应用 migration 不重写；异常时以新 patch 撤销 RPC / 前端入口或修正实现，历史建议、点赞和事件默认保留 |
+
 ## DB-8 / DB-9 正式图鉴报错闭环
 
 | 对象 / 规则 | 当前契约 |

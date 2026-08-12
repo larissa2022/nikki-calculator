@@ -25,7 +25,7 @@ const createStorage = (initialValue = null) => {
 test('刷新后恢复每个合法的主页面位置', () => {
   const storage = createStorage()
 
-  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'leaderboard', 'corrections', 'jury', 'profile', 'about', 'donate']) {
+  for (const tab of ['calculator', 'import', 'wardrobe', 'suits', 'contributors', 'suggestions', 'leaderboard', 'corrections', 'jury', 'profile', 'about', 'donate']) {
     assert.equal(writeMainTab(tab, storage), tab)
     assert.equal(readMainTab(storage), tab)
   }
@@ -58,6 +58,7 @@ test('退出登录或未登录重进时受限页面回退到首页', () => {
 test('关于项目和打赏支持允许未登录访问', () => {
   assert.equal(normalizeMainTabForSession('about', false), 'about')
   assert.equal(normalizeMainTabForSession('donate', false), 'donate')
+  assert.equal(normalizeMainTabForSession('suggestions', false), 'suggestions')
 })
 
 test('打赏页使用裁切二维码且不提供 GitHub 跳转', () => {
