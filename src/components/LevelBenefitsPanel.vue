@@ -35,10 +35,31 @@ const formatMonth = value => String(value || '').slice(0, 7) || '未知月份'
     <header>
       <div>
         <p>等级功能权益</p>
-        <h4 id="level-benefits-title">当前 Lv{{ benefits.level }} 已生效</h4>
+        <h4 id="level-benefits-title">当前累计 Lv{{ benefits.level }}</h4>
       </div>
-      <span>权益以积分事件和投票发生前的等级为准</span>
+      <span>{{ benefits.monthlyLv4Experience
+        ? '累计等级不变；三项体验以资格有效期为准'
+        : '权益以积分事件和投票发生前的等级为准' }}</span>
     </header>
+
+    <div v-if="benefits.monthlyLv4Experience" class="experience-banner" role="status">
+      <div>
+        <strong>
+          {{ benefits.monthlyLv4Experience.temporarilyApplied
+            ? '上月并列第一，Lv4 三项体验生效中'
+            : '上月并列第一，体验资格已记录' }}
+        </strong>
+        <span>
+          依据 {{ formatMonth(benefits.monthlyLv4Experience.sourceMonth) }} 冻结榜，
+          {{ formatDate(benefits.monthlyLv4Experience.scheduledEndAt) }} 自动回收
+        </span>
+      </div>
+      <small>
+        {{ benefits.monthlyLv4Experience.temporarilyApplied
+          ? '仅含 +5 奖励、3 票票权和 Lv4 治理统计；累计等级与管理员资格不变'
+          : '当前累计 Lv4 不受体验资格到期影响；管理员资格仍独立计算' }}
+      </small>
+    </div>
 
     <div class="benefit-grid">
       <article><small>有效业务奖励</small><strong>额外 +{{ benefits.bonusPerEvent }} 分</strong></article>
@@ -112,6 +133,11 @@ header { display: flex; align-items: flex-end; justify-content: space-between; g
 header p { margin: 0 0 3px; color: #4f46e5; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 header h4 { margin: 0; color: #1e293b; font-size: 17px; font-weight: 900; }
 header > span { color: #64748b; font-size: 10px; font-weight: 700; text-align: right; }
+.experience-banner { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding: 12px 14px; border: 1px solid #c4b5fd; border-radius: 14px; background: linear-gradient(120deg, rgba(237,233,254,.95), rgba(254,249,195,.9)); }
+.experience-banner div { display: grid; gap: 3px; }
+.experience-banner strong { color: #5b21b6; font-size: 12px; font-weight: 900; }
+.experience-banner span { color: #6d28d9; font-size: 10px; font-weight: 700; }
+.experience-banner small { max-width: 290px; color: #64748b; font-size: 9px; font-weight: 800; text-align: right; }
 .benefit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .benefit-grid article { padding: 11px; border: 1px solid rgba(199, 210, 254, .8); border-radius: 12px; background: rgba(255,255,255,.84); }
 .benefit-grid small, .benefit-grid strong { display: block; }
@@ -129,6 +155,6 @@ summary { color: #334155; font-size: 11px; font-weight: 900; cursor: pointer; }
 .locked { padding: 10px 12px; border: 1px dashed #cbd5e1; border-radius: 11px; }
 .governance-summary { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; color: #64748b; font-size: 10px; }
 .governance-summary strong { color: #4338ca; }
-@media (max-width: 760px) { .benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { align-items: flex-start; flex-direction: column; } header > span { text-align: left; } }
+@media (max-width: 760px) { .benefit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } header, .experience-banner { align-items: flex-start; flex-direction: column; } header > span, .experience-banner small { text-align: left; } }
 @media (max-width: 480px) { .activity-list li { grid-template-columns: minmax(0,1fr) auto; } .activity-list time { grid-column: 1 / -1; } }
 </style>

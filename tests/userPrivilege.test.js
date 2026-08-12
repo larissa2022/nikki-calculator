@@ -29,7 +29,7 @@ test('等级本身不直接授予广告免除权', () => {
   assert.equal(getUserRankAndPrivilege(0).adFree, false)
 })
 
-test('当月榜首不在第一版自动获得 Lv4', () => {
+test('累计等级计算器不把月榜首体验改写为永久 Lv4', () => {
   assert.equal(getUserRankAndPrivilege(0).level, 0)
 })
 

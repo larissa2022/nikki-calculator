@@ -172,11 +172,11 @@
 | `private_db2.points_leaderboard_months` | 以北京时间自然月首日为主键，记录冻结时间与行数；空月份同样保留标记 |
 | `private_db2.points_leaderboard_monthly_snapshots` | 只保存目标月份、用户、冻结积分、dense rank 名次和冻结时间；用户删除时 `user_id` 置空 |
 | `private_db2.freeze_points_leaderboard_month(date)` | 仅 postgres 执行；只接受已结束自然月，事务 advisory lock 与月份唯一标记保证只冻结一次 |
-| `private_db2.freeze_previous_month_if_due(timestamptz)` | 仅 postgres 执行；每日 UTC 16:05 由 `pg_cron` 调用，只在北京时间每月 1 日冻结上月 |
+| `private_db2.freeze_previous_month_if_due(timestamptz)` | 仅 postgres 执行；每日 UTC 16:05 由 `pg_cron` 调用，只在北京时间每月 1 日冻结上月，并由 DB-19 在同一事务授予次月体验 |
 | `private_db2.last_month_points_leaderboard()` | 仅 authenticated 执行；积分与名次读取快照，名称和注销状态读取当前 profile / 用户事实 |
 | `public.points_leaderboard_last_month` | `security_invoker + security_barrier`；仅 authenticated SELECT，字段与 DB-13 榜单一致 |
 
-两张私有表均启用并强制 RLS，不向 anon、authenticated 或 service_role 授予底表权限。快照不保存展示名称，改名后显示新名称，账号删除后显示“已注销用户”。首次启用补冻最近一个已结束自然月；冻结后的积分流水变化不追改快照，也不自动授予首页鸣谢、广告免除或 Lv4 体验。
+两张私有表均启用并强制 RLS，不向 anon、authenticated 或 service_role 授予底表权限。快照不保存展示名称，改名后显示新名称，账号删除后显示“已注销用户”。首次启用补冻最近一个已结束自然月；冻结后的积分流水变化不追改快照。首页鸣谢与 Lv4 体验分别由 DB-18 / DB-19 独立读取冻结事实，广告免除仍未实现。
 
 ## DB-17 报错推翻原资料后的积分扣回
 
@@ -422,3 +422,10 @@
 - `get_my_level_benefits()`：Lv0 返回本人总积分，Lv1 增加本人流水，Lv2 增加本人贡献 / 投票和本月匿名统计，Lv3 扩展为最近 12 个月匿名统计，Lv4 增加匿名任期、低风险决定和积压统计。RPC 不返回其他用户 ID、邮箱、手机号或私密证据。
 - `clothing_contributors_public` 增加 `contributor_level`，排序仍只按既有贡献时间与名次；三个积分榜增加 `current_level`，不改变周期积分和名次。
 - `pending_clothes` 底表只允许用户读取本人申请、超级管理员读取全部并直接更新状态；普通管理员不再获得整表 RLS 能力。
+
+## DB-19 月榜首 Lv4 三项体验
+
+- `private_db2.monthly_lv4_experience_terms`：按服务月关联上月冻结榜第一名快照，保存冻结积分、北京时间起止与回收时间；同一快照每月只产生一条资格，账号删除后 `user_id` 置空但审计保留。表强制 RLS，客户端和 `service_role` 均无底表权限。
+- `private_db2.refresh_monthly_lv4_experiences(timestamptz)`：仅 owner 执行，事务 advisory lock 与唯一约束保证并列第一全授予且重复执行幂等；第二名和已注销账号跳过。DB-14 00:05 冻结入口在同一事务调用，首次启用补授当前次月剩余有效期。
+- 资格窗口只叠加三项：业务成功积分事件的 `level_snapshot = 4` 并追加 +5、首次陪审投票冻结 Lv4 / 3 票、`get_my_level_benefits()` 返回 Lv4 匿名治理统计。月底 00:00 后按窗口自然失效，下次刷新补记 `reclaimed_at`。
+- `get_my_level_benefits().level`、排行榜 `current_level`、复核意见门槛和管理员候选仍按累计积分等级；体验不写 `profiles`、`admin_terms` 或 `admin_rotation_candidates`。累计 Lv4 的资格保留审计，但到期不降低永久权益。
