@@ -64,7 +64,14 @@ test('等级权益 RPC 规范化分级数据', async () => {
           contributions: [],
           votes: [],
           community_stats: [],
-          governance_stats: null
+          governance_stats: null,
+          monthly_lv4_experience: {
+            source_month: '2026-07-01',
+            service_month: '2026-08-01',
+            starts_at: '2026-07-31T16:00:00Z',
+            scheduled_end_at: '2026-08-31T16:00:00Z',
+            temporarily_applied: true
+          }
         },
         error: null
       })
@@ -82,9 +89,18 @@ test('等级权益 RPC 规范化分级数据', async () => {
     contributions: [],
     votes: [],
     communityStats: [],
-    governanceStats: null
+    governanceStats: null,
+    monthlyLv4Experience: {
+      sourceMonth: '2026-07-01',
+      serviceMonth: '2026-08-01',
+      startsAt: '2026-07-31T16:00:00Z',
+      scheduledEndAt: '2026-08-31T16:00:00Z',
+      temporarilyApplied: true
+    }
   })
   assert.equal(normalizeLevelBenefits({ level: 99 }).level, 4)
+  assert.equal(normalizeLevelBenefits({}).monthlyLv4Experience, null)
+  assert.equal(normalizeLevelBenefits({ monthly_lv4_experience: {} }).monthlyLv4Experience, null)
 })
 
 const createLeaderboardClient = (expectedTable, pages) => ({

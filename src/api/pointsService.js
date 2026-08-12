@@ -19,6 +19,30 @@ const levelForPoints = points => {
   return 0
 }
 
+const normalizeMonthlyLv4Experience = (value) => {
+  if (!value || typeof value !== 'object') return null
+
+  const sourceMonth = String(value.source_month || '')
+  const serviceMonth = String(value.service_month || '')
+  const startsAt = String(value.starts_at || '')
+  const scheduledEndAt = String(value.scheduled_end_at || '')
+
+  if (!/^\d{4}-\d{2}-01$/.test(sourceMonth)
+    || !/^\d{4}-\d{2}-01$/.test(serviceMonth)
+    || Number.isNaN(Date.parse(startsAt))
+    || Number.isNaN(Date.parse(scheduledEndAt))) {
+    return null
+  }
+
+  return {
+    sourceMonth,
+    serviceMonth,
+    startsAt,
+    scheduledEndAt,
+    temporarilyApplied: value.temporarily_applied === true
+  }
+}
+
 export const normalizeLeaderboardRow = (row) => {
   const rank = Number(row?.leaderboard_rank)
   const points = Number(row?.points)
@@ -65,7 +89,8 @@ export const normalizeLevelBenefits = (data = {}) => ({
   communityStats: Array.isArray(data?.community_stats) ? data.community_stats : null,
   governanceStats: data?.governance_stats && typeof data.governance_stats === 'object'
     ? data.governance_stats
-    : null
+    : null,
+  monthlyLv4Experience: normalizeMonthlyLv4Experience(data?.monthly_lv4_experience)
 })
 
 export const fetchMyLevelBenefits = async (client) => {

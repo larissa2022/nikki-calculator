@@ -187,7 +187,7 @@ const openEditModal = () => {
           <div v-else-if="pointsLoadError" class="text-lg font-black text-slate-400">暂不可用</div>
           <template v-else>
             <div class="text-lg font-black text-slate-700">{{ myRank?.title }}</div>
-            <div class="mt-1 text-[11px] font-bold text-slate-500">陪审票权：{{ myRank?.voteWeight || 1 }} 票；有效业务奖励额外 +{{ myRank?.bonusPoints || 0 }} 分</div>
+            <div class="mt-1 text-[11px] font-bold text-slate-500">陪审票权：{{ levelBenefits?.voteWeight ?? myRank?.voteWeight ?? 1 }} 票；有效业务奖励额外 +{{ levelBenefits?.bonusPerEvent ?? myRank?.bonusPoints ?? 0 }} 分</div>
           </template>
         </div>
         
