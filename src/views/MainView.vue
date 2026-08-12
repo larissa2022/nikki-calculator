@@ -12,6 +12,7 @@ import JuryReviewBoard from '../components/JuryReviewBoard.vue'
 import UserProfile from '../components/UserProfile.vue'
 import AboutProject from '../components/AboutProject.vue'
 import DonationSupport from '../components/DonationSupport.vue'
+import HomepageMonthlyThanks from '../components/HomepageMonthlyThanks.vue'
 import { normalizeMainTabForSession, readMainTab, writeMainTab } from '../utils/navigationState'
 
 const props = defineProps({
@@ -99,6 +100,7 @@ watch(
     </div>
     
     <main>
+      <HomepageMonthlyThanks v-if="currentTab === 'calculator'" />
       <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
       <ImportZone v-if="currentTab === 'import'" :key="currentUser?.id || 'guest'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" :userId="currentUser?.id || ''" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
