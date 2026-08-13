@@ -1,14 +1,47 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
+import {
+  CALCULATOR_STATE,
+  resolveCalculatorState,
+  selectCalculatorClothes
+} from '../utils/calculatorState'
 
 // 1. 接收从 App.vue (父组件) 传过来的数据
 const props = defineProps({
   wardrobe: { type: Array, required: true }, // 完整图鉴数据
   ownedIds: { type: Array, required: true }, // 用户拥有的衣服 ID 列表
-  stages: { type: Array, required: true }    // 竞技场主题关卡数据
+  stages: { type: Array, required: true },   // 竞技场主题关卡数据
+  isLoggedIn: { type: Boolean, default: false },
+  isAuthInitialized: { type: Boolean, default: false },
+  wardrobeStatus: { type: String, default: 'idle' }
 })
 
+const emit = defineEmits(['open-import', 'retry-wardrobe'])
+
 const selectedTheme = ref('')
+
+const calculatorState = computed(() => resolveCalculatorState({
+  isAuthInitialized: props.isAuthInitialized,
+  isLoggedIn: props.isLoggedIn,
+  wardrobeStatus: props.wardrobeStatus,
+  ownedCount: props.ownedIds.length
+}))
+
+const stateMessage = computed(() => {
+  if (calculatorState.value === CALCULATOR_STATE.AUTH_LOADING) {
+    return { title: '正在确认登录状态…', detail: '确认后将使用你的衣柜进行计算。' }
+  }
+  if (calculatorState.value === CALCULATOR_STATE.WARDROBE_LOADING) {
+    return { title: '正在读取你的云端衣柜…', detail: '读取完成前不会使用全图鉴代替你的衣柜。' }
+  }
+  if (calculatorState.value === CALCULATOR_STATE.WARDROBE_ERROR) {
+    return { title: '暂时无法读取你的衣柜', detail: '请重新读取；仍然失败时可刷新页面后再试。' }
+  }
+  if (calculatorState.value === CALCULATOR_STATE.WARDROBE_EMPTY) {
+    return { title: '你的衣柜还是空的', detail: '先录入已拥有的服装，就能获得只属于你的高分搭配。' }
+  }
+  return null
+})
 
 // 🌟 监听：当关卡数据加载完毕时，自动选中第一个主题
 watch(() => props.stages, (newStages) => {
@@ -47,10 +80,16 @@ const outfitResult = computed(() => {
   const themeWeights = currentStage.weights
 
   // 算法优化：将数组转为 Set，底层使用哈希映射，实现 O(1) 极速查找
-  const wardrobeSet = new Set(props.ownedIds)
-  const availableClothes = wardrobeSet.size > 0 
-    ? props.wardrobe.filter(c => wardrobeSet.has(c.id))
-    : props.wardrobe
+  const availableClothes = selectCalculatorClothes({
+    wardrobe: props.wardrobe,
+    ownedIds: props.ownedIds,
+    isLoggedIn: props.isLoggedIn,
+    calculatorState: calculatorState.value
+  })
+
+  if (availableClothes.length === 0) {
+    return { items: [], totalScore: 0, penaltyRate: 100, accCount: 0 }
+  }
 
   // 计算每件衣服的加权分数
   const scoredClothes = availableClothes.map(clothes => {
@@ -131,6 +170,22 @@ const outfitResult = computed(() => {
 
 <template>
   <div class="calculator-module">
+    <div v-if="stateMessage" class="calculator-state" role="status">
+      <strong>{{ stateMessage.title }}</strong>
+      <p>{{ stateMessage.detail }}</p>
+      <button
+        v-if="calculatorState === CALCULATOR_STATE.WARDROBE_EMPTY"
+        type="button"
+        @click="emit('open-import')"
+      >去录入衣柜</button>
+      <button
+        v-else-if="calculatorState === CALCULATOR_STATE.WARDROBE_ERROR"
+        type="button"
+        @click="emit('retry-wardrobe')"
+      >重新读取衣柜</button>
+    </div>
+
+    <template v-else>
     <div class="control-panel">
       <label>选择竞技场主题：</label>
       <select v-model="selectedTheme">
@@ -170,6 +225,7 @@ const outfitResult = computed(() => {
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -179,6 +235,10 @@ const outfitResult = computed(() => {
    ========================================== */
 .calculator-module { animation: fadeIn 0.4s ease; }
 .control-panel, .result-panel { background: #fff; padding: 25px; border-radius: 16px; box-shadow: 0 10px 25px rgba(124,58,237,0.05); margin-bottom: 25px; border: 1px solid #f3f4f6; }
+.calculator-state { display: grid; gap: 8px; padding: 24px; border: 1px solid #fbcfe8; border-radius: 16px; background: #fff; color: #475569; text-align: center; }
+.calculator-state strong { color: #be185d; font-size: 18px; }
+.calculator-state p { margin: 0; font-size: 13px; line-height: 1.7; }
+.calculator-state button { justify-self: center; margin-top: 4px; padding: 10px 16px; border: 0; border-radius: 12px; background: linear-gradient(135deg, #f472b6, #d946ef); color: #fff; font-weight: 900; cursor: pointer; }
 
 /* ==========================================
    🏆 2. 顶部分数看板

@@ -25,13 +25,14 @@ const props = defineProps({
   userQuota: Number,
   fullWardrobeData: Array, 
   myWardrobeIds: Array, 
+  wardrobeSyncStatus: { type: String, default: 'idle' },
   stagesData: Array, 
   isLoading: Boolean,
   loadingDebugMessage: String,
   cloudSaveNotice: Object
 })
 
-const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog'])
+const emit = defineEmits(['open-login', 'go-admin', 'update:ownedIds', 'save-cloud', 'refresh-profile', 'profile-updated', 'refresh-catalog', 'retry-wardrobe'])
 const currentTab = ref(normalizeMainTabForSession(
   readMainTab(),
   Boolean(props.currentUser),
@@ -103,7 +104,17 @@ watch(
     
     <main>
       <HomepageMonthlyThanks v-if="currentTab === 'calculator'" />
-      <Calculator v-if="currentTab === 'calculator'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :stages="stagesData" />
+      <Calculator
+        v-if="currentTab === 'calculator'"
+        :wardrobe="fullWardrobeData"
+        :ownedIds="myWardrobeIds"
+        :stages="stagesData"
+        :isLoggedIn="Boolean(currentUser)"
+        :isAuthInitialized="authInitialized"
+        :wardrobeStatus="wardrobeSyncStatus"
+        @open-import="switchTab('import')"
+        @retry-wardrobe="emit('retry-wardrobe')"
+      />
       <ImportZone v-if="currentTab === 'import'" :key="currentUser?.id || 'guest'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :quota="userQuota" :isLoggedIn="!!currentUser" :userId="currentUser?.id || ''" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-profile="emit('refresh-profile')" />
       <WardrobeGrid v-if="currentTab === 'wardrobe'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud')" />
       <SuitGallery v-if="currentTab === 'suits'" :wardrobe="fullWardrobeData" :ownedIds="myWardrobeIds" :isLoggedIn="!!currentUser" @update:ownedIds="emit('update:ownedIds', $event)" @save-cloud="emit('save-cloud', $event)" @refresh-catalog="emit('refresh-catalog')" />
