@@ -10,7 +10,7 @@ import LowRiskAdminView from './views/LowRiskAdminView.vue'
 
 // 🌟 1. 核心修复：在这里把 userProfile 提取出来
 const { currentUser, userProfile, adminCapabilities, isAdmin, isAuthInitialized, userQuota, initAuth, fetchProfile } = useAuth()
-const { fullWardrobeData, myWardrobeIds, stagesData, isLoading, loadingDebugMessage, loadData, syncWardrobeFromCloud, saveWardrobeToCloud } = useWardrobe()
+const { fullWardrobeData, myWardrobeIds, wardrobeSyncStatus, stagesData, isLoading, loadingDebugMessage, loadData, syncWardrobeFromCloud, resetWardrobeSession, saveWardrobeToCloud } = useWardrobe()
 
 const currentMode = ref('main') 
 const isAuthModalOpen = ref(false)
@@ -28,8 +28,8 @@ const showCloudSaveNotice = (type, message) => {
 watch(currentUser, (newUser, previousUser) => {
   if (newUser?.id !== previousUser?.id) currentMode.value = 'main'
   if (newUser) syncWardrobeFromCloud(newUser.id)
-  else myWardrobeIds.value = []
-})
+  else resetWardrobeSession()
+}, { flush: 'sync' })
 
 onMounted(() => {
   initAuth().catch(err => console.error('初始化登录状态失败:', err))
@@ -50,6 +50,10 @@ const handleRefreshCatalog = async () => {
   if (currentUser.value) {
     await syncWardrobeFromCloud(currentUser.value.id)
   }
+}
+
+const handleRetryWardrobe = () => {
+  if (currentUser.value?.id) void syncWardrobeFromCloud(currentUser.value.id)
 }
 
 const handleProfileUpdated = (updatedProfile) => {
@@ -86,6 +90,7 @@ const handleProfileUpdated = (updatedProfile) => {
       :userQuota="userQuota"
       :fullWardrobeData="fullWardrobeData"
       :myWardrobeIds="myWardrobeIds"
+      :wardrobeSyncStatus="wardrobeSyncStatus"
       :stagesData="stagesData"
       :isLoading="isLoading"
       :loadingDebugMessage="loadingDebugMessage"
@@ -97,6 +102,7 @@ const handleProfileUpdated = (updatedProfile) => {
       @refresh-profile="fetchProfile"
       @profile-updated="handleProfileUpdated"
       @refresh-catalog="handleRefreshCatalog"
+      @retry-wardrobe="handleRetryWardrobe"
     />
     </div>
 </template>

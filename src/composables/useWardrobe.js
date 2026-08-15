@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { supabase } from '../api/supabase'
+import { createLatestIdentityRequestGuard } from '../utils/latestIdentityRequest'
 
 const SUPABASE_PAGE_SIZE = 1000
 const SUPABASE_PAGE_TIMEOUT_MS = 8000
@@ -245,11 +246,14 @@ const getFromLocal = async (key) => {
 export function useWardrobe() {
   const fullWardrobeData = ref([])
   const myWardrobeIds = ref([])
+  const wardrobeSyncStatus = ref('idle')
+  const wardrobeSyncError = ref('')
   const stagesData = ref([])
   const isLoading = ref(false)
   const loadingDebugMessage = ref('')
   const isSaving = ref(false) // 🌟 1. 新增：防抖与防误触的全局锁
   const debugEnabled = isDebugMode()
+  const wardrobeRequestGuard = createLatestIdentityRequestGuard()
 
   const setLoadingDebug = (message) => {
     if (debugEnabled) loadingDebugMessage.value = message || ''
@@ -352,7 +356,17 @@ export function useWardrobe() {
 
   // 2. 从云端同步我的衣柜
   const syncWardrobeFromCloud = async (userId) => {
-    if (!userId) return
+    myWardrobeIds.value = []
+    wardrobeSyncError.value = ''
+
+    if (!userId) {
+      wardrobeSyncStatus.value = 'idle'
+      return
+    }
+
+    wardrobeSyncStatus.value = 'loading'
+    const request = wardrobeRequestGuard.begin(userId)
+    const isCurrentRequest = () => wardrobeRequestGuard.isCurrent(request, userId)
     try {
       const { data, error } = await supabase
         .from('user_wardrobes')
@@ -361,13 +375,24 @@ export function useWardrobe() {
         .maybeSingle()
 
       if (error && error.code !== 'PGRST116') throw error
-      
-      if (data && data.owned_clothes) {
-        myWardrobeIds.value = normalizeOwnedIds(data.owned_clothes)
-      }
+      if (!isCurrentRequest()) return
+
+      myWardrobeIds.value = normalizeOwnedIds(data?.owned_clothes)
+      wardrobeSyncStatus.value = 'ready'
     } catch (err) {
+      if (!isCurrentRequest()) return
       console.error("☁️ 从云端同步衣柜失败:", err.message)
+      myWardrobeIds.value = []
+      wardrobeSyncError.value = err?.message || '衣柜读取失败'
+      wardrobeSyncStatus.value = 'error'
     }
+  }
+
+  const resetWardrobeSession = () => {
+    wardrobeRequestGuard.invalidate()
+    myWardrobeIds.value = []
+    wardrobeSyncStatus.value = 'idle'
+    wardrobeSyncError.value = ''
   }
 
   // 3. 🌟 将我的衣柜存入云端 (重构为：悲观更新安全版)
@@ -411,6 +436,9 @@ export function useWardrobe() {
         )
 
       if (error) throw error
+
+      wardrobeSyncStatus.value = 'ready'
+      wardrobeSyncError.value = ''
       
       // 🛡️ 防御 3：只有数据库明确没报错，才允许前台数组更新！！！
       if (pendingIds) {
@@ -429,6 +457,8 @@ export function useWardrobe() {
   return {
     fullWardrobeData,
     myWardrobeIds,
+    wardrobeSyncStatus,
+    wardrobeSyncError,
     stagesData,
     isLoading,
     loadingDebugMessage,
@@ -436,6 +466,7 @@ export function useWardrobe() {
     myWardrobeSet,
     loadData,
     syncWardrobeFromCloud,
+    resetWardrobeSession,
     saveWardrobeToCloud
   }
 }
