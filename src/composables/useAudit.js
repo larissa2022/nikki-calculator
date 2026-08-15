@@ -441,8 +441,8 @@ export function useAudit() {
         }
     }
 
-    const approvePendingSuit = async (suitName) => {
-        await adminService.approveSuit(suitName)
+    const approvePendingSuit = async (suitName, options) => {
+        await adminService.approveSuit(suitName, options)
         await fetchAllData()
         await fetchSuits()
     }

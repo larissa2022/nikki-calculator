@@ -5,7 +5,6 @@ import UserManageBoard from '../components/UserManageBoard.vue'
 import CorrectionReviewBoard from '../components/CorrectionReviewBoard.vue'
 import FeatureRequestAdminBoard from '../components/FeatureRequestAdminBoard.vue'
 import AdminGovernanceBoard from '../components/AdminGovernanceBoard.vue'
-import { supabase } from '../api/supabase' // 🌟 新增这一行：引入数据库实例
 import ClothesEntryForm from '../components/ClothesEntryForm.vue'
 import { isSuperAdminRole } from '../utils/roles'
 const emit = defineEmits(['back-to-main'])
@@ -68,17 +67,11 @@ const auditSubmitLoadingText = computed(() => (
 // 🌟 2. 新增：套装申请列表的去重与热度统计
 const uniquePendingSuits = computed(() => {
   if (!pendingSuitsList.value) return []
-  const map = new Map()
-  pendingSuitsList.value.forEach(suit => {
-    // 利用套装名称作为唯一标识进行去重归类
-    if (!map.has(suit.name)) {
-      map.set(suit.name, { ...suit, count: 1 })
-    } else {
-      map.get(suit.name).count++
-    }
-  })
-  // 按提交申请的人数降序排列，越多人申请的套装越靠前
-  return Array.from(map.values()).sort((a, b) => b.count - a.count)
+  return pendingSuitsList.value.map(suit => ({
+    name: suit.name,
+    count: Number(suit.request_count || 0),
+    created_at: suit.first_created_at
+  }))
 })
 // 🌟 新增：极速顺手创建套装逻辑
 const quickCreateSuit = async (newSuitName) => {
@@ -87,27 +80,15 @@ const quickCreateSuit = async (newSuitName) => {
   if (!cleanName) return
 
   try {
-    // 1. 直接往数据库正规军库里插入新套装
-    const { data, error } = await supabase
-      .from('suits')
-      .insert([{ name: cleanName }])
-      .select()
-      .single()
-      
-    if (error && error.code !== '23505') throw error // 忽略可能存在的同名并发错误
+    // 统一由超级管理员受控 RPC 原子写入正式套装并收口同名待审申请。
+    await approvePendingSuit(cleanName, { allowWithoutPending: true })
     
     alert(`✅ 套装《${cleanName}》已秒建成功！`)
-    
-    // 2. 重新拉取全局套装列表，让刚才建的套装生效
-    await fetchSuits() 
-    
-    // 3. 自动帮你把新建的套装填入当前的审核表单中！
+
+    // 自动帮你把新建的套装填入当前的审核表单中。
     const newlyCreated = suitList.value.find(s => s.name === cleanName)
     if (newlyCreated) {
       selectSuit(newlyCreated)
-    } else if (data) {
-      // 兜底：如果刚插入还没来得及同步，直接用插入返回的数据
-      selectSuit(data)
     }
     
   } catch (err) {
@@ -325,7 +306,7 @@ const rejectSelectedPendingClothes = async () => {
           <div v-for="suit in uniquePendingSuits" :key="suit.name" class="flex flex-col sm:flex-row justify-between sm:items-center bg-slate-50 border border-slate-100 p-4 rounded-xl gap-3">
             <div>
               <div class="font-black text-slate-700 text-lg flex items-center gap-2">《{{ suit.name }}》 <span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded">{{ suit.count }} 人申请</span></div>
-              <div class="text-xs text-slate-400 font-bold mt-1">首次申请时间: {{ new Date(suit.created_at).toLocaleString() }}</div>
+              <div class="text-xs text-slate-400 font-bold mt-1">首次申请时间: {{ suit.created_at ? new Date(suit.created_at).toLocaleString() : '未知' }}</div>
             </div>
             <div class="flex gap-2 shrink-0">
               <button @click="rejectPendingSuit(suit.name)" class="px-4 py-2 bg-white border border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-200 font-bold text-sm rounded-lg transition-colors">驳回</button>

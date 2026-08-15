@@ -99,9 +99,11 @@ export const adminService = {
     async getPendingData() {
         const [clothesRes, suitsRes, contribRes] = await Promise.all([
             supabase.from('pending_clothes').select('*, suits(name)').eq('status', 'pending').order('id', { ascending: false }),
-            supabase.from('pending_suits').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+            supabase.rpc('list_pending_suits_for_review'),
             supabase.from('pending_clothes').select('submitted_by').eq('status', 'approved')
         ]);
+
+        if (suitsRes.error) throw new Error('获取套装审核队列失败: ' + suitsRes.error.message)
 
         // 🌟 修复：取代原先脆弱的可选链操作，使用前置结构判断
         const countsMap = {};
@@ -143,31 +145,16 @@ export const adminService = {
         return true;
     },
 
-    async approveSuit(name) {
+    async approveSuit(name, { allowWithoutPending = false } = {}) {
         const cleanName = name?.trim()
         if (!cleanName) throw new Error('套装名称不能为空')
 
-        const { error: insertErr } = await supabase
-            .from('suits')
-            .upsert(
-                [{ name: cleanName }],
-                { onConflict: 'name', ignoreDuplicates: true }
-            )
-
-        if (insertErr) {
-            throw new Error('写入套装库失败: ' + insertErr.message)
-        }
-
-        const { error: delErr } = await supabase
-            .from('pending_suits')
-            .delete()
-            .eq('name', cleanName)
-
-        if (delErr) {
-            throw new Error('清理待办套装失败: ' + delErr.message)
-        }
-
-        return true
+        const { data, error } = await supabase.rpc('review_pending_suit', {
+            p_name: cleanName,
+            p_decision: allowWithoutPending ? 'create' : 'approve'
+        })
+        if (error) throw new Error('批准套装失败: ' + error.message)
+        return data
     },
 
     // 6. 驳回当前选中的服装申请
@@ -193,13 +180,12 @@ export const adminService = {
         const cleanName = name?.trim()
         if (!cleanName) throw new Error('套装名称不能为空')
 
-        const { error } = await supabase
-            .from('pending_suits')
-            .update({ status: 'rejected' })
-            .eq('name', cleanName)
-
-        if (error) throw error
-        return true
+        const { data, error } = await supabase.rpc('review_pending_suit', {
+            p_name: cleanName,
+            p_decision: 'reject'
+        })
+        if (error) throw new Error('驳回套装失败: ' + error.message)
+        return data
     },
 
     async findClothesByNameCategory(name, category) {

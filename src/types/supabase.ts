@@ -1341,6 +1341,14 @@ export type Database = {
       }
       list_feature_requests_for_admin: { Args: never; Returns: Json }
       list_low_risk_clothes_review_candidates: { Args: never; Returns: Json }
+      list_pending_suits_for_review: {
+        Args: never
+        Returns: {
+          first_created_at: string
+          name: string
+          request_count: number
+        }[]
+      }
       moderate_feature_request: {
         Args: {
           p_action: string
@@ -1375,6 +1383,10 @@ export type Database = {
           p_reason?: string
           p_representative_pending_id: number
         }
+        Returns: Json
+      }
+      review_pending_suit: {
+        Args: { p_decision: string; p_name: string }
         Returns: Json
       }
       revoke_admin_candidate_exclusion: {

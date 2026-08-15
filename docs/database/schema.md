@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-17，不能作为这些对象的当前事实。2026-08-10 已在 development 应用 DB-17 报错推翻原资料后的积分扣回；相关列、函数、触发器、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-08-15 已在 development 应用 DB-21 公开核心表与套装审核权限收口；目标 RLS、grants、RPC、索引、角色矩阵、并发与事务回滚已通过 live catalog、fixture、真实 Data API 会话、Advisor 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -244,6 +244,19 @@
 | 默认拒绝 | 三张 public 底表启用并强制 RLS，anon / authenticated 无底表权限；客户端只执行精确授权 RPC |
 | Rollback | 已应用 migration 不重写；异常时以新 patch 撤销 RPC / 前端入口或修正实现，历史建议、点赞和事件默认保留 |
 
+## DB-21 公开核心表与套装审核权限收口
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `stages` | 启用并强制 RLS；anon / authenticated 仅有 SELECT，匿名高分计算继续读取；客户端没有 INSERT / UPDATE / DELETE / TRUNCATE |
+| `suits` | 启用并强制 RLS；anon / authenticated 仅有 SELECT，套装图鉴、衣柜录入、提交、陪审与报错继续读取；正式套装不允许客户端直接写 |
+| `pending_suits` | 启用并强制 RLS；anon 无表权限；authenticated 只读本人记录，并且只能插入 `name / submitted_by`，RLS 强制本人、非匿名登录、`pending` 默认状态与规范名称 |
+| `list_pending_suits_for_review()` | 仅超级管理员返回按名称聚合的待审队列；普通任期管理员和普通用户均由函数内身份校验拒绝 |
+| `review_pending_suit(text,text)` | 仅超级管理员批准 / 驳回；按名称事务 advisory lock 串行，批准时正式套装写入与全部同名 pending 状态一次提交，重复及并发调用幂等；服装仲裁秒建使用显式 `create` 动作，只有从未出现同名审核历史时可无 pending 创建 |
+| 受信维护 | `service_role` 对 stages / suits 保留 SELECT / INSERT / UPDATE / DELETE，对 pending_suits 仅保留 SELECT / INSERT / UPDATE；客户端角色不继承这些权限 |
+| 索引 | `idx_pending_suits_review_queue(status,name,created_at)` 支撑审核队列，`idx_pending_suits_submitted_by(submitted_by)` 覆盖本人读取与外键 |
+| Rollback | 已应用 migration 不重写；异常时新增 patch 停用审核入口并修正 RPC，误封先恢复 stages / suits 最小 SELECT，不恢复客户端整表写，pending 与审核状态保留 |
+
 ## DB-8 / DB-9 正式图鉴报错闭环
 
 | 对象 / 规则 | 当前契约 |
@@ -344,7 +357,8 @@
 | idx_clothes_suit_id | index | clothes.suit_id |
 | idx_pending_clothes_submitted_by | index | pending_clothes.submitted_by，用于按提交人执行 RLS 查询 |
 | idx_pending_clothes_status | index | pending_clothes.status |
-| idx_pending_suits_status | index | pending_suits.status |
+| idx_pending_suits_review_queue | index | pending_suits.status + name + created_at，覆盖超级管理员待审队列 |
+| idx_pending_suits_submitted_by | index | pending_suits.submitted_by，覆盖本人 RLS 读取与外键 |
 | idx_profiles_username | index | profiles.username |
 | idx_suits_name | index | suits.name |
 
@@ -385,6 +399,8 @@
 - correction_requests（DB-8 默认拒绝，无 policy）
 - pending_clothes
 - pending_suits
+- stages
+- suits
 - points_ledger（DB-1 默认拒绝，无 policy）
 - profiles
 - re_review_candidates
@@ -412,10 +428,10 @@
 - DB-8 增强 fixture 已在 development 通过并 rollback 至 0 行；live catalog 确认 3 个外键均有索引、两个 `SECURITY DEFINER` RPC 均为空 `search_path` 且 anon 无执行权限，service_role 仅保留 SELECT / INSERT / UPDATE。原生 Advisor 命令受直连传输错误影响未返回，已用相同 catalog 检查逐项回读。
 - DB-11 fixture 已在 development 通过并 `ROLLBACK`；live catalog 确认私有 bucket、路径约束与索引、三条 Storage policy、专用提交和陪审队列 RPC、旧入口撤权及 `private` helper 的空 `search_path`。Performance Advisor 未发现 DB-11 新问题；Security Advisor 接口在补丁后连续传输失败，已保留为未取得的远端检查结果，未用 catalog 回读冒充 Advisor 通过。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
-- Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
+- DB-21 已消除 `stages`、`suits` 的 `rls_disabled_in_public` ERROR；目标三表均强制 RLS，公开核心表保持最小 SELECT，pending 只开放本人 SELECT 与受保护列 INSERT。两个受控 `SECURITY DEFINER` RPC 的 authenticated 可执行 WARN 为有意公开面，函数内复核真实登录与超级管理员身份；Security / Performance 均为 0 ERROR。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
 - 当前 `profiles.role` 为 `text`，并使用 `user`、`admin`、`super_admin` 字符串区分角色；该设计存在非法值、拼写错误和权限判断不一致风险。后续数据库开发应评估迁移为数字角色等级，例如 `0` 普通用户、`1` 普通管理员、`2` 超级管理员，并由前端 option / 常量表做展示映射。
-- `pending_suits` 和 `app_errors` 仍有 Advisor 提示的宽松 policy；不在 DB-0 范围，后续应单独审查。
+- `pending_suits` 旧宽松 policy 已由 DB-21 移除；`app_errors` 仍属后续独立安全事项。
 ## DB-15 普通管理员月度轮换
 
 - `admin_terms`：普通管理员月度、手动和旧管理员过渡任期的唯一权限事实；按起止时间和状态实时复核。
