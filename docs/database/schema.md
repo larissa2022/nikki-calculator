@@ -257,6 +257,8 @@
 | 索引 | `idx_pending_suits_review_queue(status,name,created_at)` 支撑审核队列，`idx_pending_suits_submitted_by(submitted_by)` 覆盖本人读取与外键 |
 | Rollback | 已应用 migration 不重写；异常时新增 patch 停用审核入口并修正 RPC，误封先恢复 stages / suits 最小 SELECT，不恢复客户端整表写，pending 与审核状态保留 |
 
+以上表格记录当前 development 已应用事实，不代表社区共治 V2.1 已完成。2026-08-30 冻结的目标是在不开放底表直写的前提下，为当前有效任期普通管理员提供“图鉴管理”入口与套装 2 人同结论共签，并保留超级管理员单独执行和纠错权；实现只能新增前向 patch，完成前目标 PR 不得合并。
+
 ## DB-8 / DB-9 正式图鉴报错闭环
 
 | 对象 / 规则 | 当前契约 |
