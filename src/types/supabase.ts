@@ -318,6 +318,113 @@ export type Database = {
           },
         ]
       }
+      community_admin_action_signatures: {
+        Row: {
+          action_id: string
+          admin_term_id: string | null
+          signature_source: string
+          signed_at: string
+          signer_user_id: string
+        }
+        Insert: {
+          action_id: string
+          admin_term_id?: string | null
+          signature_source: string
+          signed_at?: string
+          signer_user_id: string
+        }
+        Update: {
+          action_id?: string
+          admin_term_id?: string | null
+          signature_source?: string
+          signed_at?: string
+          signer_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_admin_action_signatures_action_id_fkey"
+            columns: ["action_id"]
+            isOneToOne: false
+            referencedRelation: "community_admin_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_admin_action_signatures_admin_term_id_fkey"
+            columns: ["admin_term_id"]
+            isOneToOne: false
+            referencedRelation: "admin_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_admin_actions: {
+        Row: {
+          action_type: string
+          corrects_action_id: string | null
+          created_at: string
+          executed_at: string | null
+          executed_by: string | null
+          expires_at: string
+          id: string
+          payload: Json
+          proposal_key: string
+          proposed_by: string | null
+          reason: string
+          required_signatures: number
+          result: Json | null
+          status: string
+          target_key: string
+          target_record_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          corrects_action_id?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          expires_at?: string
+          id?: string
+          payload: Json
+          proposal_key: string
+          proposed_by?: string | null
+          reason: string
+          required_signatures: number
+          result?: Json | null
+          status?: string
+          target_key: string
+          target_record_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          corrects_action_id?: string | null
+          created_at?: string
+          executed_at?: string | null
+          executed_by?: string | null
+          expires_at?: string
+          id?: string
+          payload?: Json
+          proposal_key?: string
+          proposed_by?: string | null
+          reason?: string
+          required_signatures?: number
+          result?: Json | null
+          status?: string
+          target_key?: string
+          target_record_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_admin_actions_corrects_action_id_fkey"
+            columns: ["corrects_action_id"]
+            isOneToOne: false
+            referencedRelation: "community_admin_actions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       correction_requests: {
         Row: {
           accepted_patch: Json | null
@@ -558,6 +665,7 @@ export type Database = {
         Row: {
           admin_user_id: string | null
           candidate_id: string
+          community_action_id: string | null
           created_at: string
           decision: string
           id: string
@@ -567,6 +675,7 @@ export type Database = {
         Insert: {
           admin_user_id?: string | null
           candidate_id: string
+          community_action_id?: string | null
           created_at?: string
           decision: string
           id?: string
@@ -576,6 +685,7 @@ export type Database = {
         Update: {
           admin_user_id?: string | null
           candidate_id?: string
+          community_action_id?: string | null
           created_at?: string
           decision?: string
           id?: string
@@ -588,6 +698,13 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: true
             referencedRelation: "re_review_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jury_admin_decisions_community_action_id_fkey"
+            columns: ["community_action_id"]
+            isOneToOne: false
+            referencedRelation: "community_admin_actions"
             referencedColumns: ["id"]
           },
           {
@@ -1344,9 +1461,26 @@ export type Database = {
       list_pending_suits_for_review: {
         Args: never
         Returns: {
+          approve_reason: string
+          approve_signature_count: number
           first_created_at: string
+          my_decision: string
           name: string
+          reject_reason: string
+          reject_signature_count: number
           request_count: number
+        }[]
+      }
+      list_rejected_jury_items_for_reopen: {
+        Args: never
+        Returns: {
+          can_reopen: boolean
+          candidate_id: string
+          clothes_name: string
+          re_review_item_id: string
+          rejected_at: string
+          rejected_reason: string
+          reopen_signature_count: number
         }[]
       }
       moderate_feature_request: {
@@ -1368,6 +1502,10 @@ export type Database = {
         Returns: string
       }
       profile_role_to_level: { Args: { p_role: string }; Returns: number }
+      reopen_rejected_jury_candidate: {
+        Args: { p_candidate_id: string; p_reason: string }
+        Returns: Json
+      }
       review_correction_request: {
         Args: {
           p_accepted_value?: Json
@@ -1386,7 +1524,7 @@ export type Database = {
         Returns: Json
       }
       review_pending_suit: {
-        Args: { p_decision: string; p_name: string }
+        Args: { p_decision: string; p_name: string; p_reason?: string }
         Returns: Json
       }
       revoke_admin_candidate_exclusion: {
@@ -1399,6 +1537,17 @@ export type Database = {
       }
       set_feature_request_like: {
         Args: { p_liked: boolean; p_request_id: string }
+        Returns: Json
+      }
+      submit_admin_governance_action: {
+        Args: {
+          p_action_type: string
+          p_ends_at?: string
+          p_reason?: string
+          p_starts_at?: string
+          p_target_record_id?: string
+          p_target_user_id?: string
+        }
         Returns: Json
       }
       submit_clothing_contribution: {

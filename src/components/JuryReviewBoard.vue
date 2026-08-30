@@ -28,6 +28,7 @@ import { clampJuryCardIndex, getJurySwipeDirection } from '../utils/juryCarousel
 
 const props = defineProps({
   isLoggedIn: Boolean,
+  canPermanentlyReject: Boolean,
   isSuperAdmin: Boolean
 })
 
@@ -392,10 +393,14 @@ const executeAdminReject = async item => {
       reason,
       { signal }
     ),
-    onSuccess: () => {
-      items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+    onSuccess: result => {
+      if (result?.status === 'rejected') {
+        items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+      }
     },
-    successMessage: () => '管理员终审已记录，该事项已永久驳回。'
+    successMessage: result => result?.status === 'awaiting_cosign'
+      ? `已完成第 ${result.signature_count} / ${result.required_signatures} 份共签，达到门槛后才会永久驳回。`
+      : '管理员终审已记录，该事项已永久驳回。'
   })
 }
 
@@ -687,8 +692,9 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="isSuperAdmin" class="mt-5 border-t border-slate-200 pt-4">
-            <div class="text-xs font-black text-rose-600">管理员独立终审</div>
+          <div v-if="canPermanentlyReject" class="mt-5 border-t border-slate-200 pt-4">
+            <div class="text-xs font-black text-rose-600">{{ isSuperAdmin ? '站长独立终审' : '普通管理员多人共签终审' }}</div>
+            <p v-if="!isSuperAdmin" class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">永久驳回需要 2 位不同的当前有效普通管理员对同一理由共签。</p>
             <p v-if="!item.canAdminReject" class="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-500">
               你已参与普通投票、提交过本次内容或参与过原始录入，因此不能再执行终审。
             </p>

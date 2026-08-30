@@ -49,9 +49,9 @@ begin
   end if;
 
   if pg_catalog.has_function_privilege('anon', 'public.list_pending_suits_for_review()', 'EXECUTE')
-    or pg_catalog.has_function_privilege('anon', 'public.review_pending_suit(text,text)', 'EXECUTE')
+    or pg_catalog.has_function_privilege('anon', 'public.review_pending_suit(text,text,text)', 'EXECUTE')
     or not pg_catalog.has_function_privilege('authenticated', 'public.list_pending_suits_for_review()', 'EXECUTE')
-    or not pg_catalog.has_function_privilege('authenticated', 'public.review_pending_suit(text,text)', 'EXECUTE') then
+    or not pg_catalog.has_function_privilege('authenticated', 'public.review_pending_suit(text,text,text)', 'EXECUTE') then
     raise exception 'DB21_ASSERT: suit review RPC grants are incorrect';
   end if;
 
@@ -238,16 +238,22 @@ select pg_catalog.set_config(
 );
 do $$
 declare
-  v_denied boolean := false;
+  v_result jsonb;
 begin
   if (select pg_catalog.count(*) from public.pending_suits) <> 0 then
     raise exception 'DB21_ASSERT: ordinary administrator gained review-table visibility';
   end if;
-  begin
-    perform public.review_pending_suit('DB21 并发批准套装', 'approve');
-  exception when others then v_denied := true;
-  end;
-  if not v_denied then raise exception 'DB21_ASSERT: ordinary administrator reviewed suit'; end if;
+  v_result := public.review_pending_suit('DB21 并发批准套装', 'approve');
+  if v_result->>'status' <> 'awaiting_cosign'
+    or (v_result->>'signature_count')::integer <> 1
+    or (v_result->>'required_signatures')::integer <> 2
+    or exists (select 1 from public.suits where name = 'DB21 并发批准套装')
+    or exists (
+      select 1 from public.pending_suits
+      where name = 'DB21 并发批准套装' and status <> 'pending'
+    ) then
+    raise exception 'DB21_ASSERT: ordinary administrator suit review did not wait for a second signer: %', v_result;
+  end if;
 end;
 $$;
 
@@ -287,8 +293,8 @@ begin
     raise exception 'DB21_ASSERT: approval is not atomic and retry-safe';
   end if;
 
-  v_reject := public.review_pending_suit('DB21 驳回套装', 'reject');
-  v_reject_retry := public.review_pending_suit('DB21 驳回套装', 'reject');
+  v_reject := public.review_pending_suit('DB21 驳回套装', 'reject', 'fixture rejection');
+  v_reject_retry := public.review_pending_suit('DB21 驳回套装', 'reject', 'fixture rejection');
   if (v_reject->>'processed_count')::bigint <> 1
     or coalesce((v_reject->>'idempotent')::boolean, true)
     or (v_reject_retry->>'processed_count')::bigint <> 0
@@ -298,7 +304,7 @@ begin
   end if;
 
   begin
-    perform public.review_pending_suit('DB21 并发批准套装', 'reject');
+    perform public.review_pending_suit('DB21 并发批准套装', 'reject', 'fixture conflict');
   exception when others then v_conflict_denied := true;
   end;
   if not v_conflict_denied then

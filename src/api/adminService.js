@@ -151,7 +151,8 @@ export const adminService = {
 
         const { data, error } = await supabase.rpc('review_pending_suit', {
             p_name: cleanName,
-            p_decision: allowWithoutPending ? 'create' : 'approve'
+            p_decision: allowWithoutPending ? 'create' : 'approve',
+            p_reason: null
         })
         if (error) throw new Error('批准套装失败: ' + error.message)
         return data
@@ -176,13 +177,14 @@ export const adminService = {
         return data.map(item => item.id)
     },
 
-    async rejectPendingSuitsByName(name) {
+    async rejectPendingSuitsByName(name, reason) {
         const cleanName = name?.trim()
         if (!cleanName) throw new Error('套装名称不能为空')
 
         const { data, error } = await supabase.rpc('review_pending_suit', {
             p_name: cleanName,
-            p_decision: 'reject'
+            p_decision: 'reject',
+            p_reason: reason?.trim() || null
         })
         if (error) throw new Error('驳回套装失败: ' + error.message)
         return data

@@ -5,6 +5,7 @@ import UserManageBoard from '../components/UserManageBoard.vue'
 import CorrectionReviewBoard from '../components/CorrectionReviewBoard.vue'
 import FeatureRequestAdminBoard from '../components/FeatureRequestAdminBoard.vue'
 import AdminGovernanceBoard from '../components/AdminGovernanceBoard.vue'
+import CommunityCorrectionBoard from '../components/CommunityCorrectionBoard.vue'
 import ClothesEntryForm from '../components/ClothesEntryForm.vue'
 import { isSuperAdminRole } from '../utils/roles'
 const emit = defineEmits(['back-to-main'])
@@ -68,6 +69,7 @@ const auditSubmitLoadingText = computed(() => (
 const uniquePendingSuits = computed(() => {
   if (!pendingSuitsList.value) return []
   return pendingSuitsList.value.map(suit => ({
+    ...suit,
     name: suit.name,
     count: Number(suit.request_count || 0),
     created_at: suit.first_created_at
@@ -93,6 +95,16 @@ const quickCreateSuit = async (newSuitName) => {
     
   } catch (err) {
     alert('极速创建套装失败: ' + err.message)
+  }
+}
+
+const rejectSuitWithReason = async (suit) => {
+  const reason = window.prompt(`请填写驳回套装《${suit.name}》的原因。`)?.trim()
+  if (!reason) return
+  try {
+    await rejectPendingSuit(suit.name, reason)
+  } catch (error) {
+    window.alert(error.message || '驳回套装失败，请刷新后重试。')
   }
 }
 // 🌟 补回刚才不小心删掉的初始化加载钩子！
@@ -168,6 +180,7 @@ const rejectSelectedPendingClothes = async () => {
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'suggestions'" :class="activeTab === 'suggestions' ? 'bg-white text-pink-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">💡 优化建议</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'users'" :class="activeTab === 'users' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🛡️ 权限大盘</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'governance'" :class="activeTab === 'governance' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🗓️ 任期治理</button>
+        <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'community-corrections'" :class="activeTab === 'community-corrections' ? 'bg-white text-fuchsia-700 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">↩️ 决定纠错</button>
       </div>
       <button @click="emit('back-to-main')" class="mt-4 md:mt-0 text-sm font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"><span class="text-lg">🏠</span> 返回前台</button>
     </div>
@@ -309,7 +322,7 @@ const rejectSelectedPendingClothes = async () => {
               <div class="text-xs text-slate-400 font-bold mt-1">首次申请时间: {{ suit.created_at ? new Date(suit.created_at).toLocaleString() : '未知' }}</div>
             </div>
             <div class="flex gap-2 shrink-0">
-              <button @click="rejectPendingSuit(suit.name)" class="px-4 py-2 bg-white border border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-200 font-bold text-sm rounded-lg transition-colors">驳回</button>
+              <button @click="rejectSuitWithReason(suit)" class="px-4 py-2 bg-white border border-slate-200 text-slate-500 hover:text-rose-500 hover:border-rose-200 font-bold text-sm rounded-lg transition-colors">驳回</button>
               <button @click="approvePendingSuit(suit.name)" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold text-sm rounded-lg transition-colors shadow-sm shadow-blue-500/30">✅ 批准入库</button>
             </div>
           </div>
@@ -330,7 +343,11 @@ const rejectSelectedPendingClothes = async () => {
     </div>
 
     <div v-show="activeTab === 'governance' && isSuperAdminRole(currentUserRole)">
-      <AdminGovernanceBoard :users="allUsersList" />
+      <AdminGovernanceBoard />
+    </div>
+
+    <div v-show="activeTab === 'community-corrections' && isSuperAdminRole(currentUserRole)">
+      <CommunityCorrectionBoard :is-super-admin="true" />
     </div>
   </div>
 </template>

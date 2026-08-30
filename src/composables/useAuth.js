@@ -54,6 +54,8 @@ export function useAuth() {
         adminCapabilities.value = normalizeAdminCapabilities({
           is_super_admin: data?.role === 'super_admin' || Number(data?.role_level) === 2,
           can_review_low_risk: data?.role === 'super_admin' || Number(data?.role_level) === 2,
+          can_review_suits: data?.role === 'super_admin' || Number(data?.role_level) === 2,
+          can_permanently_reject: data?.role === 'super_admin' || Number(data?.role_level) === 2,
           can_manage_admin_terms: data?.role === 'super_admin' || Number(data?.role_level) === 2,
           can_review_high_risk: data?.role === 'super_admin' || Number(data?.role_level) === 2
         })

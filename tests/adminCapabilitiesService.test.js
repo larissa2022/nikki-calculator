@@ -14,6 +14,8 @@ test('normalizeAdminCapabilities 只接受严格布尔能力并保留任期事�
   assert.deepEqual(normalizeAdminCapabilities({
     is_super_admin: false,
     can_review_low_risk: true,
+    can_review_suits: 'true',
+    can_permanently_reject: 1,
     can_manage_admin_terms: 'true',
     can_review_high_risk: 1,
     term_id: 'term-1',
@@ -23,6 +25,8 @@ test('normalizeAdminCapabilities 只接受严格布尔能力并保留任期事�
   }), {
     is_super_admin: false,
     can_review_low_risk: true,
+    can_review_suits: false,
+    can_permanently_reject: false,
     can_manage_admin_terms: false,
     can_review_high_risk: false,
     term_id: 'term-1',

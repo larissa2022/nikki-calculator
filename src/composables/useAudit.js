@@ -442,13 +442,15 @@ export function useAudit() {
     }
 
     const approvePendingSuit = async (suitName, options) => {
-        await adminService.approveSuit(suitName, options)
+        const result = await adminService.approveSuit(suitName, options)
         await fetchAllData()
         await fetchSuits()
+        return result
     }
-    const rejectPendingSuit = async (suitName) => {
-        await adminService.rejectPendingSuitsByName(suitName)
+    const rejectPendingSuit = async (suitName, reason) => {
+        const result = await adminService.rejectPendingSuitsByName(suitName, reason)
         await fetchAllData()
+        return result
     }
 
     // 对外暴露的属性和方法
