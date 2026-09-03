@@ -28,6 +28,7 @@ import { clampJuryCardIndex, getJurySwipeDirection } from '../utils/juryCarousel
 
 const props = defineProps({
   isLoggedIn: Boolean,
+  canPermanentlyReject: Boolean,
   isSuperAdmin: Boolean
 })
 
@@ -392,10 +393,14 @@ const executeAdminReject = async item => {
       reason,
       { signal }
     ),
-    onSuccess: () => {
-      items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+    onSuccess: result => {
+      if (result?.status === 'rejected') {
+        items.value = items.value.filter(current => current.reReviewItemId !== item.reReviewItemId)
+      }
     },
-    successMessage: () => '管理员终审已记录，该事项已永久驳回。'
+    successMessage: result => result?.status === 'awaiting_cosign'
+      ? `你的终审已记录（${result.signature_count} / ${result.required_signatures}）。请换另一位未参与本项投票的管理员确认相同原因。`
+      : '管理员终审已记录，该事项已永久驳回。'
   })
 }
 
@@ -429,7 +434,7 @@ const askAdminConfirmation = item => {
   }
   confirmation.value = {
     title: '确认永久驳回',
-    message: `该操作与普通投票分开记录，理由为：“${reason}”`,
+    message: `永久驳回后，这条资料会停止投票。原因：“${reason}”`,
     confirmText: '永久驳回',
     tone: 'rose',
     action: () => executeAdminReject(item)
@@ -687,10 +692,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="isSuperAdmin" class="mt-5 border-t border-slate-200 pt-4">
-            <div class="text-xs font-black text-rose-600">管理员独立终审</div>
+          <div v-if="canPermanentlyReject" class="mt-5 border-t border-slate-200 pt-4">
+            <div class="text-xs font-black text-rose-600">{{ isSuperAdmin ? '站长终审' : '管理员终审' }}</div>
+            <p v-if="!isSuperAdmin" class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">永久驳回需要两位管理员填写相同原因。参加过这项投票的人不能再终审。</p>
             <p v-if="!item.canAdminReject" class="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-500">
-              你已参与普通投票、提交过本次内容或参与过原始录入，因此不能再执行终审。
+              {{ item.adminRejectBlockReason === 'already_voted' ? '你已经投过这一项，不能再终审。请换一位没有投过此项的管理员。' : '这项现在不能由你终审。请换一位未参与本项提交、录入或投票的管理员。' }}
             </p>
             <div v-else class="mt-2 flex flex-col gap-2 sm:flex-row">
               <input

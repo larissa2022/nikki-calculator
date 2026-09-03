@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-17，不能作为这些对象的当前事实。2026-08-10 已在 development 应用 DB-17 报错推翻原资料后的积分扣回；相关列、函数、触发器、索引、约束、权限和事务回滚已通过 live catalog、fixture 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-09-03 已在 development 应用 DB-21 V2.1 任期权限与陪审入口前向补丁：手动任期仅站长可管理，普通管理员未参投时可正常发起永久驳回，候选限制与等级门槛不变。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -244,6 +244,24 @@
 | 默认拒绝 | 三张 public 底表启用并强制 RLS，anon / authenticated 无底表权限；客户端只执行精确授权 RPC |
 | Rollback | 已应用 migration 不重写；异常时以新 patch 撤销 RPC / 前端入口或修正实现，历史建议、点赞和事件默认保留 |
 
+## DB-21 公开核心表与套装审核权限收口
+
+| 对象 / 规则 | 当前契约 |
+| --- | --- |
+| `stages` | 启用并强制 RLS；anon / authenticated 仅有 SELECT，匿名高分计算继续读取；客户端没有 INSERT / UPDATE / DELETE / TRUNCATE |
+| `suits` | 启用并强制 RLS；anon / authenticated 仅有 SELECT，套装图鉴、衣柜录入、提交、陪审与报错继续读取；正式套装不允许客户端直接写 |
+| `pending_suits` | 启用并强制 RLS；anon 无表权限；authenticated 只读本人记录，并且只能插入 `name / submitted_by`，RLS 强制本人、非匿名登录、`pending` 默认状态与规范名称 |
+| `list_pending_suits_for_review()` | 当前有效普通管理员和超级管理员可读取按名称聚合的待审队列、两种结论共签数及本人结论；普通用户由函数内身份校验拒绝 |
+| `review_pending_suit(text,text,text)` | 普通管理员批准 / 驳回需 2 位不同当前有效任期管理员对同一名称、同一结论和原因共签；超级管理员单独执行。按名称事务 advisory lock 串行，批准时正式套装写入与全部同名 pending 状态一次提交；重复调用幂等、冲突结论失败关闭；无 pending 极速创建仍只属于超级管理员 |
+| `community_admin_actions` / `community_admin_action_signatures` | 不可由客户端或 service_role 直读写的决定与签名事实；记录目标、规范提案、原因、人数门槛、执行结果、纠错来源和签署时任期，启用并强制 RLS，不建立放宽 policy |
+| `admin_reject_jury_candidate(...)` / `reopen_rejected_jury_candidate(...)` | 永久驳回和重新打开均为普通管理员 2 人共签或超级管理员单独执行；原提交者、来源参与者、原轮投票者与原决定共签者按环节回避，原决定与候选历史不删除 |
+| `submit_admin_governance_action(...)` | 手动任期和提前结束任期仅超级管理员可执行；候选排除与撤销由 3 位不同当前有效普通管理员共同确认或超级管理员单独执行；普通管理员不得处理自己或超级管理员身份 |
+| 受信维护 | `service_role` 对 stages / suits 保留 SELECT / INSERT / UPDATE / DELETE，对 pending_suits 仅保留 SELECT / INSERT / UPDATE；客户端角色不继承这些权限 |
+| 索引 | `idx_pending_suits_review_queue(status,name,created_at)` 支撑审核队列，`idx_pending_suits_submitted_by(submitted_by)` 覆盖本人读取与外键 |
+| Rollback | 已应用 migration 不重写；异常时新增 patch 停用审核入口并修正 RPC，误封先恢复 stages / suits 最小 SELECT，不恢复客户端整表写，pending 与审核状态保留 |
+
+以上表格记录当前 development 已应用事实。社区共治 V2.1 数据库与前端实现已进入目标 PR，但普通管理员“图鉴管理”、永久驳回和重新审核仍须绑定该 PR 最新 Preview 完成负责人业务复验；复验前不得合并。
+
 ## DB-8 / DB-9 正式图鉴报错闭环
 
 | 对象 / 规则 | 当前契约 |
@@ -344,7 +362,8 @@
 | idx_clothes_suit_id | index | clothes.suit_id |
 | idx_pending_clothes_submitted_by | index | pending_clothes.submitted_by，用于按提交人执行 RLS 查询 |
 | idx_pending_clothes_status | index | pending_clothes.status |
-| idx_pending_suits_status | index | pending_suits.status |
+| idx_pending_suits_review_queue | index | pending_suits.status + name + created_at，覆盖超级管理员待审队列 |
+| idx_pending_suits_submitted_by | index | pending_suits.submitted_by，覆盖本人 RLS 读取与外键 |
 | idx_profiles_username | index | profiles.username |
 | idx_suits_name | index | suits.name |
 
@@ -385,6 +404,8 @@
 - correction_requests（DB-8 默认拒绝，无 policy）
 - pending_clothes
 - pending_suits
+- stages
+- suits
 - points_ledger（DB-1 默认拒绝，无 policy）
 - profiles
 - re_review_candidates
@@ -412,18 +433,18 @@
 - DB-8 增强 fixture 已在 development 通过并 rollback 至 0 行；live catalog 确认 3 个外键均有索引、两个 `SECURITY DEFINER` RPC 均为空 `search_path` 且 anon 无执行权限，service_role 仅保留 SELECT / INSERT / UPDATE。原生 Advisor 命令受直连传输错误影响未返回，已用相同 catalog 检查逐项回读。
 - DB-11 fixture 已在 development 通过并 `ROLLBACK`；live catalog 确认私有 bucket、路径约束与索引、三条 Storage policy、专用提交和陪审队列 RPC、旧入口撤权及 `private` helper 的空 `search_path`。Performance Advisor 未发现 DB-11 新问题；Security Advisor 接口在补丁后连续传输失败，已保留为未取得的远端检查结果，未用 catalog 回读冒充 Advisor 通过。
 - Security Advisor 对两张 DB-1 表仅报告预期 INFO：RLS 已启用但没有 policy；DB-2 helper 位于未暴露 schema 且没有新增 Advisor WARN / ERROR。
-- Security Advisor 仍报告 `stages`、`suits` 未启用 RLS；不属于本次 DB-0 范围，必须在后续独立安全任务处理。
+- DB-21 已消除 `stages`、`suits` 的 `rls_disabled_in_public` ERROR；目标三表均强制 RLS，公开核心表保持最小 SELECT，pending 只开放本人 SELECT 与受保护列 INSERT。V2.1 的 authenticated `SECURITY DEFINER` RPC 为有意受控入口，全部使用空 `search_path` 并在函数内复核真实登录、有效任期、人数、同结论和回避条件；Security / Performance 均为 0 ERROR。
 - 当前 `profiles` 仍保留 `total_points`、`current_month_points`、`monthly_action_count` 字段；根据需求文档，后续积分权威来源应迁移到 `points_ledger`，这些字段只能作为历史字段或缓存字段，不应作为权威总分。
 - 当前 `profiles.role` 为 `text`，并使用 `user`、`admin`、`super_admin` 字符串区分角色；该设计存在非法值、拼写错误和权限判断不一致风险。后续数据库开发应评估迁移为数字角色等级，例如 `0` 普通用户、`1` 普通管理员、`2` 超级管理员，并由前端 option / 常量表做展示映射。
-- `pending_suits` 和 `app_errors` 仍有 Advisor 提示的宽松 policy；不在 DB-0 范围，后续应单独审查。
+- `pending_suits` 旧宽松 policy 已由 DB-21 移除；`app_errors` 仍属后续独立安全事项。
 ## DB-15 普通管理员月度轮换
 
 - `admin_terms`：普通管理员月度、手动和旧管理员过渡任期的唯一权限事实；按起止时间和状态实时复核。
 - `private_db2.admin_rotation_candidates`：按服务月冻结候选积分、有效行为数、并列时间、顺序及跳过原因。
-- `admin_candidate_exclusions`：超级管理员维护的带原因、起止时间和撤销事实的候选排除；受控创建 RPC 拒绝结束时间不晚于当前时间的记录，治理读模型同时保留当前、待生效、已过期和已撤销历史。
+- `admin_candidate_exclusions`：带原因、起止时间和撤销事实的候选排除；普通管理员 3 人共签或超级管理员单独执行，受控 RPC 拒绝结束时间不晚于当前时间的记录，治理读模型同时保留当前、待生效、已过期和已撤销历史。
 - `admin_review_decisions` / `admin_review_decision_sources`：不可由客户端修改或删除的低风险审核决定、采用资料和全部来源 pending 审计。
 - 月度定时任务北京时间每月 1 日 00:10 执行；缺少 DB-14 上月冻结标记时失败关闭，部署当月不追授。
-- 普通管理员只通过 `get_current_admin_capabilities()`、`list_low_risk_clothes_review_candidates()` 和 `review_low_risk_clothes_candidate(...)` 获取或执行受限能力；套装、补全、重审、报错、永久驳回和治理仍只属于超级管理员。
+- 普通管理员只通过受控 RPC 获取或执行能力：低风险服装沿用单人审核；套装与永久驳回采用 2 人确认；候选排除采用 3 人确认；不拥有手动任期权限；正式库补全、重审、图鉴报错仍不得绕过既有陪审门槛。超级管理员保留全部单独执行、任期管理和纠错权。
 
 ## DB-16 等级功能权益
 

@@ -28,8 +28,7 @@ export const suitService = {
   async applyNewSuit(name, userId) {
     const { error } = await supabase.from('pending_suits').insert([{
       name: name.trim(),
-      submitted_by: userId,
-      status: 'pending'
+      submitted_by: userId
     }]);
     
     if (error) throw error;
