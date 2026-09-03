@@ -10,9 +10,9 @@ begin
     where id between 'db210000-0000-4000-8000-000000000001'::uuid
       and 'db210000-0000-4000-8000-000000000004'::uuid
   ) or exists (
-    select 1 from public.pending_suits where name like 'DB21 %'
+    select 1 from public.pending_suits where name like 'DB21 fixture %'
   ) or exists (
-    select 1 from public.suits where name like 'DB21 %'
+    select 1 from public.suits where name like 'DB21 fixture %'
   ) then
     raise exception 'DB21_ASSERT: fixture identifiers already exist';
   end if;
@@ -138,7 +138,7 @@ begin
   perform pg_catalog.count(*) from public.suits;
   begin
     insert into public.pending_suits (name, submitted_by)
-    values ('DB21 匿名伪造', 'db210000-0000-4000-8000-000000000001'::uuid);
+    values ('DB21 fixture 匿名伪造', 'db210000-0000-4000-8000-000000000001'::uuid);
   exception when others then
     v_denied := true;
   end;
@@ -158,9 +158,9 @@ select pg_catalog.set_config(
 
 insert into public.pending_suits (name, submitted_by)
 values
-  ('DB21 并发批准套装', 'db210000-0000-4000-8000-000000000001'::uuid),
-  ('DB21 并发批准套装', 'db210000-0000-4000-8000-000000000001'::uuid),
-  ('DB21 驳回套装', 'db210000-0000-4000-8000-000000000001'::uuid);
+  ('DB21 fixture 并发批准套装', 'db210000-0000-4000-8000-000000000001'::uuid),
+  ('DB21 fixture 并发批准套装', 'db210000-0000-4000-8000-000000000001'::uuid),
+  ('DB21 fixture 驳回套装', 'db210000-0000-4000-8000-000000000001'::uuid);
 
 do $$
 declare
@@ -173,7 +173,7 @@ begin
   v_denied := false;
   begin
     insert into public.pending_suits (name, submitted_by)
-    values ('DB21 伪造提交人', 'db210000-0000-4000-8000-000000000002'::uuid);
+    values ('DB21 fixture 伪造提交人', 'db210000-0000-4000-8000-000000000002'::uuid);
   exception when others then v_denied := true;
   end;
   if not v_denied then raise exception 'DB21_ASSERT: submitted_by forgery was accepted'; end if;
@@ -181,7 +181,7 @@ begin
   v_denied := false;
   begin
     insert into public.pending_suits (name, submitted_by, status)
-    values ('DB21 伪造状态', 'db210000-0000-4000-8000-000000000001'::uuid, 'approved');
+    values ('DB21 fixture 伪造状态', 'db210000-0000-4000-8000-000000000001'::uuid, 'approved');
   exception when others then v_denied := true;
   end;
   if not v_denied then raise exception 'DB21_ASSERT: status forgery was accepted'; end if;
@@ -189,7 +189,7 @@ begin
   v_denied := false;
   begin
     insert into public.pending_suits (id, name, submitted_by)
-    values ('db210000-0000-4000-8000-000000000099'::uuid, 'DB21 伪造 ID', 'db210000-0000-4000-8000-000000000001'::uuid);
+    values ('db210000-0000-4000-8000-000000000099'::uuid, 'DB21 fixture 伪造 ID', 'db210000-0000-4000-8000-000000000001'::uuid);
   exception when others then v_denied := true;
   end;
   if not v_denied then raise exception 'DB21_ASSERT: id forgery was accepted'; end if;
@@ -197,7 +197,7 @@ begin
   v_denied := false;
   begin
     insert into public.pending_suits (name, submitted_by, created_at)
-    values ('DB21 伪造时间', 'db210000-0000-4000-8000-000000000001'::uuid, '2000-01-01');
+    values ('DB21 fixture 伪造时间', 'db210000-0000-4000-8000-000000000001'::uuid, '2000-01-01');
   exception when others then v_denied := true;
   end;
   if not v_denied then raise exception 'DB21_ASSERT: created_at forgery was accepted'; end if;
@@ -243,14 +243,14 @@ begin
   if (select pg_catalog.count(*) from public.pending_suits) <> 0 then
     raise exception 'DB21_ASSERT: ordinary administrator gained review-table visibility';
   end if;
-  v_result := public.review_pending_suit('DB21 并发批准套装', 'approve');
+  v_result := public.review_pending_suit('DB21 fixture 并发批准套装', 'approve');
   if v_result->>'status' <> 'awaiting_cosign'
     or (v_result->>'signature_count')::integer <> 1
     or (v_result->>'required_signatures')::integer <> 2
-    or exists (select 1 from public.suits where name = 'DB21 并发批准套装')
+    or exists (select 1 from public.suits where name = 'DB21 fixture 并发批准套装')
     or exists (
       select 1 from public.pending_suits
-      where name = 'DB21 并发批准套装' and status <> 'pending'
+      where name = 'DB21 fixture 并发批准套装' and status <> 'pending'
     ) then
     raise exception 'DB21_ASSERT: ordinary administrator suit review did not wait for a second signer: %', v_result;
   end if;
@@ -277,34 +277,34 @@ begin
   if (
     select pg_catalog.count(*)
     from public.list_pending_suits_for_review()
-    where name like 'DB21 %'
+    where name like 'DB21 fixture %'
   ) <> 2 then
     raise exception 'DB21_ASSERT: super administrator review queue is incomplete';
   end if;
 
-  v_first := public.review_pending_suit('DB21 并发批准套装', 'approve');
-  v_retry := public.review_pending_suit('DB21 并发批准套装', 'approve');
+  v_first := public.review_pending_suit('DB21 fixture 并发批准套装', 'approve');
+  v_retry := public.review_pending_suit('DB21 fixture 并发批准套装', 'approve');
   if (v_first->>'processed_count')::bigint <> 2
     or coalesce((v_first->>'idempotent')::boolean, true)
     or (v_retry->>'processed_count')::bigint <> 0
     or not coalesce((v_retry->>'idempotent')::boolean, false)
     or v_first->>'suit_id' is distinct from v_retry->>'suit_id'
-    or (select pg_catalog.count(*) from public.suits where name = 'DB21 并发批准套装') <> 1 then
+    or (select pg_catalog.count(*) from public.suits where name = 'DB21 fixture 并发批准套装') <> 1 then
     raise exception 'DB21_ASSERT: approval is not atomic and retry-safe';
   end if;
 
-  v_reject := public.review_pending_suit('DB21 驳回套装', 'reject', 'fixture rejection');
-  v_reject_retry := public.review_pending_suit('DB21 驳回套装', 'reject', 'fixture rejection');
+  v_reject := public.review_pending_suit('DB21 fixture 驳回套装', 'reject', 'fixture rejection');
+  v_reject_retry := public.review_pending_suit('DB21 fixture 驳回套装', 'reject', 'fixture rejection');
   if (v_reject->>'processed_count')::bigint <> 1
     or coalesce((v_reject->>'idempotent')::boolean, true)
     or (v_reject_retry->>'processed_count')::bigint <> 0
     or not coalesce((v_reject_retry->>'idempotent')::boolean, false)
-    or exists (select 1 from public.suits where name = 'DB21 驳回套装') then
+    or exists (select 1 from public.suits where name = 'DB21 fixture 驳回套装') then
     raise exception 'DB21_ASSERT: rejection is not atomic and retry-safe';
   end if;
 
   begin
-    perform public.review_pending_suit('DB21 并发批准套装', 'reject', 'fixture conflict');
+    perform public.review_pending_suit('DB21 fixture 并发批准套装', 'reject', 'fixture conflict');
   exception when others then v_conflict_denied := true;
   end;
   if not v_conflict_denied then
@@ -312,31 +312,31 @@ begin
   end if;
 
   begin
-    perform public.review_pending_suit('DB21 驳回套装', 'approve');
+    perform public.review_pending_suit('DB21 fixture 驳回套装', 'approve');
   exception when others then v_reverse_conflict_denied := true;
   end;
-  if not v_reverse_conflict_denied or exists (select 1 from public.suits where name = 'DB21 驳回套装') then
+  if not v_reverse_conflict_denied or exists (select 1 from public.suits where name = 'DB21 fixture 驳回套装') then
     raise exception 'DB21_ASSERT: completed rejection was overwritten by approval';
   end if;
 
   begin
-    perform public.review_pending_suit('DB21 无待审批准', 'approve');
+    perform public.review_pending_suit('DB21 fixture 无待审批准', 'approve');
   exception when others then v_missing_approve_denied := true;
   end;
   if not v_missing_approve_denied then
     raise exception 'DB21_ASSERT: review approval created a suit without pending rows';
   end if;
 
-  v_quick_create := public.review_pending_suit('DB21 受控秒建', 'create');
+  v_quick_create := public.review_pending_suit('DB21 fixture 受控秒建', 'create');
   if (v_quick_create->>'processed_count')::bigint <> 0
     or coalesce((v_quick_create->>'idempotent')::boolean, true)
-    or (select pg_catalog.count(*) from public.suits where name = 'DB21 受控秒建') <> 1 then
+    or (select pg_catalog.count(*) from public.suits where name = 'DB21 fixture 受控秒建') <> 1 then
     raise exception 'DB21_ASSERT: controlled quick creation failed';
   end if;
 
   if exists (
     select 1 from public.list_pending_suits_for_review()
-    where name like 'DB21 %'
+    where name like 'DB21 fixture %'
   ) then
     raise exception 'DB21_ASSERT: completed rows remained in review queue';
   end if;
@@ -349,26 +349,26 @@ select pg_catalog.set_config('request.jwt.claims', '{"role":"service_role"}', tr
 
 insert into public.stages (id, name, weights)
 overriding system value
-values (9223372036854775000, 'DB21 service stage', '{}'::jsonb);
-update public.stages set weights = '{"simple":1}'::jsonb where name = 'DB21 service stage';
-delete from public.stages where name = 'DB21 service stage';
+values (9223372036854775000, 'DB21 fixture service stage', '{}'::jsonb);
+update public.stages set weights = '{"simple":1}'::jsonb where name = 'DB21 fixture service stage';
+delete from public.stages where name = 'DB21 fixture service stage';
 
-insert into public.suits (name) values ('DB21 service suit');
-update public.suits set description = 'service maintenance' where name = 'DB21 service suit';
-delete from public.suits where name = 'DB21 service suit';
+insert into public.suits (name) values ('DB21 fixture service suit');
+update public.suits set description = 'service maintenance' where name = 'DB21 fixture service suit';
+delete from public.suits where name = 'DB21 fixture service suit';
 
 insert into public.pending_suits (name, submitted_by, status)
-values ('DB21 service pending', 'db210000-0000-4000-8000-000000000001'::uuid, 'pending');
-update public.pending_suits set status = 'rejected' where name = 'DB21 service pending';
+values ('DB21 fixture service pending', 'db210000-0000-4000-8000-000000000001'::uuid, 'pending');
+update public.pending_suits set status = 'rejected' where name = 'DB21 fixture service pending';
 
 reset role;
 
 do $$
 begin
-  if (select pg_catalog.count(*) from public.suits where name like 'DB21 %') <> 2
-    or (select pg_catalog.count(*) from public.pending_suits where name like 'DB21 %') <> 4
-    or (select pg_catalog.count(*) from public.pending_suits where name = 'DB21 并发批准套装' and status = 'approved') <> 2
-    or (select pg_catalog.count(*) from public.pending_suits where name in ('DB21 驳回套装', 'DB21 service pending') and status = 'rejected') <> 2 then
+  if (select pg_catalog.count(*) from public.suits where name like 'DB21 fixture %') <> 2
+    or (select pg_catalog.count(*) from public.pending_suits where name like 'DB21 fixture %') <> 4
+    or (select pg_catalog.count(*) from public.pending_suits where name = 'DB21 fixture 并发批准套装' and status = 'approved') <> 2
+    or (select pg_catalog.count(*) from public.pending_suits where name in ('DB21 fixture 驳回套装', 'DB21 fixture service pending') and status = 'rejected') <> 2 then
     raise exception 'DB21_ASSERT: fixture business assertions did not complete';
   end if;
 end;

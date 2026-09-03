@@ -105,7 +105,8 @@ export const normalizeQueueItem = (row) => ({
   canVote: Boolean(row?.can_vote),
   canSubmitReviewNote: Boolean(row?.can_submit_review_note),
   isCandidateAuthor: Boolean(row?.is_candidate_author),
-  canAdminReject: Boolean(row?.can_admin_reject)
+  canAdminReject: Boolean(row?.can_admin_reject),
+  adminRejectBlockReason: String(row?.admin_reject_block_reason || '')
 })
 
 const callRpc = async (client, name, params = {}, options = {}) => {

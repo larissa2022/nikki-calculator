@@ -343,7 +343,7 @@ const rejectSelectedPendingClothes = async () => {
     </div>
 
     <div v-show="activeTab === 'governance' && isSuperAdminRole(currentUserRole)">
-      <AdminGovernanceBoard />
+      <AdminGovernanceBoard :allow-term-management="true" />
     </div>
 
     <div v-show="activeTab === 'community-corrections' && isSuperAdminRole(currentUserRole)">

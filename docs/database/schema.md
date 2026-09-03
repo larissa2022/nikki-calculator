@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-08-30 已在 development 应用 DB-21 社区共治 V2.1 前向补丁；目标 RLS、grants、RPC、索引、角色矩阵、多人共签、纠错和事务回滚已通过 live catalog、fixture、Advisor 与生成类型回读。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-09-03 已在 development 应用 DB-21 V2.1 任期权限与陪审入口前向补丁：手动任期仅站长可管理，普通管理员未参投时可正常发起永久驳回，候选限制与等级门槛不变。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -255,12 +255,12 @@
 | `review_pending_suit(text,text,text)` | 普通管理员批准 / 驳回需 2 位不同当前有效任期管理员对同一名称、同一结论和原因共签；超级管理员单独执行。按名称事务 advisory lock 串行，批准时正式套装写入与全部同名 pending 状态一次提交；重复调用幂等、冲突结论失败关闭；无 pending 极速创建仍只属于超级管理员 |
 | `community_admin_actions` / `community_admin_action_signatures` | 不可由客户端或 service_role 直读写的决定与签名事实；记录目标、规范提案、原因、人数门槛、执行结果、纠错来源和签署时任期，启用并强制 RLS，不建立放宽 policy |
 | `admin_reject_jury_candidate(...)` / `reopen_rejected_jury_candidate(...)` | 永久驳回和重新打开均为普通管理员 2 人共签或超级管理员单独执行；原提交者、来源参与者、原轮投票者与原决定共签者按环节回避，原决定与候选历史不删除 |
-| `submit_admin_governance_action(...)` | 手动任期、提前结束任期、候选排除与撤销由 3 位不同当前有效普通管理员共签，超级管理员单独执行；普通管理员不得处理自己或超级管理员身份 |
+| `submit_admin_governance_action(...)` | 手动任期和提前结束任期仅超级管理员可执行；候选排除与撤销由 3 位不同当前有效普通管理员共同确认或超级管理员单独执行；普通管理员不得处理自己或超级管理员身份 |
 | 受信维护 | `service_role` 对 stages / suits 保留 SELECT / INSERT / UPDATE / DELETE，对 pending_suits 仅保留 SELECT / INSERT / UPDATE；客户端角色不继承这些权限 |
 | 索引 | `idx_pending_suits_review_queue(status,name,created_at)` 支撑审核队列，`idx_pending_suits_submitted_by(submitted_by)` 覆盖本人读取与外键 |
 | Rollback | 已应用 migration 不重写；异常时新增 patch 停用审核入口并修正 RPC，误封先恢复 stages / suits 最小 SELECT，不恢复客户端整表写，pending 与审核状态保留 |
 
-以上表格记录当前 development 已应用事实。社区共治 V2.1 数据库与前端实现已进入目标 PR，但普通管理员“图鉴管理”、多人共签和纠错仍须绑定该 PR 最新 Preview 完成负责人业务验收；验收前不得合并。
+以上表格记录当前 development 已应用事实。社区共治 V2.1 数据库与前端实现已进入目标 PR，但普通管理员“图鉴管理”、永久驳回和重新审核仍须绑定该 PR 最新 Preview 完成负责人业务复验；复验前不得合并。
 
 ## DB-8 / DB-9 正式图鉴报错闭环
 
@@ -444,7 +444,7 @@
 - `admin_candidate_exclusions`：带原因、起止时间和撤销事实的候选排除；普通管理员 3 人共签或超级管理员单独执行，受控 RPC 拒绝结束时间不晚于当前时间的记录，治理读模型同时保留当前、待生效、已过期和已撤销历史。
 - `admin_review_decisions` / `admin_review_decision_sources`：不可由客户端修改或删除的低风险审核决定、采用资料和全部来源 pending 审计。
 - 月度定时任务北京时间每月 1 日 00:10 执行；缺少 DB-14 上月冻结标记时失败关闭，部署当月不追授。
-- 普通管理员只通过受控 RPC 获取或执行能力：低风险服装沿用单人审核；套装与永久驳回采用 2 人共签；任期和候选排除采用 3 人共签；正式库补全、重审、图鉴报错仍不得绕过既有陪审门槛。超级管理员保留全部单独执行和纠错权。
+- 普通管理员只通过受控 RPC 获取或执行能力：低风险服装沿用单人审核；套装与永久驳回采用 2 人确认；候选排除采用 3 人确认；不拥有手动任期权限；正式库补全、重审、图鉴报错仍不得绕过既有陪审门槛。超级管理员保留全部单独执行、任期管理和纠错权。
 
 ## DB-16 等级功能权益
 

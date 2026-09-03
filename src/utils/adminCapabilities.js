@@ -4,6 +4,7 @@ export const EMPTY_ADMIN_CAPABILITIES = Object.freeze({
   can_review_suits: false,
   can_permanently_reject: false,
   can_manage_admin_terms: false,
+  can_manage_candidate_exclusions: false,
   can_review_high_risk: false,
   term_id: null,
   term_source: null,
@@ -19,6 +20,7 @@ export const normalizeAdminCapabilities = (value) => ({
   can_review_suits: value?.can_review_suits === true,
   can_permanently_reject: value?.can_permanently_reject === true,
   can_manage_admin_terms: value?.can_manage_admin_terms === true,
+  can_manage_candidate_exclusions: value?.can_manage_candidate_exclusions === true,
   can_review_high_risk: value?.can_review_high_risk === true,
   show_grant_notice: value?.show_grant_notice === true
 })

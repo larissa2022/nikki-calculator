@@ -58,21 +58,21 @@ onMounted(loadCandidates)
     <div class="mb-6 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 class="text-xl font-black text-slate-800">社区图鉴管理</h2>
-          <p class="mt-1 text-sm font-bold text-slate-500">普通任期管理员可独立处理既有低风险事项，并通过多人共签参与套装、永久驳回纠错和任期治理。</p>
+          <h2 class="text-xl font-black text-slate-800">图鉴管理</h2>
+          <p class="mt-1 text-sm font-bold text-slate-500">在这里处理服装、套装、候选限制和纠错申请。手动任期只由站长管理。</p>
         </div>
         <button class="text-sm font-bold text-slate-500 hover:text-slate-800" @click="emit('back-to-main')">🏠 返回前台</button>
       </div>
       <div class="mt-4 flex flex-wrap gap-2">
         <button class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'low-risk' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'low-risk'">新增服装审核</button>
-        <button v-if="adminCapabilities.can_review_suits" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'suits' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'suits'">套装共签</button>
-        <button v-if="adminCapabilities.can_manage_admin_terms" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'governance' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'governance'">任期治理</button>
-        <button v-if="adminCapabilities.can_permanently_reject" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'corrections' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'corrections'">纠错</button>
+        <button v-if="adminCapabilities.can_review_suits" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'suits' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'suits'">套装审核</button>
+        <button v-if="adminCapabilities.can_manage_candidate_exclusions" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'governance' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'governance'">候选管理</button>
+        <button v-if="adminCapabilities.can_permanently_reject" class="rounded-full px-4 py-2 text-xs font-black" :class="activeTab === 'corrections' ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeTab = 'corrections'">重新审核</button>
       </div>
     </div>
 
     <div class="mb-5 rounded-xl border border-purple-100 bg-purple-50 p-4 text-sm font-bold text-purple-800">
-      套装通过 / 驳回与永久驳回需要 2 人同结论共签；手动任期、提前结束和候选排除治理需要 3 人共签。达到门槛前不会改变正式事实，所有提案和签名都会保留审计记录。
+      套装和永久驳回需要两位管理员做出相同决定。候选限制需要三位管理员确认。人数不足时不会执行。
     </div>
 
     <template v-if="activeTab === 'low-risk'">
@@ -101,7 +101,7 @@ onMounted(loadCandidates)
     </template>
 
     <CommunitySuitReviewBoard v-else-if="activeTab === 'suits'" :is-super-admin="adminCapabilities.is_super_admin" />
-    <AdminGovernanceBoard v-else-if="activeTab === 'governance'" />
+    <AdminGovernanceBoard v-else-if="activeTab === 'governance'" :allow-term-management="false" />
     <CommunityCorrectionBoard v-else-if="activeTab === 'corrections'" :is-super-admin="adminCapabilities.is_super_admin" />
   </div>
 </template>

@@ -87,14 +87,14 @@ from pg_catalog.generate_series(1, 8) as fixture(value);
 update public.profiles
 set
   username = case id
-    when 'db220000-0000-4000-8000-000000000001'::uuid then 'DB21 V2.1 提交者'
-    when 'db220000-0000-4000-8000-000000000002'::uuid then 'DB21 V2.1 管理员甲'
-    when 'db220000-0000-4000-8000-000000000003'::uuid then 'DB21 V2.1 管理员乙'
-    when 'db220000-0000-4000-8000-000000000004'::uuid then 'DB21 V2.1 管理员丙'
-    when 'db220000-0000-4000-8000-000000000005'::uuid then 'DB21 V2.1 管理员丁'
-    when 'db220000-0000-4000-8000-000000000006'::uuid then 'DB21 V2.1 站长'
-    when 'db220000-0000-4000-8000-000000000007'::uuid then 'DB21 V2.1 任期目标'
-    else 'DB21 V2.1 纠错候选人'
+    when 'db220000-0000-4000-8000-000000000001'::uuid then 'DB21 V2.1 fixture 提交者'
+    when 'db220000-0000-4000-8000-000000000002'::uuid then 'DB21 V2.1 fixture 管理员甲'
+    when 'db220000-0000-4000-8000-000000000003'::uuid then 'DB21 V2.1 fixture 管理员乙'
+    when 'db220000-0000-4000-8000-000000000004'::uuid then 'DB21 V2.1 fixture 管理员丙'
+    when 'db220000-0000-4000-8000-000000000005'::uuid then 'DB21 V2.1 fixture 管理员丁'
+    when 'db220000-0000-4000-8000-000000000006'::uuid then 'DB21 V2.1 fixture 站长'
+    when 'db220000-0000-4000-8000-000000000007'::uuid then 'DB21 V2.1 fixture 任期目标'
+    else 'DB21 V2.1 fixture 纠错候选人'
   end,
   role = case when id = 'db220000-0000-4000-8000-000000000006'::uuid then 'super_admin' else 'user' end,
   role_level = case when id = 'db220000-0000-4000-8000-000000000006'::uuid then 2 else 0 end
@@ -176,7 +176,8 @@ begin
   v_capabilities := public.get_current_admin_capabilities();
   if not coalesce((v_capabilities->>'can_review_suits')::boolean, false)
     or not coalesce((v_capabilities->>'can_permanently_reject')::boolean, false)
-    or not coalesce((v_capabilities->>'can_manage_admin_terms')::boolean, false)
+    or coalesce((v_capabilities->>'can_manage_admin_terms')::boolean, false)
+    or not coalesce((v_capabilities->>'can_manage_candidate_exclusions')::boolean, false)
     or not coalesce((v_capabilities->>'can_review_high_risk')::boolean, false) then
     raise exception 'DB21_V21_ASSERT: ordinary administrator did not receive V2.1 capabilities: %', v_capabilities;
   end if;
@@ -260,7 +261,7 @@ begin
 end;
 $$;
 
--- Three distinct ordinary administrators must agree before a governance action executes.
+-- Ordinary administrators cannot manage terms; three of them may still agree on candidate restrictions.
 select pg_catalog.set_config(
   'request.jwt.claims',
   '{"sub":"db220000-0000-4000-8000-000000000002","role":"authenticated","is_anonymous":false}',
@@ -271,28 +272,64 @@ do $$
 declare
   v_first jsonb;
   v_self_denied boolean := false;
+  v_term_denied boolean := false;
+  v_term_end_denied boolean := false;
+  v_target_term uuid;
 begin
+  begin
+    perform public.submit_admin_governance_action(
+      'manual_term_create',
+      'db220000-0000-4000-8000-000000000007'::uuid,
+      null,
+      '普通管理员不应获得手动任期权限',
+      null,
+      pg_catalog.now() + interval '2 days'
+    );
+  exception when sqlstate '42501' then v_term_denied := true;
+  end;
+  if not v_term_denied then
+    raise exception 'DB21_V21_ASSERT: ordinary administrator managed a manual term';
+  end if;
+
+  select (term->>'id')::uuid into v_target_term
+  from pg_catalog.jsonb_array_elements(public.list_admin_governance()->'terms') as term
+  where term->>'user_id' = 'db220000-0000-4000-8000-000000000003';
+  begin
+    perform public.submit_admin_governance_action(
+      'term_end',
+      null,
+      v_target_term,
+      '普通管理员不应提前结束任期',
+      null,
+      null
+    );
+  exception when sqlstate '42501' then v_term_end_denied := true;
+  end;
+  if not v_term_end_denied then
+    raise exception 'DB21_V21_ASSERT: ordinary administrator ended an admin term';
+  end if;
+
   v_first := public.submit_admin_governance_action(
-    'manual_term_create',
+    'candidate_exclusion_create',
     'db220000-0000-4000-8000-000000000007'::uuid,
     null,
-    '补充社区值守任期',
-    null,
+    '候选资料需要进一步核对',
+    pg_catalog.now(),
     pg_catalog.now() + interval '2 days'
   );
   if v_first->>'status' <> 'awaiting_cosign'
     or (v_first->>'signature_count')::integer <> 1
     or (v_first->>'required_signatures')::integer <> 3 then
-    raise exception 'DB21_V21_ASSERT: first governance signer changed term state: %', v_first;
+    raise exception 'DB21_V21_ASSERT: first candidate restriction signer changed state: %', v_first;
   end if;
 
   begin
     perform public.submit_admin_governance_action(
-      'manual_term_create',
+      'candidate_exclusion_create',
       'db220000-0000-4000-8000-000000000002'::uuid,
       null,
-      '普通管理员尝试处理自己',
-      null,
+      '普通管理员尝试限制自己',
+      pg_catalog.now(),
       pg_catalog.now() + interval '2 days'
     );
   exception when others then v_self_denied := true;
@@ -309,11 +346,11 @@ select pg_catalog.set_config(
   true
 );
 select public.submit_admin_governance_action(
-  'manual_term_create',
+  'candidate_exclusion_create',
   'db220000-0000-4000-8000-000000000007'::uuid,
   null,
-  '补充社区值守任期',
-  null,
+  '候选资料需要进一步核对',
+  pg_catalog.now(),
   pg_catalog.now() + interval '2 days'
 );
 
@@ -328,16 +365,16 @@ declare
   v_result jsonb;
 begin
   v_result := public.submit_admin_governance_action(
-    'manual_term_create',
+    'candidate_exclusion_create',
     'db220000-0000-4000-8000-000000000007'::uuid,
     null,
-    '补充社区值守任期',
-    null,
+    '候选资料需要进一步核对',
+    pg_catalog.now(),
     pg_catalog.now() + interval '2 days'
   );
   if v_result->>'status' <> 'executed'
     or (v_result->>'required_signatures')::integer <> 3 then
-    raise exception 'DB21_V21_ASSERT: third governance signer did not execute action: %', v_result;
+    raise exception 'DB21_V21_ASSERT: third candidate restriction signer did not execute action: %', v_result;
   end if;
 end;
 $$;
@@ -397,6 +434,23 @@ select pg_catalog.set_config(
   '{"sub":"db220000-0000-4000-8000-000000000002","role":"authenticated","is_anonymous":false}',
   true
 );
+
+do $$
+declare
+  v_queue_item jsonb;
+begin
+  select item into v_queue_item
+  from pg_catalog.jsonb_array_elements(public.get_jury_review_queue_with_evidence()) as item
+  where item->>'candidate_id' = 'db220000-0000-4000-8000-000000000091';
+
+  if v_queue_item is null
+    or not coalesce((v_queue_item->>'can_admin_reject')::boolean, false)
+    or nullif(v_queue_item->>'admin_reject_block_reason', '') is not null then
+    raise exception 'DB21_V21_ASSERT: eligible ordinary administrator cannot start permanent rejection: %', v_queue_item;
+  end if;
+end;
+$$;
+
 select public.admin_reject_jury_candidate(
   'db220000-0000-4000-8000-000000000091'::uuid,
   '当前证据无法支持候选修正'
@@ -485,12 +539,26 @@ select pg_catalog.set_config(
 do $$
 declare
   v_create jsonb;
+  v_manual_term jsonb;
   v_governance jsonb;
   v_reopen jsonb;
 begin
   v_create := public.review_pending_suit('DB21 V2.1 站长极速创建', 'create');
   if v_create->>'status' <> 'executed' then
     raise exception 'DB21_V21_ASSERT: owner quick create failed: %', v_create;
+  end if;
+
+  v_manual_term := public.submit_admin_governance_action(
+    'manual_term_create',
+    'db220000-0000-4000-8000-000000000008'::uuid,
+    null,
+    '站长补充短期值守',
+    null,
+    pg_catalog.now() + interval '2 days'
+  );
+  if v_manual_term->>'status' <> 'executed'
+    or (v_manual_term->>'required_signatures')::integer <> 1 then
+    raise exception 'DB21_V21_ASSERT: owner manual term management failed: %', v_manual_term;
   end if;
 
   v_governance := public.submit_admin_governance_action(
@@ -526,7 +594,8 @@ begin
     or exists (select 1 from public.suits where name = 'DB21 V2.1 共签驳回')
     or (select pg_catalog.count(*) from public.pending_suits where name = 'DB21 V2.1 共签通过' and status = 'approved') <> 1
     or (select pg_catalog.count(*) from public.pending_suits where name = 'DB21 V2.1 共签驳回' and status = 'rejected') <> 1
-    or (select pg_catalog.count(*) from public.admin_terms where user_id = 'db220000-0000-4000-8000-000000000007'::uuid and status = 'active') <> 1
+    or (select pg_catalog.count(*) from public.admin_terms where user_id = 'db220000-0000-4000-8000-000000000008'::uuid and status = 'active') <> 1
+    or (select pg_catalog.count(*) from public.admin_candidate_exclusions where user_id = 'db220000-0000-4000-8000-000000000007'::uuid and revoked_at is null) <> 1
     or not exists (
       select 1 from public.re_review_items
       where id in (

@@ -12,10 +12,11 @@ import {
   groupCandidateExclusions
 } from '../utils/adminGovernance'
 
+const props = defineProps({ allowTermManagement: Boolean })
 const data = ref({ users: [], terms: [], exclusions: [], candidates: [], decisions: [], communityActions: [] })
 const isLoading = ref(false)
 const errorMessage = ref('')
-const activeSection = ref('terms')
+const activeSection = ref(props.allowTermManagement ? 'terms' : 'exclusions')
 const manualForm = reactive({ userId: '', reason: '', endsAt: '' })
 const exclusionForm = reactive({ userId: '', reason: '', startsAt: '', endsAt: '' })
 const actionNotice = ref('')
@@ -25,6 +26,13 @@ const availableUsers = computed(() => data.value.users)
 const groupedExclusions = computed(() => groupCandidateExclusions(data.value.exclusions))
 const currentExclusions = computed(() => groupedExclusions.value.current)
 const exclusionHistory = computed(() => groupedExclusions.value.history)
+const visibleSections = computed(() => [
+  ...(props.allowTermManagement ? [{ key: 'terms', label: '任期' }] : []),
+  { key: 'exclusions', label: '候选限制' },
+  { key: 'candidates', label: '候选名单' },
+  { key: 'decisions', label: '审核记录' },
+  { key: 'actions', label: '确认记录' }
+])
 
 const formatTime = (value) => value ? new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '—'
 const sourceLabel = (source) => ({ monthly: '月度轮值', manual: '手动任期', legacy_transition: '旧管理员过渡' }[source] || source)
@@ -52,9 +60,9 @@ const actionTypeLabel = (type) => ({
   candidate_exclusion_create: '新增候选排除',
   candidate_exclusion_revoke: '撤销候选排除'
 }[type] || type)
-const actionStatusLabel = (status) => ({ proposed: '等待共签', executed: '已执行', superseded: '已被其他结论取代', cancelled: '已失效' }[status] || status)
+const actionStatusLabel = (status) => ({ proposed: '等待其他管理员确认', executed: '已执行', superseded: '已被其他决定取代', cancelled: '已失效' }[status] || status)
 const resultNotice = (result, executedMessage) => result?.status === 'awaiting_cosign'
-  ? `共签已记录：${result.signature_count} / ${result.required_signatures}，达到门槛后才执行。`
+  ? `你的确认已记录（${result.signature_count} / ${result.required_signatures}）。还需要其他管理员确认。`
   : executedMessage
 
 const load = async () => {
@@ -63,7 +71,7 @@ const load = async () => {
   try {
     data.value = await fetchAdminGovernance()
   } catch (error) {
-    errorMessage.value = error.message || '管理员治理数据读取失败'
+    errorMessage.value = error.message || '管理记录读取失败'
   } finally {
     isLoading.value = false
   }
@@ -137,14 +145,14 @@ onMounted(load)
   <section class="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm md:p-6">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h3 class="text-xl font-black text-slate-800">🛡️ 管理员任期治理</h3>
-        <p class="mt-1 text-xs font-bold text-slate-500">任期和候选排除由 3 位不同的当前有效普通管理员共签；站长可单独执行，所有事实保留审计。</p>
+        <h3 class="text-xl font-black text-slate-800">🛡️ {{ allowTermManagement ? '任期与候选管理' : '候选管理' }}</h3>
+        <p class="mt-1 text-xs font-bold text-slate-500">{{ allowTermManagement ? '站长可以管理手动任期和候选限制。' : '候选限制需要三位管理员确认。手动任期只由站长管理。' }}</p>
       </div>
       <button class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600" @click="load">刷新</button>
     </div>
 
     <div class="mb-5 flex flex-wrap gap-2">
-      <button v-for="item in [{key:'terms',label:'任期'}, {key:'exclusions',label:'候选排除'}, {key:'candidates',label:'候选快照'}, {key:'decisions',label:'审核审计'}, {key:'actions',label:'共签记录'}]" :key="item.key" class="rounded-full px-4 py-2 text-xs font-black" :class="activeSection === item.key ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeSection = item.key">{{ item.label }}</button>
+      <button v-for="item in visibleSections" :key="item.key" class="rounded-full px-4 py-2 text-xs font-black" :class="activeSection === item.key ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-600'" @click="activeSection = item.key">{{ item.label }}</button>
     </div>
 
     <p v-if="actionNotice" class="mb-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{{ actionNotice }}</p>
@@ -179,11 +187,11 @@ onMounted(load)
         </select>
         <label class="text-xs font-black text-slate-600">开始时间<input v-model="exclusionForm.startsAt" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
         <label class="text-xs font-black text-slate-600">结束时间<input v-model="exclusionForm.endsAt" type="datetime-local" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal" /></label>
-        <input v-model="exclusionForm.reason" class="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="排除原因（必填）" />
-        <button class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-black text-white md:col-span-2">新增候选排除</button>
+        <input v-model="exclusionForm.reason" class="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2" placeholder="限制原因（必填）" />
+        <button class="rounded-lg bg-purple-600 px-4 py-2 text-sm font-black text-white md:col-span-2">提交候选限制</button>
       </form>
       <div class="mb-6">
-        <h4 class="mb-3 text-sm font-black text-slate-700">当前及待生效排除（{{ currentExclusions.length }}）</h4>
+        <h4 class="mb-3 text-sm font-black text-slate-700">当前及待生效限制（{{ currentExclusions.length }}）</h4>
         <div class="space-y-3">
           <article v-for="item in currentExclusions" :key="item.id" class="flex flex-col justify-between gap-3 rounded-xl border border-slate-100 p-4 md:flex-row md:items-center">
             <div>
@@ -192,12 +200,12 @@ onMounted(load)
             </div>
             <button class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-slate-600" @click="revokeExclusion(item)">撤销排除</button>
           </article>
-          <p v-if="currentExclusions.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无可撤销的候选排除。</p>
+          <p v-if="currentExclusions.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无可撤销的候选限制。</p>
         </div>
       </div>
 
       <div>
-        <h4 class="mb-3 text-sm font-black text-slate-700">排除历史（{{ exclusionHistory.length }}）</h4>
+        <h4 class="mb-3 text-sm font-black text-slate-700">限制历史（{{ exclusionHistory.length }}）</h4>
         <div class="space-y-3">
           <article v-for="item in exclusionHistory" :key="item.id" class="rounded-xl border border-slate-100 p-4">
             <div class="flex flex-wrap items-center gap-2"><span class="font-black text-slate-700">{{ item.display_name }}</span><span class="rounded-full px-2 py-1 text-[11px] font-black" :class="exclusionStatusClass(item.view_status)">{{ exclusionStatusLabel(item.view_status) }}</span></div>
@@ -223,9 +231,9 @@ onMounted(load)
           <div class="rounded-full bg-purple-50 px-3 py-1 text-xs font-black text-purple-700">{{ item.valid_signature_count }} / {{ item.required_signatures }}</div>
         </div>
         <div class="mt-1 text-xs font-bold text-slate-500">{{ item.reason }} · {{ formatTime(item.created_at) }}</div>
-        <div v-if="item.signatures?.length" class="mt-2 text-xs font-bold text-slate-500">共签：{{ item.signatures.map(signature => signature.display_name).join('、') }}</div>
+        <div v-if="item.signatures?.length" class="mt-2 text-xs font-bold text-slate-500">已确认：{{ item.signatures.map(signature => signature.display_name).join('、') }}</div>
       </article>
-      <p v-if="data.communityActions.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无共签记录。</p>
+      <p v-if="data.communityActions.length === 0" class="rounded-xl bg-slate-50 py-5 text-center text-sm font-bold text-slate-400">暂无确认记录。</p>
     </div>
   </section>
 </template>
