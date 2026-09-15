@@ -172,8 +172,8 @@ const rejectSelectedPendingClothes = async () => {
 
 <template>
   <div class="admin-container pb-20 max-w-4xl mx-auto">
-    <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm mb-6 border border-slate-100">
-      <div class="flex gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100 w-full md:w-auto">
+    <div class="flex flex-col gap-3 bg-white p-4 rounded-2xl shadow-sm mb-6 border border-slate-100 md:flex-row md:items-start">
+      <div class="flex min-w-0 w-full flex-1 flex-wrap gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
         <button @click="activeTab = 'audit'" :class="activeTab === 'audit' ? 'bg-white text-purple-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">👗 散件仲裁</button>
         <button @click="activeTab = 'suits'" :class="activeTab === 'suits' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📦 套装审核</button>
         <button @click="activeTab = 'corrections'" :class="activeTab === 'corrections' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">📝 图鉴报错</button>
@@ -182,7 +182,7 @@ const rejectSelectedPendingClothes = async () => {
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'governance'" :class="activeTab === 'governance' ? 'bg-white text-purple-700 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">🗓️ 任期治理</button>
         <button v-if="isSuperAdminRole(currentUserRole)" @click="activeTab = 'community-corrections'" :class="activeTab === 'community-corrections' ? 'bg-white text-fuchsia-700 shadow-sm' : 'text-slate-500'" class="flex-1 md:flex-none px-6 py-2 rounded-lg font-bold text-sm transition-all">↩️ 决定纠错</button>
       </div>
-      <button @click="emit('back-to-main')" class="mt-4 md:mt-0 text-sm font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1"><span class="text-lg">🏠</span> 返回前台</button>
+      <button @click="emit('back-to-main')" class="flex shrink-0 items-center gap-1 self-end whitespace-nowrap text-sm font-bold text-slate-400 hover:text-slate-600 md:self-center"><span class="text-lg">🏠</span> 返回前台</button>
     </div>
 
     <div v-show="activeTab === 'audit'">

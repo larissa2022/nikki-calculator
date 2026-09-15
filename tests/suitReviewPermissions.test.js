@@ -52,8 +52,12 @@ test('普通管理员页面不显示手动任期入口', async () => {
   assert.doesNotMatch(lowRiskAdminView, /can_manage_admin_terms/)
   assert.match(lowRiskAdminView, /:allow-term-management="false"/)
   assert.match(adminView, /:allow-term-management="true"/)
+  assert.match(adminView, /flex-wrap/)
+  assert.match(adminView, /whitespace-nowrap/)
   assert.match(await readSource('../src/composables/useAuth.js'), /can_manage_admin_terms: data\?\.role === 'super_admin',/)
   assert.match(juryBoard, /你已经投过这一项，不能再终审/)
+  assert.match(juryBoard, /第一位管理员填写原因，第二位管理员查看原因后确认/)
+  assert.match(juryBoard, /item\.adminRejectReason \? '确认永久驳回' : '提交永久驳回'/)
 })
 
 test('普通提交入口不再发送受保护的 pending 状态字段', async () => {

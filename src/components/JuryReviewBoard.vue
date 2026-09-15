@@ -383,7 +383,8 @@ const executeVote = async (item, vote) => {
 }
 
 const executeAdminReject = async item => {
-  const reason = String(adminReasons.value[item.candidateId] || '').trim()
+  const reason = item.adminRejectReason
+    || String(adminReasons.value[item.candidateId] || '').trim()
   await runAction({
     key: `admin:${item.candidateId}`,
     item,
@@ -399,10 +400,16 @@ const executeAdminReject = async item => {
       }
     },
     successMessage: result => result?.status === 'awaiting_cosign'
-      ? `你的终审已记录（${result.signature_count} / ${result.required_signatures}）。请换另一位未参与本项投票的管理员确认相同原因。`
+      ? `永久驳回原因已提交（${result.signature_count} / ${result.required_signatures}）。请换另一位未参与本项投票的管理员确认。`
       : '管理员终审已记录，该事项已永久驳回。'
   })
 }
+
+const adminRejectBlockMessage = item => ({
+  already_confirmed: '你已确认永久驳回，正在等待另一位管理员。',
+  already_voted: '你已经投过这一项，不能再终审。请换一位没有投过此项的管理员。',
+  candidate_author: '你提交了本轮内容，不能参与永久驳回。请换一位管理员。'
+}[item.adminRejectBlockReason] || '这项现在不能由你终审。请换一位未参与本项提交、录入或投票的管理员。')
 
 const askCandidateConfirmation = item => {
   setFormError(item.reReviewItemId)
@@ -427,13 +434,14 @@ const askVoteConfirmation = (item, vote) => {
 }
 
 const askAdminConfirmation = item => {
-  const reason = String(adminReasons.value[item.candidateId] || '').trim()
+  const reason = item.adminRejectReason
+    || String(adminReasons.value[item.candidateId] || '').trim()
   if (!reason) {
     setFormError(item.reReviewItemId, '永久驳回必须填写终审理由。')
     return
   }
   confirmation.value = {
-    title: '确认永久驳回',
+    title: item.adminRejectReason ? '确认首位管理员的永久驳回' : '提交永久驳回原因',
     message: `永久驳回后，这条资料会停止投票。原因：“${reason}”`,
     confirmText: '永久驳回',
     tone: 'rose',
@@ -694,12 +702,17 @@ onBeforeUnmount(() => {
 
           <div v-if="canPermanentlyReject" class="mt-5 border-t border-slate-200 pt-4">
             <div class="text-xs font-black text-rose-600">{{ isSuperAdmin ? '站长终审' : '管理员终审' }}</div>
-            <p v-if="!isSuperAdmin" class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">永久驳回需要两位管理员填写相同原因。参加过这项投票的人不能再终审。</p>
+            <p v-if="!isSuperAdmin" class="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">第一位管理员填写原因，第二位管理员查看原因后确认。参加过这项投票的人不能再终审。</p>
+            <div v-if="item.adminRejectReason" class="mt-2 rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm font-bold text-slate-700">
+              <div><span class="text-rose-600">永久驳回原因：</span>{{ item.adminRejectReason }}</div>
+              <div class="mt-1 text-xs text-slate-500">管理员确认 {{ item.adminRejectSignatureCount }} / {{ item.adminRejectRequiredSignatures || (isSuperAdmin ? 1 : 2) }}</div>
+            </div>
             <p v-if="!item.canAdminReject" class="mt-2 rounded-lg bg-white px-3 py-2 text-xs font-bold text-slate-500">
-              {{ item.adminRejectBlockReason === 'already_voted' ? '你已经投过这一项，不能再终审。请换一位没有投过此项的管理员。' : '这项现在不能由你终审。请换一位未参与本项提交、录入或投票的管理员。' }}
+              {{ adminRejectBlockMessage(item) }}
             </p>
             <div v-else class="mt-2 flex flex-col gap-2 sm:flex-row">
               <input
+                v-if="!item.adminRejectReason"
                 v-model="adminReasons[item.candidateId]"
                 type="text"
                 maxlength="200"
@@ -712,7 +725,7 @@ onBeforeUnmount(() => {
                 :disabled="isItemBusy(item)"
                 @click="askAdminConfirmation(item)"
               >
-                永久驳回
+                {{ item.adminRejectReason ? '确认永久驳回' : '提交永久驳回' }}
               </button>
             </div>
           </div>

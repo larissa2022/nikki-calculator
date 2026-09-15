@@ -106,7 +106,11 @@ export const normalizeQueueItem = (row) => ({
   canSubmitReviewNote: Boolean(row?.can_submit_review_note),
   isCandidateAuthor: Boolean(row?.is_candidate_author),
   canAdminReject: Boolean(row?.can_admin_reject),
-  adminRejectBlockReason: String(row?.admin_reject_block_reason || '')
+  adminRejectBlockReason: String(row?.admin_reject_block_reason || ''),
+  adminRejectReason: String(row?.admin_reject_reason || '').trim(),
+  adminRejectSignatureCount: Math.max(0, Number(row?.admin_reject_signature_count) || 0),
+  adminRejectRequiredSignatures: Math.max(0, Number(row?.admin_reject_required_signatures) || 0),
+  adminRejectSignedByMe: Boolean(row?.admin_reject_signed_by_me)
 })
 
 const callRpc = async (client, name, params = {}, options = {}) => {

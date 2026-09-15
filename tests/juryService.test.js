@@ -59,7 +59,11 @@ test('陪审团队列规范化票数和权限状态', async () => {
         can_submit_candidate: false,
         can_vote: true,
         is_candidate_author: false,
-        can_admin_reject: true
+        can_admin_reject: true,
+        admin_reject_reason: '资料无法核实',
+        admin_reject_signature_count: '1',
+        admin_reject_required_signatures: 2,
+        admin_reject_signed_by_me: false
       }],
       error: null
     }
@@ -72,6 +76,10 @@ test('陪审团队列规范化票数和权限状态', async () => {
     [4, 1, 7, 2]
   )
   assert.equal(queue[0].canSubmitReviewNote, true)
+  assert.equal(queue[0].adminRejectReason, '资料无法核实')
+  assert.equal(queue[0].adminRejectSignatureCount, 1)
+  assert.equal(queue[0].adminRejectRequiredSignatures, 2)
+  assert.equal(queue[0].adminRejectSignedByMe, false)
   assert.deepEqual(queue[0].reviewOpinions, [{
     voterLevel: 3,
     vote: 'reject',

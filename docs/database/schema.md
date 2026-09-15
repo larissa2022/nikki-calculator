@@ -2,7 +2,7 @@
 
 当前文件是 development 项目 `tfwejruvdahonacyldrg` 的 public schema 摘要。
 
-完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-09-03 已在 development 应用 DB-21 V2.1 任期权限与陪审入口前向补丁：手动任期仅站长可管理，普通管理员未参投时可正常发起永久驳回，候选限制与等级门槛不变。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
+完整 public SQL 快照见：`supabase/schema.sql`，其 SHA-256 仍为 `91004C23062511813053A1462BC532FA5F41970C222187EC6268675BC5639D25`，但未包含 DB-8～DB-21，不能作为这些对象的当前事实。2026-09-15 已在 development 应用 DB-21 V2.1 永久驳回确认前向补丁：手动任期仍仅站长可管理，普通管理员首位填写原因、第二位查看并确认，候选限制与等级门槛不变。migration、live catalog、本摘要和 `src/types/supabase.ts` 为当前权威。
 
 ## 表结构摘要
 
@@ -254,7 +254,7 @@
 | `list_pending_suits_for_review()` | 当前有效普通管理员和超级管理员可读取按名称聚合的待审队列、两种结论共签数及本人结论；普通用户由函数内身份校验拒绝 |
 | `review_pending_suit(text,text,text)` | 普通管理员批准 / 驳回需 2 位不同当前有效任期管理员对同一名称、同一结论和原因共签；超级管理员单独执行。按名称事务 advisory lock 串行，批准时正式套装写入与全部同名 pending 状态一次提交；重复调用幂等、冲突结论失败关闭；无 pending 极速创建仍只属于超级管理员 |
 | `community_admin_actions` / `community_admin_action_signatures` | 不可由客户端或 service_role 直读写的决定与签名事实；记录目标、规范提案、原因、人数门槛、执行结果、纠错来源和签署时任期，启用并强制 RLS，不建立放宽 policy |
-| `admin_reject_jury_candidate(...)` / `reopen_rejected_jury_candidate(...)` | 永久驳回和重新打开均为普通管理员 2 人共签或超级管理员单独执行；原提交者、来源参与者、原轮投票者与原决定共签者按环节回避，原决定与候选历史不删除 |
+| `admin_reject_jury_candidate(...)` / `reopen_rejected_jury_candidate(...)` | 永久驳回和重新打开均为普通管理员 2 人共签或超级管理员单独执行；永久驳回由首位管理员填写原因，队列只向管理员返回该原因与确认进度，第二位查看后直接确认；原提交者、来源参与者、原轮投票者与原决定共签者按环节回避，原决定与候选历史不删除 |
 | `submit_admin_governance_action(...)` | 手动任期和提前结束任期仅超级管理员可执行；候选排除与撤销由 3 位不同当前有效普通管理员共同确认或超级管理员单独执行；普通管理员不得处理自己或超级管理员身份 |
 | 受信维护 | `service_role` 对 stages / suits 保留 SELECT / INSERT / UPDATE / DELETE，对 pending_suits 仅保留 SELECT / INSERT / UPDATE；客户端角色不继承这些权限 |
 | 索引 | `idx_pending_suits_review_queue(status,name,created_at)` 支撑审核队列，`idx_pending_suits_submitted_by(submitted_by)` 覆盖本人读取与外键 |

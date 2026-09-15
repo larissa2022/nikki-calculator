@@ -451,10 +451,33 @@ begin
 end;
 $$;
 
-select public.admin_reject_jury_candidate(
-  'db220000-0000-4000-8000-000000000091'::uuid,
-  '当前证据无法支持候选修正'
-);
+do $$
+declare
+  v_result jsonb;
+  v_queue_item jsonb;
+begin
+  v_result := public.admin_reject_jury_candidate(
+    'db220000-0000-4000-8000-000000000091'::uuid,
+    '当前证据无法支持候选修正'
+  );
+  if v_result->>'status' <> 'awaiting_cosign' then
+    raise exception 'DB21_V21_ASSERT: first permanent-rejection signer was not recorded: %', v_result;
+  end if;
+
+  select item into v_queue_item
+  from pg_catalog.jsonb_array_elements(public.get_jury_review_queue_with_evidence()) as item
+  where item->>'candidate_id' = 'db220000-0000-4000-8000-000000000091';
+
+  if v_queue_item->>'admin_reject_reason' <> '当前证据无法支持候选修正'
+    or (v_queue_item->>'admin_reject_signature_count')::integer <> 1
+    or (v_queue_item->>'admin_reject_required_signatures')::integer <> 2
+    or not coalesce((v_queue_item->>'admin_reject_signed_by_me')::boolean, false)
+    or coalesce((v_queue_item->>'can_admin_reject')::boolean, true)
+    or v_queue_item->>'admin_reject_block_reason' <> 'already_confirmed' then
+    raise exception 'DB21_V21_ASSERT: first signer cannot see recorded permanent-rejection proposal: %', v_queue_item;
+  end if;
+end;
+$$;
 
 select pg_catalog.set_config(
   'request.jwt.claims',
@@ -465,10 +488,22 @@ select pg_catalog.set_config(
 do $$
 declare
   v_result jsonb;
+  v_queue_item jsonb;
 begin
+  select item into v_queue_item
+  from pg_catalog.jsonb_array_elements(public.get_jury_review_queue_with_evidence()) as item
+  where item->>'candidate_id' = 'db220000-0000-4000-8000-000000000091';
+
+  if v_queue_item->>'admin_reject_reason' <> '当前证据无法支持候选修正'
+    or (v_queue_item->>'admin_reject_signature_count')::integer <> 1
+    or coalesce((v_queue_item->>'admin_reject_signed_by_me')::boolean, true)
+    or not coalesce((v_queue_item->>'can_admin_reject')::boolean, false) then
+    raise exception 'DB21_V21_ASSERT: second signer cannot review the first permanent-rejection reason: %', v_queue_item;
+  end if;
+
   v_result := public.admin_reject_jury_candidate(
     'db220000-0000-4000-8000-000000000091'::uuid,
-    '当前证据无法支持候选修正'
+    v_queue_item->>'admin_reject_reason'
   );
   if v_result->>'status' <> 'executed' then
     raise exception 'DB21_V21_ASSERT: second permanent-rejection signer did not execute: %', v_result;
