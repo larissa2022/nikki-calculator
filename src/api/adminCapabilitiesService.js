@@ -32,33 +32,70 @@ export const fetchMyRejectedClothingSubmissions = async () => {
 export const fetchAdminGovernance = async () => {
   const data = await rpc('list_admin_governance')
   return {
+    users: Array.isArray(data?.users) ? data.users : [],
     terms: Array.isArray(data?.terms) ? data.terms : [],
     exclusions: Array.isArray(data?.exclusions) ? data.exclusions : [],
     candidates: Array.isArray(data?.candidates) ? data.candidates : [],
-    decisions: Array.isArray(data?.decisions) ? data.decisions : []
+    decisions: Array.isArray(data?.decisions) ? data.decisions : [],
+    communityActions: Array.isArray(data?.community_actions) ? data.community_actions : []
   }
 }
 
-export const createManualAdminTerm = (payload) => rpc('create_manual_admin_term', {
-  p_user_id: payload.userId,
+const submitGovernanceAction = (payload) => rpc('submit_admin_governance_action', {
+  p_action_type: payload.actionType,
+  p_target_user_id: payload.userId || null,
+  p_target_record_id: payload.recordId || null,
   p_reason: payload.reason,
-  p_ends_at: payload.endsAt
+  p_starts_at: payload.startsAt || null,
+  p_ends_at: payload.endsAt || null
 })
 
-export const endAdminTerm = (termId, reason) => rpc('end_admin_term', {
-  p_term_id: termId,
-  p_reason: reason
+export const createManualAdminTerm = (payload) => submitGovernanceAction({
+  actionType: 'manual_term_create',
+  userId: payload.userId,
+  reason: payload.reason,
+  endsAt: payload.endsAt
+})
+
+export const endAdminTerm = (termId, reason) => submitGovernanceAction({
+  actionType: 'term_end',
+  recordId: termId,
+  reason
 })
 
 export const leaveCurrentAdminTerm = () => rpc('leave_current_admin_term')
 
-export const createAdminCandidateExclusion = (payload) => rpc('create_admin_candidate_exclusion', {
-  p_user_id: payload.userId,
-  p_reason: payload.reason,
-  p_starts_at: payload.startsAt,
-  p_ends_at: payload.endsAt
+export const createAdminCandidateExclusion = (payload) => submitGovernanceAction({
+  actionType: 'candidate_exclusion_create',
+  userId: payload.userId,
+  reason: payload.reason,
+  startsAt: payload.startsAt,
+  endsAt: payload.endsAt
 })
 
-export const revokeAdminCandidateExclusion = (exclusionId) => (
-  rpc('revoke_admin_candidate_exclusion', { p_exclusion_id: exclusionId })
-)
+export const revokeAdminCandidateExclusion = (exclusionId, reason) => submitGovernanceAction({
+  actionType: 'candidate_exclusion_revoke',
+  recordId: exclusionId,
+  reason
+})
+
+export const fetchCommunitySuitReviewQueue = async () => {
+  const data = await rpc('list_pending_suits_for_review')
+  return Array.isArray(data) ? data : []
+}
+
+export const reviewCommunitySuit = (name, decision, reason = null) => rpc('review_pending_suit', {
+  p_name: name,
+  p_decision: decision,
+  p_reason: reason
+})
+
+export const fetchRejectedJuryItemsForReopen = async () => {
+  const data = await rpc('list_rejected_jury_items_for_reopen')
+  return Array.isArray(data) ? data : []
+}
+
+export const reopenRejectedJuryCandidate = (candidateId, reason) => rpc('reopen_rejected_jury_candidate', {
+  p_candidate_id: candidateId,
+  p_reason: reason
+})

@@ -69,7 +69,7 @@ watch(
     />
 
     <div v-if="adminCapabilities.show_grant_notice" class="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-4 text-sm font-black text-purple-800" role="status">
-      {{ adminCapabilities.term_source === 'monthly' ? '您已自动获得本期受限管理员权限' : (adminCapabilities.term_source === 'legacy_transition' ? '您的旧管理员权限已转换为本期受限任期' : '您已获得本期受限管理员权限') }}，可在“图鉴管理”中处理新增服装多数审核。
+      {{ adminCapabilities.term_source === 'monthly' ? '您已自动获得本期社区管理员权限' : (adminCapabilities.term_source === 'legacy_transition' ? '您的旧管理员权限已转换为本期任期' : '您已获得本期社区管理员权限') }}，可在“图鉴管理”中处理低风险审核并参与多人共签。
     </div>
 
     <header>
@@ -139,6 +139,7 @@ watch(
       <JuryReviewBoard
         v-if="currentTab === 'jury'"
         :isLoggedIn="Boolean(currentUser)"
+        :canPermanentlyReject="adminCapabilities.can_permanently_reject === true"
         :isSuperAdmin="adminCapabilities.is_super_admin === true"
       />
       

@@ -11,7 +11,7 @@ export const contributionService = {
 
   // 2. 批量提报缺失的套装 (SuitGallery 使用)
   async submitMissingSuits(namesArray, userId) {
-    const inserts = namesArray.map(name => ({ name: name, submitted_by: userId, status: 'pending' }));
+    const inserts = namesArray.map(name => ({ name: name.trim(), submitted_by: userId }));
     const { error } = await supabase.from('pending_suits').insert(inserts);
     if (error) throw new Error('提报套装失败：' + error.message);
     return true;
